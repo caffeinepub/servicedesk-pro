@@ -125,24 +125,31 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Reports</h2>
-        <p className="text-sm text-gray-500">Export and analyze case data</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Reports</h2>
+          <p className="text-sm text-gray-500">Export and analyze case data</p>
+        </div>
+        <Button onClick={exportCSV} data-ocid="reports.primary_button">
+          <Download className="h-4 w-4 mr-2" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border p-5 shadow-sm space-y-4">
+      <div className="bg-white rounded-xl border p-4 sm:p-5 shadow-sm space-y-4">
         <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2">
           <BarChart2 className="h-4 w-4" />
           Filter Data
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="space-y-1">
             <Label className="text-xs">From Date</Label>
             <Input
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
+              data-ocid="reports.input"
             />
           </div>
           <div className="space-y-1">
@@ -156,7 +163,7 @@ export default function ReportsPage() {
           <div className="space-y-1">
             <Label className="text-xs">Status</Label>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger>
+              <SelectTrigger data-ocid="reports.select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -189,7 +196,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
         {[
           { label: "Total", value: stats.total, color: "text-blue-600" },
           { label: "Closed", value: stats.closed, color: "text-green-600" },
@@ -208,7 +215,7 @@ export default function ReportsPage() {
         ].map((s) => (
           <div
             key={s.label}
-            className="bg-white rounded-xl border p-4 text-center shadow-sm"
+            className="bg-white rounded-xl border p-3 sm:p-4 text-center shadow-sm"
           >
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
             <p className="text-xs text-gray-500 mt-1">{s.label}</p>
@@ -223,70 +230,144 @@ export default function ReportsPage() {
             Technician Performance
           </h3>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              {[
-                "Technician",
-                "Specialization",
-                "Total Assigned",
-                "Completed",
-                "Pending",
-                "Part Required",
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="text-left px-4 py-3 text-xs font-semibold text-gray-500"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {technicians.map((t) => {
-              const tCases = filtered.filter((c) => c.technicianId === t.id);
-              if (tCases.length === 0) return null;
-              return (
-                <tr key={t.id} className="border-b last:border-0">
-                  <td className="px-4 py-3 font-medium">{t.name}</td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {t.specialization}
-                  </td>
-                  <td className="px-4 py-3 text-blue-600 font-bold">
-                    {tCases.length}
-                  </td>
-                  <td className="px-4 py-3 text-green-600">
-                    {
-                      tCases.filter((c) =>
-                        [
-                          "closed",
-                          "adjustment_closed",
-                          "replacement_done",
-                        ].includes(c.status),
-                      ).length
-                    }
-                  </td>
-                  <td className="px-4 py-3 text-yellow-600">
-                    {tCases.filter((c) => c.status === "pending").length}
-                  </td>
-                  <td className="px-4 py-3 text-red-600">
-                    {tCases.filter((c) => c.status === "part_required").length}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                {[
+                  "Technician",
+                  "Specialization",
+                  "Total Assigned",
+                  "Completed",
+                  "Pending",
+                  "Part Required",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="text-left px-4 py-3 text-xs font-semibold text-gray-500"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {technicians.map((t) => {
+                const tCases = filtered.filter((c) => c.technicianId === t.id);
+                if (tCases.length === 0) return null;
+                return (
+                  <tr key={t.id} className="border-b last:border-0">
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      {t.name}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {t.specialization}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-blue-600">
+                      {tCases.length}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-green-600">
+                      {
+                        tCases.filter((c) =>
+                          [
+                            "closed",
+                            "adjustment_closed",
+                            "replacement_done",
+                          ].includes(c.status),
+                        ).length
+                      }
+                    </td>
+                    <td className="px-4 py-3 font-bold text-yellow-600">
+                      {tCases.filter((c) => c.status === "pending").length}
+                    </td>
+                    <td className="px-4 py-3 font-bold text-red-600">
+                      {
+                        tCases.filter((c) => c.status === "part_required")
+                          .length
+                      }
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="flex gap-3">
-        <Button onClick={exportCSV} className="flex items-center gap-2">
-          <Download className="h-4 w-4" /> Export {filtered.length} Cases to CSV
-        </Button>
-        <p className="text-sm text-gray-500 self-center">
-          {filtered.length} cases in current filter
-        </p>
+      {/* Cases Table */}
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900">
+            Cases ({filtered.length})
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                {[
+                  "Case ID",
+                  "Customer",
+                  "Product",
+                  "Status",
+                  "Technician",
+                  "Age",
+                  "Created",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="text-left px-4 py-3 text-xs font-semibold text-gray-500"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.slice(0, 50).map((c) => (
+                <tr key={c.id} className="border-b last:border-0">
+                  <td className="px-4 py-3 font-medium text-blue-700">
+                    {c.caseId}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700">{c.customerName}</td>
+                  <td className="px-4 py-3 text-gray-600">{c.product}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
+                      {c.status.replace(/_/g, " ")}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {technicians.find((t) => t.id === c.technicianId)?.name ??
+                      "—"}
+                  </td>
+                  <td
+                    className={`px-4 py-3 font-medium ${
+                      getAgeing(c.createdAt) >= 8
+                        ? "text-red-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {getAgeing(c.createdAt)}d
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">
+                    {new Date(c.createdAt).toLocaleDateString("en-IN")}
+                  </td>
+                </tr>
+              ))}
+              {filtered.length > 50 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-3 text-center text-xs text-gray-400"
+                  >
+                    Showing first 50 of {filtered.length}. Export CSV for full
+                    data.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

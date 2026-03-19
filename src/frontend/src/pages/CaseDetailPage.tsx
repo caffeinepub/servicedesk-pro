@@ -13,6 +13,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import StatusBadge from "../components/StatusBadge";
 import {
   AlertDialog,
@@ -77,6 +78,7 @@ export default function CaseDetailPage() {
     currentUser,
     settings,
     deleteCase,
+    resetStaleTechnician,
   } = useStore();
 
   const caseData = cases.find((c) => c.id === selectedCaseId);
@@ -114,6 +116,16 @@ export default function CaseDetailPage() {
       </div>
     );
   }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Stale detection
+  const isStale =
+    caseData.status === "on_route" &&
+    !!caseData.technicianId &&
+    !caseData.hasFirstUpdate &&
+    !!caseData.onRouteDate &&
+    caseData.onRouteDate < today;
 
   // Auto-load customer history using normalized phone matching
   const normalizePhone = (ph: string) => ph.replace(/\D/g, "");
@@ -269,8 +281,40 @@ export default function CaseDetailPage() {
 
   const isAdmin = currentUser?.role === "admin";
 
+  const handleResetStale = () => {
+    resetStaleTechnician(caseData.id);
+    toast.success(
+      `Technician unassigned. Case ${caseData.caseId} reset to Pending.`,
+    );
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-4">
+      {/* Stale Warning Banner */}
+      {isStale && (
+        <div
+          className="bg-amber-50 border border-amber-400 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
+          data-ocid="case_detail.panel"
+        >
+          <div className="flex items-center gap-2 text-amber-700">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <p className="text-sm font-medium">
+              No technician update received — this case will auto-reset at
+              midnight unless you take action.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0 border-amber-500 text-amber-700 hover:bg-amber-100"
+            onClick={handleResetStale}
+            data-ocid="case_detail.button"
+          >
+            Reset Technician Now
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-3">
         <button
@@ -466,8 +510,12 @@ export default function CaseDetailPage() {
               ],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-2">
-                <span className="text-gray-500 min-w-[100px]">{k}:</span>
-                <span className="text-gray-900 font-medium">{v}</span>
+                <span className="text-gray-500 min-w-[100px] shrink-0">
+                  {k}:
+                </span>
+                <span className="text-gray-900 font-medium break-words">
+                  {v}
+                </span>
               </div>
             ))}
             {caseData.partCode && (
@@ -866,7 +914,10 @@ export default function CaseDetailPage() {
         </CardHeader>
         <CardContent>
           {caseData.photos.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
+            <div
+              className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center"
+              data-ocid="case_detail.dropzone"
+            >
               <p className="text-sm text-gray-400">No photos uploaded yet</p>
             </div>
           ) : (

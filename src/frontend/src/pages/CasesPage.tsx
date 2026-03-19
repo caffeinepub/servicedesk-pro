@@ -1,27 +1,16 @@
 import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Filter,
   History,
   PlusCircle,
-  Search,
   Trash2,
-  Upload,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import StatusBadge from "../components/StatusBadge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
-import { Checkbox } from "../components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -39,25 +28,6 @@ import {
 import { getAgeing, useStore } from "../store";
 import type { Case, CaseStatus } from "../types";
 
-const ALL_STATUSES: CaseStatus[] = [
-  "new",
-  "printed",
-  "confirmed",
-  "pending",
-  "on_route",
-  "cancelled",
-  "transferred",
-  "rescheduled",
-  "part_required",
-  "part_received",
-  "re_open",
-  "gas_charge_pending",
-  "gas_charge_done",
-  "adjustment_closed",
-  "replacement_done",
-  "closed",
-];
-
 function CustomerHistoryDialog({
   open,
   onClose,
@@ -74,7 +44,7 @@ function CustomerHistoryDialog({
   const others = relatedCases.filter((c) => c.id !== currentCaseId);
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl mx-4 sm:mx-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="h-5 w-5 text-blue-600" />
@@ -89,18 +59,13 @@ function CustomerHistoryDialog({
             </p>
           ) : (
             others.map((c) => (
-              <div
+              <button
                 key={c.id}
-                className="border rounded-lg p-3 hover:bg-blue-50 cursor-pointer transition-colors"
+                type="button"
+                className="w-full text-left border rounded-lg p-3 hover:bg-blue-50 cursor-pointer transition-colors"
                 onClick={() => {
                   onClose();
                   onNavigate(c.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    onClose();
-                    onNavigate(c.id);
-                  }
                 }}
               >
                 <div className="flex items-center justify-between">
@@ -114,7 +79,7 @@ function CustomerHistoryDialog({
                   {new Date(c.createdAt).toLocaleDateString("en-IN")} ·{" "}
                   {c.remarks || "No remarks"}
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>
@@ -124,6 +89,13 @@ function CustomerHistoryDialog({
 }
 
 const normalizePhone = (ph: string) => ph.replace(/\D/g, "");
+
+const checkStale = (c: Case, today: string) =>
+  c.status === "on_route" &&
+  !!c.technicianId &&
+  !c.hasFirstUpdate &&
+  !!c.onRouteDate &&
+  c.onRouteDate < today;
 
 export default function CasesPage() {
   const {
@@ -150,6 +122,8 @@ export default function CasesPage() {
   } | null>(null);
   const PER_PAGE = 20;
 
+  const today = new Date().toISOString().split("T")[0];
+
   const filtered = useMemo(() => {
     return cases
       .filter((c) => {
@@ -160,6 +134,11 @@ export default function CasesPage() {
           c.customerName.toLowerCase().includes(q) ||
           c.phone.includes(q) ||
           c.partCode.toLowerCase().includes(q);
+
+        if (filterStatus === "stale") {
+          return matchSearch && checkStale(c, today);
+        }
+
         const matchStatus = filterStatus === "all" || c.status === filterStatus;
         const matchType =
           filterType === "all" || c.complaintType === filterType;
@@ -178,12 +157,24 @@ export default function CasesPage() {
         (a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       );
-  }, [cases, search, filterStatus, filterType, filterTech, filterAgeing]);
+  }, [
+    cases,
+    search,
+    filterStatus,
+    filterType,
+    filterTech,
+    filterAgeing,
+    today,
+  ]);
+
+  const staleCount = useMemo(
+    () => cases.filter((c) => checkStale(c, today)).length,
+    [cases, today],
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // Get customer history count for a case — normalized phone matching
   const getCustomerHistory = (c: Case) => {
     const phones = [c.phone, c.altPhone]
       .filter(Boolean)
@@ -270,6 +261,8 @@ export default function CasesPage() {
   };
 
   const rowClass = (c: (typeof cases)[0]) => {
+    if (checkStale(c, today))
+      return "bg-amber-50 border-l-4 border-l-amber-400 hover:bg-amber-100";
     const age = getAgeing(c.createdAt);
     const closed = [
       "closed",
@@ -286,9 +279,21 @@ export default function CasesPage() {
 
   const isAdmin = currentUser?.role === "admin";
 
+  const quickFilters = [
+    { label: "All", value: "all" },
+    {
+      label: `No Update${staleCount > 0 ? ` (${staleCount})` : ""}`,
+      value: "stale",
+    },
+    { label: "Pending", value: "pending" },
+    { label: "On Route", value: "on_route" },
+    { label: "Part Required", value: "part_required" },
+    { label: "Closed", value: "closed" },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900">All Cases</h2>
           <p className="text-sm text-gray-500">{filtered.length} cases found</p>
@@ -296,45 +301,74 @@ export default function CasesPage() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 mr-1" />
-            Export CSV
+            <span className="hidden sm:inline">Export CSV</span>
           </Button>
-          <Button size="sm" onClick={() => navigate("new-case")}>
+          <Button
+            size="sm"
+            onClick={() => navigate("new-case")}
+            data-ocid="cases.primary_button"
+          >
             <PlusCircle className="h-4 w-4 mr-1" />
             New Case
           </Button>
         </div>
       </div>
 
+      {/* Quick Filter Tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {quickFilters.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => {
+              setFilterStatus(f.value);
+              setPage(1);
+            }}
+            className={`px-3 py-1.5 text-xs rounded-full font-medium transition-colors ${
+              filterStatus === f.value
+                ? f.value === "stale"
+                  ? "bg-amber-500 text-white shadow-sm"
+                  : "bg-blue-600 text-white shadow-sm"
+                : f.value === "stale" && staleCount > 0
+                  ? "bg-amber-100 text-amber-700 border border-amber-300"
+                  : "bg-white text-gray-600 border hover:bg-gray-50"
+            }`}
+            data-ocid="cases.tab"
+          >
+            {f.value === "stale" && staleCount > 0 && (
+              <AlertTriangle className="h-3 w-3 inline mr-1" />
+            )}
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* Search & Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm">
-        <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search by Case ID, customer, phone, part code..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="pl-9"
-            />
-          </div>
+      <div className="bg-white rounded-xl border shadow-sm p-3 sm:p-4 space-y-3">
+        <div className="flex gap-2">
+          <Input
+            placeholder="Search case ID, customer, phone..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            className="flex-1"
+            data-ocid="cases.search_input"
+          />
           <Button
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
+            className="shrink-0"
           >
-            <Filter className="h-4 w-4 mr-1" />
-            Filters
+            <Filter className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">Filters</span>
           </Button>
-          <Upload
-            className="h-8 w-8 text-gray-400 cursor-pointer hover:text-blue-600"
-            onClick={() => {}}
-          />
         </div>
+
         {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t">
             <Select
               value={filterStatus}
               onValueChange={(v) => {
@@ -342,12 +376,30 @@ export default function CasesPage() {
                 setPage(1);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {ALL_STATUSES.map((s) => (
+                <SelectItem value="all">All Status</SelectItem>
+                {[
+                  "new",
+                  "printed",
+                  "confirmed",
+                  "pending",
+                  "on_route",
+                  "rescheduled",
+                  "part_required",
+                  "part_ordered",
+                  "part_received",
+                  "re_open",
+                  "gas_charge_pending",
+                  "gas_charge_done",
+                  "adjustment_closed",
+                  "replacement_done",
+                  "closed",
+                  "cancelled",
+                  "transferred",
+                ].map((s) => (
                   <SelectItem key={s} value={s}>
                     {s.replace(/_/g, " ")}
                   </SelectItem>
@@ -361,7 +413,7 @@ export default function CasesPage() {
                 setPage(1);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="text-xs">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -378,7 +430,7 @@ export default function CasesPage() {
                 setPage(1);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="text-xs">
                 <SelectValue placeholder="Technician" />
               </SelectTrigger>
               <SelectContent>
@@ -397,154 +449,167 @@ export default function CasesPage() {
                 setPage(1);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="text-xs">
                 <SelectValue placeholder="Ageing" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Ages</SelectItem>
-                <SelectItem value="0-3">0-3 Days</SelectItem>
-                <SelectItem value="4-7">4-7 Days</SelectItem>
-                <SelectItem value="8+">8+ Days (Overdue)</SelectItem>
+                <SelectItem value="0-3">0–3 days</SelectItem>
+                <SelectItem value="4-7">4–7 days</SelectItem>
+                <SelectItem value="8+">8+ days</SelectItem>
               </SelectContent>
             </Select>
           </div>
         )}
+
+        {selected.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+            <span className="text-sm text-gray-600">
+              {selected.size} selected
+            </span>
+            <Select value={bulkStatus} onValueChange={setBulkStatus}>
+              <SelectTrigger className="w-40 text-xs">
+                <SelectValue placeholder="Change status" />
+              </SelectTrigger>
+              <SelectContent>
+                {["pending", "confirmed", "cancelled"].map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={applyBulkStatus} disabled={!bulkStatus}>
+              Apply
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Bulk Actions */}
-      {selected.size > 0 && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-          <span className="text-sm font-medium text-blue-700">
-            {selected.size} selected
-          </span>
-          <Select value={bulkStatus} onValueChange={setBulkStatus}>
-            <SelectTrigger className="w-48 h-8 text-sm">
-              <SelectValue placeholder="Change status to..." />
-            </SelectTrigger>
-            <SelectContent>
-              {ALL_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s.replace(/_/g, " ")}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button size="sm" onClick={applyBulkStatus} disabled={!bulkStatus}>
-            Apply
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setSelected(new Set())}
-          >
-            Clear
-          </Button>
-        </div>
-      )}
-
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-gray-50">
-                <th className="px-4 py-3 w-10">
-                  <Checkbox
+                <th className="px-3 py-3 w-8">
+                  <input
+                    type="checkbox"
                     checked={
                       selected.size === paginated.length && paginated.length > 0
                     }
-                    onCheckedChange={toggleAll}
+                    onChange={toggleAll}
+                    className="rounded"
                   />
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
                   Case ID
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">
                   Customer
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Phone
-                </th>
-                <th className="hidden sm:table-cell text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">
                   Product
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">
                   Type
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
                   Status
                 </th>
-                <th className="hidden sm:table-cell text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">
                   Technician
                 </th>
-                <th className="hidden sm:table-cell text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">
                   Age
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
                   Cust. History
                 </th>
                 {isAdmin && (
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Actions
+                  <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                    Del
                   </th>
                 )}
               </tr>
             </thead>
             <tbody>
-              {paginated.map((c) => {
-                const tech = technicians.find((t) => t.id === c.technicianId);
+              {paginated.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={isAdmin ? 10 : 9}
+                    className="py-10 text-center text-gray-400 text-sm"
+                    data-ocid="cases.empty_state"
+                  >
+                    No cases found
+                  </td>
+                </tr>
+              )}
+              {paginated.map((c, idx) => {
                 const age = getAgeing(c.createdAt);
                 const history = getCustomerHistory(c);
+                const tech = technicians.find((t) => t.id === c.technicianId);
+                const stale = checkStale(c, today);
                 return (
                   <tr
                     key={c.id}
-                    className={`border-b last:border-0 transition-colors cursor-pointer ${rowClass(c)}`}
+                    className={`border-b last:border-0 cursor-pointer transition-colors ${rowClass(c)}`}
                     onClick={() => navigate("case-detail", c.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") navigate("case-detail", c.id);
                     }}
+                    tabIndex={0}
+                    data-ocid={`cases.item.${idx + 1}`}
                   >
                     <td
-                      className="px-4 py-3"
+                      className="px-3 py-3"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                     >
-                      <Checkbox
+                      <input
+                        type="checkbox"
                         checked={selected.has(c.id)}
-                        onCheckedChange={() => toggleSelect(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                        className="rounded"
                       />
                     </td>
                     <td className="px-3 py-3 font-medium text-blue-700">
-                      {c.caseId}
+                      <div className="flex items-center gap-1">
+                        {stale && (
+                          <span title="No technician update">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          </span>
+                        )}
+                        <span>{c.caseId}</span>
+                      </div>
                     </td>
-                    <td className="px-3 py-3 text-gray-800">
-                      {c.customerName}
+                    <td className="px-3 py-3 text-gray-700 hidden sm:table-cell">
+                      <div>
+                        <p className="font-medium">{c.customerName}</p>
+                        <p className="text-xs text-gray-400">{c.phone}</p>
+                      </div>
                     </td>
-                    <td className="px-3 py-3 text-gray-600">{c.phone}</td>
-                    <td className="hidden sm:table-cell px-3 py-3 text-gray-600">
+                    <td className="px-3 py-3 text-gray-600 hidden md:table-cell">
                       {c.product}
                     </td>
-                    <td className="px-3 py-3">
-                      <span
-                        className={`text-xs font-medium capitalize ${
-                          c.complaintType === "installation"
-                            ? "text-blue-600"
-                            : c.complaintType === "breakdown"
-                              ? "text-orange-600"
-                              : "text-purple-600"
-                        }`}
-                      >
-                        {c.complaintType.replace("_", " ")}
-                      </span>
+                    <td className="px-3 py-3 text-gray-500 hidden lg:table-cell capitalize">
+                      {c.complaintType.replace("_", " ")}
                     </td>
                     <td className="px-3 py-3">
                       <StatusBadge status={c.status} />
                     </td>
-                    <td className="hidden sm:table-cell px-3 py-3 text-gray-500 text-xs">
+                    <td className="px-3 py-3 text-gray-600 text-xs hidden md:table-cell">
                       {tech?.name ?? "—"}
                     </td>
                     <td
-                      className={`hidden sm:table-cell px-3 py-3 font-medium text-xs ${
+                      className={`px-3 py-3 font-medium text-xs hidden sm:table-cell ${
                         age >= 8
                           ? "text-red-600"
                           : age >= 4
@@ -563,13 +628,10 @@ export default function CasesPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            setHistoryDialog({
-                              caseId: c.id,
-                              cases: [c, ...history],
-                            })
+                            setHistoryDialog({ caseId: c.id, cases: history })
                           }
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold hover:bg-orange-200 transition-colors"
-                          data-ocid="cases.history.button"
+                          className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full hover:bg-orange-200 transition-colors"
+                          data-ocid={`cases.item.${idx + 1}`}
                         >
                           <History className="h-3 w-3" />
                           {history.length}
@@ -584,107 +646,57 @@ export default function CasesPage() {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <button
-                              type="button"
-                              className="p-1.5 rounded hover:bg-red-100 text-red-400 hover:text-red-600 transition-colors"
-                              title="Delete case"
-                              data-ocid="cases.delete_button"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Delete Case {c.caseId}?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action cannot be undone. The case and all
-                                its data will be permanently deleted.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => deleteCase(c.id)}
-                                data-ocid="cases.confirm_button"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <button
+                          type="button"
+                          onClick={() => deleteCase(c.id)}
+                          className="p-1 hover:bg-red-100 rounded text-red-400 hover:text-red-600"
+                          title="Delete case"
+                          data-ocid={`cases.delete_button.${idx + 1}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </td>
                     )}
                   </tr>
                 );
               })}
-              {paginated.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={isAdmin ? 11 : 10}
-                    className="text-center py-12 text-gray-400"
-                    data-ocid="cases.empty_state"
-                  >
-                    No cases found
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
+
         {/* Pagination */}
-        <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-          <p className="text-xs text-gray-500">
-            Showing {(page - 1) * PER_PAGE + 1}–
-            {Math.min(page * PER_PAGE, filtered.length)} of {filtered.length}
-          </p>
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="h-7"
-              data-ocid="cases.pagination_prev"
-            >
-              Prev
-            </Button>
-            {Array.from(
-              { length: Math.min(5, totalPages) },
-              (_, i) => i + 1,
-            ).map((p) => (
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+            <p className="text-xs text-gray-500">
+              Page {page} of {totalPages} · {filtered.length} total
+            </p>
+            <div className="flex gap-1">
               <Button
-                key={p}
+                variant="outline"
                 size="sm"
-                variant={page === p ? "default" : "outline"}
-                onClick={() => setPage(p)}
-                className="h-7 w-7"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                data-ocid="cases.pagination_prev"
               >
-                {p}
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            ))}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="h-7"
-              data-ocid="cases.pagination_next"
-            >
-              Next
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                data-ocid="cases.pagination_next"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Customer History Dialog */}
       {historyDialog && (
         <CustomerHistoryDialog
-          open={!!historyDialog}
+          open
           onClose={() => setHistoryDialog(null)}
           relatedCases={historyDialog.cases}
           currentCaseId={historyDialog.caseId}

@@ -79,7 +79,7 @@ export interface Notification {
   id: string;
   userId: string;
   message: string;
-  type: "follow_up" | "overdue" | "part_pending" | "general";
+  type: "follow_up" | "overdue" | "part_pending" | "general" | "stale_case";
   isRead: boolean;
   caseId?: string;
   createdAt: string;
@@ -112,6 +112,8 @@ export interface Case {
   updatedAt: string;
   createdBy: string;
   closedAt: string;
+  hasFirstUpdate: boolean;
+  onRouteDate: string;
 }
 
 export interface Settings {

@@ -41,7 +41,6 @@ export default function PartsPage() {
     .filter((c) => {
       if (tab === "part_required") return c.status === "part_required";
       if (tab === "part_ordered") return c.status === "part_ordered";
-      // Part Received: only show cases that are NOT closed
       if (tab === "part_received")
         return (
           c.status === "part_received" && !CLOSED_STATUSES.includes(c.status)
@@ -115,7 +114,7 @@ export default function PartsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           {
             label: "Part Required",
@@ -142,7 +141,7 @@ export default function PartsPage() {
         ].map((c) => (
           <div
             key={c.label}
-            className={`${c.bg} rounded-xl p-4 border border-white shadow-sm`}
+            className={`${c.bg} rounded-xl p-3 sm:p-4 border border-white shadow-sm`}
           >
             <p className="text-xs text-gray-500">{c.label}</p>
             <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
@@ -151,17 +150,18 @@ export default function PartsPage() {
       </div>
 
       {/* 3 Tabs */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-2 text-sm rounded-lg font-medium transition-colors flex items-center gap-2 ${
               tab === t.key
                 ? `${t.color} text-white shadow-sm`
                 : "bg-white text-gray-600 border hover:bg-gray-50"
             }`}
+            data-ocid="parts.tab"
           >
             {t.label}
             <span
@@ -182,29 +182,53 @@ export default function PartsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-gray-50">
-                {[
-                  "Case ID",
-                  "Customer",
-                  "Product",
-                  "Part Name",
-                  "Part Code",
-                  "PO Number",
-                  "Order Date",
-                  "Technician",
-                  "Age",
-                  "Status",
-                  "Actions",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-3 py-3 text-xs font-semibold text-gray-500"
-                  >
-                    {h}
-                  </th>
-                ))}
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                  Case ID
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                  Customer
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">
+                  Product
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                  Part Name
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">
+                  Part Code
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">
+                  PO Number
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">
+                  Order Date
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">
+                  Technician
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">
+                  Age
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                  Status
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
+              {partCases.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={11}
+                    className="py-10 text-center text-gray-400 text-sm"
+                    data-ocid="parts.empty_state"
+                  >
+                    No cases in this stage
+                  </td>
+                </tr>
+              )}
               {partCases.map((c) => {
                 const tech = technicians.find((t) => t.id === c.technicianId);
                 const age = getAgeing(c.createdAt);
@@ -216,22 +240,30 @@ export default function PartsPage() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter") navigate("case-detail", c.id);
                     }}
+                    tabIndex={0}
                   >
                     <td className="px-3 py-3 font-medium text-blue-700">
                       {c.caseId}
                     </td>
                     <td className="px-3 py-3 text-gray-700">
-                      {c.customerName}
+                      <div>
+                        <p className="font-medium">{c.customerName}</p>
+                        <p className="text-xs text-gray-400 sm:hidden">
+                          {c.product}
+                        </p>
+                      </div>
                     </td>
-                    <td className="px-3 py-3 text-gray-600">{c.product}</td>
+                    <td className="px-3 py-3 text-gray-600 hidden sm:table-cell">
+                      {c.product}
+                    </td>
                     <td className="px-3 py-3 font-medium text-orange-700">
                       {c.partName || "—"}
                     </td>
-                    <td className="px-3 py-3 text-gray-600 font-mono text-xs">
+                    <td className="px-3 py-3 text-gray-600 font-mono text-xs hidden md:table-cell">
                       {c.partCode || "—"}
                     </td>
                     <td
-                      className="px-3 py-3"
+                      className="px-3 py-3 hidden md:table-cell"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                     >
@@ -242,23 +274,26 @@ export default function PartsPage() {
                           type="button"
                           onClick={() => setPoDialog(c.id)}
                           className="text-xs text-blue-600 hover:underline"
+                          data-ocid="parts.button"
                         >
                           Enter PO
                         </button>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-gray-500 text-xs">
+                    <td className="px-3 py-3 text-gray-600 text-xs hidden lg:table-cell">
                       {c.orderDate
                         ? new Date(c.orderDate).toLocaleDateString("en-IN")
                         : "—"}
                     </td>
-                    <td className="px-3 py-3 text-gray-600">
+                    <td className="px-3 py-3 text-gray-600 text-xs hidden lg:table-cell">
                       {tech?.name ?? "—"}
                     </td>
                     <td
-                      className={`px-3 py-3 font-medium text-xs ${age >= 8 ? "text-red-600" : "text-yellow-600"}`}
+                      className={`px-3 py-3 font-medium text-xs hidden sm:table-cell ${
+                        age >= 8 ? "text-red-600" : "text-gray-600"
+                      }`}
                     >
                       {age}d
                     </td>
@@ -270,44 +305,44 @@ export default function PartsPage() {
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                     >
-                      {c.status === "part_required" && (
-                        <Button
-                          size="sm"
-                          onClick={() => markOrdered(c.id)}
-                          className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
-                        >
-                          Mark Ordered
-                        </Button>
-                      )}
-                      {c.status === "part_ordered" && (
-                        <Button
-                          size="sm"
-                          onClick={() => markReceived(c.id)}
-                          className="h-7 text-xs bg-green-600 hover:bg-green-700"
-                        >
-                          Mark Received
-                        </Button>
-                      )}
-                      {c.status === "part_received" && (
-                        <Button
-                          size="sm"
-                          onClick={() => markReopen(c.id)}
-                          className="h-7 text-xs bg-violet-600 hover:bg-violet-700"
-                        >
-                          Re-open Case
-                        </Button>
-                      )}
+                      <div className="flex flex-col sm:flex-row gap-1">
+                        {tab === "part_required" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2"
+                            onClick={() => markOrdered(c.id)}
+                            data-ocid="parts.button"
+                          >
+                            Mark Ordered
+                          </Button>
+                        )}
+                        {tab === "part_ordered" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2"
+                            onClick={() => markReceived(c.id)}
+                            data-ocid="parts.button"
+                          >
+                            Mark Received
+                          </Button>
+                        )}
+                        {tab === "part_received" && (
+                          <Button
+                            size="sm"
+                            className="text-xs h-7 px-2 bg-green-600 hover:bg-green-700"
+                            onClick={() => markReopen(c.id)}
+                            data-ocid="parts.button"
+                          >
+                            Re-open
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
               })}
-              {partCases.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="text-center py-10 text-gray-400">
-                    No cases in this section
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -315,33 +350,44 @@ export default function PartsPage() {
 
       {/* PO Dialog */}
       <Dialog open={!!poDialog} onOpenChange={() => setPoDialog(null)}>
-        <DialogContent>
+        <DialogContent className="mx-4 sm:mx-auto">
           <DialogHeader>
             <DialogTitle>Enter PO Details</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1">
-              <Label>PO Number</Label>
+              <Label className="text-xs">PO Number (optional)</Label>
               <Input
-                placeholder="e.g. PO-2024-123"
+                placeholder="e.g. PO-2024-001"
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
+                data-ocid="parts.input"
               />
             </div>
             <div className="space-y-1">
-              <Label>Order Date</Label>
+              <Label className="text-xs">Order Date (optional)</Label>
               <Input
                 type="date"
                 value={orderDate}
                 onChange={(e) => setOrderDate(e.target.value)}
               />
             </div>
-            <Button
-              onClick={() => poDialog && savePO(poDialog)}
-              className="w-full"
-            >
-              Save
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => poDialog && savePO(poDialog)}
+                className="flex-1"
+                data-ocid="parts.save_button"
+              >
+                Save
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setPoDialog(null)}
+                data-ocid="parts.cancel_button"
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

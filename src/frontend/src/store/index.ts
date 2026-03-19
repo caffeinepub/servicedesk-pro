@@ -16,6 +16,7 @@ import type {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const now = () => new Date().toISOString();
+const todayStr = () => new Date().toISOString().split("T")[0];
 
 const SEED_USERS: User[] = [
   {
@@ -106,6 +107,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(1),
     createdBy: "u2",
     closedAt: "",
+    hasFirstUpdate: false,
+    onRouteDate: "",
   },
   {
     id: "c2",
@@ -131,9 +134,11 @@ const SEED_CASES: Case[] = [
     additionalNotes: "",
     photos: [],
     createdAt: d(3),
-    updatedAt: d(1),
+    updatedAt: d(2),
     createdBy: "u1",
     closedAt: "",
+    hasFirstUpdate: false,
+    onRouteDate: d(2).split("T")[0],
   },
   {
     id: "c3",
@@ -162,6 +167,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(2),
     createdBy: "u2",
     closedAt: "",
+    hasFirstUpdate: true,
+    onRouteDate: "",
   },
   {
     id: "c4",
@@ -190,6 +197,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(1),
     createdBy: "u1",
     closedAt: "",
+    hasFirstUpdate: true,
+    onRouteDate: "",
   },
   {
     id: "c5",
@@ -218,6 +227,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(0),
     createdBy: "u1",
     closedAt: d(0),
+    hasFirstUpdate: true,
+    onRouteDate: "",
   },
   {
     id: "c6",
@@ -246,6 +257,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(1),
     createdBy: "u2",
     closedAt: "",
+    hasFirstUpdate: false,
+    onRouteDate: "",
   },
   {
     id: "c7",
@@ -274,6 +287,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(1),
     createdBy: "u1",
     closedAt: "",
+    hasFirstUpdate: false,
+    onRouteDate: "",
   },
   {
     id: "c8",
@@ -302,6 +317,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(0),
     createdBy: "u2",
     closedAt: d(0),
+    hasFirstUpdate: true,
+    onRouteDate: "",
   },
   {
     id: "c9",
@@ -330,6 +347,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(0),
     createdBy: "u1",
     closedAt: "",
+    hasFirstUpdate: false,
+    onRouteDate: "",
   },
   {
     id: "c10",
@@ -358,6 +377,8 @@ const SEED_CASES: Case[] = [
     updatedAt: d(1),
     createdBy: "u2",
     closedAt: "",
+    hasFirstUpdate: true,
+    onRouteDate: "",
   },
 ];
 
@@ -387,7 +408,7 @@ const SEED_AUDIT: AuditEntry[] = [
     userName: "Admin",
     action: "Status Changed",
     details: "New → On Route. Assigned to Suresh Singh",
-    timestamp: d(1),
+    timestamp: d(2),
   },
   {
     id: "a4",
@@ -447,6 +468,7 @@ interface StoreState {
   currentPage: PageType;
   selectedCaseId: string | null;
   notificationsGenerated: boolean;
+  lastMidnightResetDate: string;
 
   // Data
   users: User[];
@@ -468,7 +490,14 @@ interface StoreState {
   addCase: (
     c: Omit<
       Case,
-      "id" | "createdAt" | "updatedAt" | "createdBy" | "closedAt" | "photos"
+      | "id"
+      | "createdAt"
+      | "updatedAt"
+      | "createdBy"
+      | "closedAt"
+      | "photos"
+      | "hasFirstUpdate"
+      | "onRouteDate"
     >,
   ) => Case;
   updateCase: (id: string, updates: Partial<Case>) => void;
@@ -490,6 +519,8 @@ interface StoreState {
     details: string,
   ) => void;
   generateAutoNotifications: () => void;
+  runMidnightResets: () => void;
+  resetStaleTechnician: (caseId: string) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -499,6 +530,7 @@ export const useStore = create<StoreState>()(
       currentPage: "login",
       selectedCaseId: null,
       notificationsGenerated: false,
+      lastMidnightResetDate: "",
       users: SEED_USERS,
       technicians: SEED_TECHNICIANS,
       cases: SEED_CASES,
@@ -506,6 +538,93 @@ export const useStore = create<StoreState>()(
       reminders: [],
       notifications: [],
       settings: { ...SEED_SETTINGS },
+
+      runMidnightResets: () => {
+        const today = todayStr();
+        if (get().lastMidnightResetDate === today) return;
+        const { cases, currentUser } = get();
+        const staleCases = cases.filter(
+          (c) =>
+            c.status === "on_route" &&
+            c.technicianId &&
+            !c.hasFirstUpdate &&
+            c.onRouteDate &&
+            c.onRouteDate < today,
+        );
+        if (staleCases.length === 0) {
+          set({ lastMidnightResetDate: today });
+          return;
+        }
+        const resetAt = now();
+        set((s) => ({
+          lastMidnightResetDate: today,
+          cases: s.cases.map((c) =>
+            staleCases.find((sc) => sc.id === c.id)
+              ? {
+                  ...c,
+                  status: "pending" as CaseStatus,
+                  technicianId: "",
+                  updatedAt: resetAt,
+                }
+              : c,
+          ),
+          auditLog: [
+            ...staleCases.map((c) => ({
+              id: uid(),
+              caseId: c.id,
+              userId: "system",
+              userName: "System (Auto)",
+              action: "Auto Reset",
+              details:
+                "No technician update received. Technician unassigned and case reset to Pending at midnight.",
+              timestamp: resetAt,
+            })),
+            ...s.auditLog,
+          ],
+        }));
+        const newNotifs: Notification[] = staleCases.map((c) => ({
+          id: uid(),
+          userId: currentUser?.id ?? "",
+          message: `Case ${c.caseId} (${c.customerName}) was auto-reset — no technician update received.`,
+          type: "stale_case" as const,
+          isRead: false,
+          caseId: c.id,
+          createdAt: resetAt,
+        }));
+        if (newNotifs.length > 0) {
+          set((s) => ({ notifications: [...newNotifs, ...s.notifications] }));
+        }
+      },
+
+      resetStaleTechnician: (caseId) => {
+        const c = get().cases.find((x) => x.id === caseId);
+        if (!c) return;
+        const resetAt = now();
+        set((s) => ({
+          cases: s.cases.map((x) =>
+            x.id === caseId
+              ? {
+                  ...x,
+                  status: "pending" as CaseStatus,
+                  technicianId: "",
+                  updatedAt: resetAt,
+                }
+              : x,
+          ),
+          auditLog: [
+            {
+              id: uid(),
+              caseId,
+              userId: get().currentUser?.id ?? "",
+              userName: get().currentUser?.name ?? "User",
+              action: "Manual Reset",
+              details: "Technician manually unassigned. Case reset to Pending.",
+              timestamp: resetAt,
+            },
+            ...s.auditLog,
+          ],
+        }));
+      },
 
       login: (email, password) => {
         const user = get().users.find(
@@ -516,6 +635,7 @@ export const useStore = create<StoreState>()(
         );
         if (user) {
           set({ currentUser: user, currentPage: "dashboard" });
+          get().runMidnightResets();
           get().generateAutoNotifications();
           return true;
         }
@@ -584,6 +704,24 @@ export const useStore = create<StoreState>()(
               createdAt: now(),
             });
           }
+          // Stale case detection
+          if (
+            c.status === "on_route" &&
+            c.technicianId &&
+            !c.hasFirstUpdate &&
+            c.onRouteDate &&
+            c.onRouteDate < today
+          ) {
+            newNotifications.push({
+              id: uid(),
+              userId: currentUser?.id ?? "",
+              message: `Case ${c.caseId} (${c.customerName}) is On Route with no technician update — will auto-reset at midnight`,
+              type: "stale_case",
+              isRead: false,
+              caseId: c.id,
+              createdAt: now(),
+            });
+          }
         }
 
         if (newNotifications.length > 0) {
@@ -637,6 +775,8 @@ export const useStore = create<StoreState>()(
           updatedAt: now(),
           createdBy: get().currentUser?.id ?? "",
           closedAt: "",
+          hasFirstUpdate: false,
+          onRouteDate: "",
         };
         set((s) => ({ cases: [newCase, ...s.cases] }));
         get().addAuditEntry({
@@ -760,6 +900,14 @@ export const useStore = create<StoreState>()(
           newStatus === "gas_charge_done"
         ) {
           updates.closedAt = now();
+        }
+        // Track on_route date and first update flag
+        if (newStatus === "on_route") {
+          updates.onRouteDate = todayStr();
+          updates.hasFirstUpdate = false;
+        } else if (oldStatus === "on_route") {
+          // Any status change away from on_route = first update received
+          updates.hasFirstUpdate = true;
         }
         get().updateCase(caseId, updates);
         get().addAuditEntry({

@@ -1,4 +1,4 @@
-import { Bell, CheckCheck, X } from "lucide-react";
+import { AlertTriangle, Bell, CheckCheck, X } from "lucide-react";
 import { useState } from "react";
 import { getAgeing, useStore } from "../store";
 import { Button } from "./ui/button";
@@ -35,10 +35,20 @@ export default function NotificationPanel() {
   );
   const partPending = cases.filter((c) => c.status === "part_required");
 
+  const staleAlerts = cases.filter(
+    (c) =>
+      c.status === "on_route" &&
+      c.technicianId &&
+      !c.hasFirstUpdate &&
+      c.onRouteDate &&
+      c.onRouteDate < today,
+  );
+
   const unreadCount =
     notifications.filter((n) => !n.isRead).length +
     overdueAlerts.length +
-    followUpToday.length;
+    followUpToday.length +
+    staleAlerts.length;
 
   const handleCaseClick = (caseId: string) => {
     navigate("case-detail", caseId);
@@ -51,6 +61,7 @@ export default function NotificationPanel() {
         type="button"
         onClick={() => setOpen(!open)}
         className="relative p-2 rounded-lg hover:bg-white/10 transition-colors"
+        data-ocid="notifications.button"
       >
         <Bell className="h-5 w-5 text-slate-300" />
         {unreadCount > 0 && (
@@ -71,7 +82,7 @@ export default function NotificationPanel() {
             role="button"
             tabIndex={-1}
           />
-          <div className="absolute right-0 top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-100 z-50">
+          <div className="absolute right-0 top-12 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-gray-100 z-50">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="font-semibold text-gray-900">Notifications</h3>
               <div className="flex items-center gap-2">
@@ -94,6 +105,29 @@ export default function NotificationPanel() {
               </div>
             </div>
             <ScrollArea className="max-h-96">
+              {staleAlerts.length > 0 && (
+                <div className="p-2">
+                  <p className="text-xs font-semibold text-amber-700 uppercase px-2 py-1 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    No Update ({staleAlerts.length}) — resets tonight
+                  </p>
+                  {staleAlerts.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleCaseClick(c.id)}
+                      className="w-full text-left px-3 py-2 hover:bg-amber-50 rounded-lg"
+                    >
+                      <p className="text-sm font-medium text-gray-900">
+                        {c.caseId} – {c.customerName}
+                      </p>
+                      <p className="text-xs text-amber-600">
+                        On Route with no update — resets tonight
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
               {overdueAlerts.length > 0 && (
                 <div className="p-2">
                   <p className="text-xs font-semibold text-red-600 uppercase px-2 py-1">
@@ -186,6 +220,7 @@ export default function NotificationPanel() {
               {overdueAlerts.length === 0 &&
                 followUpToday.length === 0 &&
                 partPending.length === 0 &&
+                staleAlerts.length === 0 &&
                 notifications.length === 0 && (
                   <div className="py-8 text-center text-gray-500 text-sm">
                     No notifications
