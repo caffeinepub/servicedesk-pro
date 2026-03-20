@@ -18,7 +18,7 @@ export type CaseStatus =
   | "closed";
 
 export type ComplaintType = "installation" | "breakdown" | "stock_repair";
-export type UserRole = "admin" | "backend_user";
+export type UserRole = "admin" | "supervisor" | "backend_user";
 export type UserStatus = "pending" | "approved" | "rejected";
 export type PhotoType =
   | "product"
@@ -37,6 +37,19 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   createdAt: string;
+  lastLogin: string;
+  lastActive: string;
+  isOnline: boolean;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  details: string;
+  timestamp: string;
+  ip?: string;
 }
 
 export interface Technician {
@@ -46,6 +59,7 @@ export interface Technician {
   specialization: string;
   isActive: boolean;
   createdAt: string;
+  technicianCode?: string;
 }
 
 export interface CasePhoto {
@@ -135,4 +149,108 @@ export type PageType =
   | "technicians"
   | "reports"
   | "settings"
-  | "admin";
+  | "admin"
+  | "profile"
+  | "inventory"
+  | "purchase"
+  | "part-detail"
+  | "issued-parts"
+  | "warehouse"
+  | "masters";
+
+// ── StorePilot Types ────────────────────────────────────────────────────────
+
+export interface StockCompany {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface StockCategory {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface StockPartName {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface WarehouseRack {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface WarehouseShelf {
+  id: string;
+  name: string;
+  rackId: string;
+  createdAt: string;
+}
+
+export interface WarehouseBin {
+  id: string;
+  name: string;
+  shelfId: string;
+  createdAt: string;
+}
+
+export type PartItemStatus =
+  | "in_stock"
+  | "issued"
+  | "installed"
+  | "returned_to_store"
+  | "returned_to_company";
+
+export interface PartInventoryItem {
+  id: string;
+  partCode: string;
+  purchaseId: string;
+  companyId: string;
+  categoryId: string;
+  partNameId: string;
+  rackId: string;
+  shelfId: string;
+  binId: string;
+  status: PartItemStatus;
+  technicianId: string;
+  caseId: string;
+  issueDate: string;
+  issuedBy: string;
+  installedAt: string;
+  returnedToStoreAt: string;
+  returnRemarks: string;
+  returnedToCompanyAt: string;
+  returnToCompanyReason: string;
+  returnToCompanyRemarks: string;
+  returnedToCompanyBy: string;
+  createdAt: string;
+  imageUrl?: string;
+}
+
+export interface PurchaseEntry {
+  id: string;
+  vendorName: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  companyId: string;
+  categoryId: string;
+  partNameId: string;
+  quantity: number;
+  createdAt: string;
+  createdBy: string;
+  invoiceImageUrl?: string;
+}
+
+export interface PartLifecycleEntry {
+  id: string;
+  partId: string;
+  action: string;
+  details: string;
+  userId: string;
+  userName: string;
+  timestamp: string;
+}

@@ -1,17 +1,28 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
+  ActivityLog,
   AuditEntry,
   Case,
   CasePhoto,
   CaseStatus,
   Notification,
   PageType,
+  PartInventoryItem,
+  PartItemStatus,
+  PartLifecycleEntry,
   PhotoType,
+  PurchaseEntry,
   Reminder,
   Settings,
+  StockCategory,
+  StockCompany,
+  StockPartName,
   Technician,
   User,
+  WarehouseBin,
+  WarehouseRack,
+  WarehouseShelf,
 } from "../types";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -28,6 +39,9 @@ const SEED_USERS: User[] = [
     role: "admin",
     status: "approved",
     createdAt: now(),
+    lastLogin: "",
+    lastActive: "",
+    isOnline: false,
   },
   {
     id: "u2",
@@ -38,6 +52,22 @@ const SEED_USERS: User[] = [
     role: "backend_user",
     status: "approved",
     createdAt: now(),
+    lastLogin: "",
+    lastActive: "",
+    isOnline: false,
+  },
+  {
+    id: "u3",
+    name: "Supervisor",
+    email: "supervisor@servicedesk.com",
+    phone: "9777777777",
+    password: "Super@123",
+    role: "supervisor" as const,
+    status: "approved" as const,
+    createdAt: now(),
+    lastLogin: "",
+    lastActive: "",
+    isOnline: false,
   },
 ];
 
@@ -49,6 +79,7 @@ const SEED_TECHNICIANS: Technician[] = [
     specialization: "AC",
     isActive: true,
     createdAt: now(),
+    technicianCode: "TECH-001",
   },
   {
     id: "t2",
@@ -57,6 +88,7 @@ const SEED_TECHNICIANS: Technician[] = [
     specialization: "Washing Machine",
     isActive: true,
     createdAt: now(),
+    technicianCode: "TECH-002",
   },
   {
     id: "t3",
@@ -65,6 +97,7 @@ const SEED_TECHNICIANS: Technician[] = [
     specialization: "Refrigerator",
     isActive: true,
     createdAt: now(),
+    technicianCode: "TECH-003",
   },
   {
     id: "t4",
@@ -73,6 +106,7 @@ const SEED_TECHNICIANS: Technician[] = [
     specialization: "General",
     isActive: false,
     createdAt: now(),
+    technicianCode: "TECH-004",
   },
 ];
 
@@ -203,16 +237,16 @@ const SEED_CASES: Case[] = [
   {
     id: "c5",
     caseId: "MD-2024-005",
-    customerName: "Dealer - TechMart",
+    customerName: "Kavita Joshi",
     phone: "9867890123",
     altPhone: "",
-    address: "Shop 4, Electronics Market",
+    address: "56 Gandhi Nagar, Bhopal",
     product: "Washing Machine",
-    productType: "Top Load 8kg",
-    complaintType: "stock_repair",
+    productType: "Top Load 6.5kg",
+    complaintType: "breakdown",
     status: "closed",
     technicianId: "t2",
-    technicianFeedback: "Repaired and tested",
+    technicianFeedback: "Belt replaced",
     partCode: "",
     partName: "",
     partPhotoUrl: "",
@@ -220,25 +254,25 @@ const SEED_CASES: Case[] = [
     orderDate: "",
     receivedDate: "",
     nextActionDate: "",
-    remarks: "Dealer stock repair",
-    additionalNotes: "Mail sent to company",
+    remarks: "Belt was worn out",
+    additionalNotes: "",
     photos: [],
-    createdAt: d(7),
-    updatedAt: d(0),
-    createdBy: "u1",
-    closedAt: d(0),
+    createdAt: d(15),
+    updatedAt: d(7),
+    createdBy: "u2",
+    closedAt: d(7),
     hasFirstUpdate: true,
     onRouteDate: "",
   },
   {
     id: "c6",
     caseId: "MD-2024-006",
-    customerName: "Rekha Tiwari",
-    phone: "9878901234",
+    customerName: "Priya Sharma",
+    phone: "9812345678",
     altPhone: "",
-    address: "56 Gandhi Nagar, Lucknow",
+    address: "12 MG Road, Delhi",
     product: "AC",
-    productType: "1 Ton Window",
+    productType: "1 Ton Split",
     complaintType: "breakdown",
     status: "pending",
     technicianId: "",
@@ -250,37 +284,7 @@ const SEED_CASES: Case[] = [
     orderDate: "",
     receivedDate: "",
     nextActionDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
-    remarks: "Customer asked to call tomorrow",
-    additionalNotes: "",
-    photos: [],
-    createdAt: d(2),
-    updatedAt: d(1),
-    createdBy: "u2",
-    closedAt: "",
-    hasFirstUpdate: false,
-    onRouteDate: "",
-  },
-  {
-    id: "c7",
-    caseId: "MD-2024-007",
-    customerName: "Sanjay Kapoor",
-    phone: "9889012345",
-    altPhone: "9890123456",
-    address: "89 Model Town, Chandigarh",
-    product: "Refrigerator",
-    productType: "200L Single Door",
-    complaintType: "installation",
-    status: "confirmed",
-    technicianId: "",
-    technicianFeedback: "",
-    partCode: "",
-    partName: "",
-    partPhotoUrl: "",
-    poNumber: "",
-    orderDate: "",
-    receivedDate: "",
-    nextActionDate: "",
-    remarks: "Customer confirmed visit",
+    remarks: "Not cooling properly",
     additionalNotes: "",
     photos: [],
     createdAt: d(2),
@@ -288,188 +292,267 @@ const SEED_CASES: Case[] = [
     createdBy: "u1",
     closedAt: "",
     hasFirstUpdate: false,
-    onRouteDate: "",
-  },
-  {
-    id: "c8",
-    caseId: "MD-2024-008",
-    customerName: "Meena Joshi",
-    phone: "9890123456",
-    altPhone: "",
-    address: "101 Vikas Nagar, Pune",
-    product: "Washing Machine",
-    productType: "Semi Auto 8kg",
-    complaintType: "breakdown",
-    status: "closed",
-    technicianId: "t3",
-    technicianFeedback: "Belt replaced",
-    partCode: "BELT-SA-8",
-    partName: "Drive Belt",
-    partPhotoUrl: "",
-    poNumber: "PO-2024-101",
-    orderDate: d(12),
-    receivedDate: d(6),
-    nextActionDate: "",
-    remarks: "Belt was worn out",
-    additionalNotes: "",
-    photos: [],
-    createdAt: d(14),
-    updatedAt: d(0),
-    createdBy: "u2",
-    closedAt: d(0),
-    hasFirstUpdate: true,
-    onRouteDate: "",
-  },
-  {
-    id: "c9",
-    caseId: "MD-2024-009",
-    customerName: "Deepak Nair",
-    phone: "9901234567",
-    altPhone: "",
-    address: "34 Indiranagar, Bangalore",
-    product: "AC",
-    productType: "1.5 Ton Inverter",
-    complaintType: "breakdown",
-    status: "rescheduled",
-    technicianId: "t1",
-    technicianFeedback: "",
-    partCode: "",
-    partName: "",
-    partPhotoUrl: "",
-    poNumber: "",
-    orderDate: "",
-    receivedDate: "",
-    nextActionDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
-    remarks: "Technician could not reach",
-    additionalNotes: "",
-    photos: [],
-    createdAt: d(6),
-    updatedAt: d(0),
-    createdBy: "u1",
-    closedAt: "",
-    hasFirstUpdate: false,
-    onRouteDate: "",
-  },
-  {
-    id: "c10",
-    caseId: "MD-2024-010",
-    customerName: "Kavita Singh",
-    phone: "9912345678",
-    altPhone: "9923456789",
-    address: "67 Ashok Vihar, Delhi",
-    product: "Refrigerator",
-    productType: "450L French Door",
-    complaintType: "breakdown",
-    status: "part_required",
-    technicianId: "t3",
-    technicianFeedback: "PCB damaged",
-    partCode: "PCB-450-FD",
-    partName: "PCB Board",
-    partPhotoUrl: "",
-    poNumber: "",
-    orderDate: "",
-    receivedDate: "",
-    nextActionDate: "",
-    remarks: "PCB board required",
-    additionalNotes: "",
-    photos: [],
-    createdAt: d(10),
-    updatedAt: d(1),
-    createdBy: "u2",
-    closedAt: "",
-    hasFirstUpdate: true,
     onRouteDate: "",
   },
 ];
 
-const SEED_AUDIT: AuditEntry[] = [
+// ── StorePilot seed data ─────────────────────────────────────────────────────
+
+const SEED_STOCK_COMPANIES: StockCompany[] = [
+  { id: "sc1", name: "Midea", createdAt: now() },
+  { id: "sc2", name: "Toshiba", createdAt: now() },
+  { id: "sc3", name: "Godrej", createdAt: now() },
+  { id: "sc4", name: "Sansui", createdAt: now() },
+];
+
+const SEED_STOCK_CATEGORIES: StockCategory[] = [
+  { id: "scat1", name: "AC", createdAt: now() },
+  { id: "scat2", name: "TV", createdAt: now() },
+  { id: "scat3", name: "Washing Machine", createdAt: now() },
+  { id: "scat4", name: "Refrigerator", createdAt: now() },
+];
+
+const SEED_STOCK_PART_NAMES: StockPartName[] = [
+  { id: "spn1", name: "Compressor", createdAt: now() },
+  { id: "spn2", name: "Power Board", createdAt: now() },
+  { id: "spn3", name: "Display Panel", createdAt: now() },
+  { id: "spn4", name: "PCB Board", createdAt: now() },
+  { id: "spn5", name: "Drive Belt", createdAt: now() },
+  { id: "spn6", name: "Thermostat", createdAt: now() },
+];
+
+const SEED_RACKS: WarehouseRack[] = [
+  { id: "rack1", name: "Rack A", createdAt: now() },
+  { id: "rack2", name: "Rack B", createdAt: now() },
+];
+
+const SEED_SHELVES: WarehouseShelf[] = [
+  { id: "shelf1", name: "Shelf A1", rackId: "rack1", createdAt: now() },
+  { id: "shelf2", name: "Shelf A2", rackId: "rack1", createdAt: now() },
+  { id: "shelf3", name: "Shelf B1", rackId: "rack2", createdAt: now() },
+];
+
+const SEED_BINS: WarehouseBin[] = [
+  { id: "bin1", name: "Bin A1-1", shelfId: "shelf1", createdAt: now() },
+  { id: "bin2", name: "Bin A1-2", shelfId: "shelf1", createdAt: now() },
+  { id: "bin3", name: "Bin B1-1", shelfId: "shelf3", createdAt: now() },
+];
+
+const SEED_PURCHASES: PurchaseEntry[] = [
   {
-    id: "a1",
-    caseId: "c1",
-    userId: "u2",
-    userName: "Rahul Verma",
-    action: "Case Created",
-    details: "Status set to New",
-    timestamp: d(1),
+    id: "pur1",
+    vendorName: "Star Electronics",
+    invoiceNumber: "INV-2024-001",
+    invoiceDate: d(10).split("T")[0],
+    companyId: "sc1",
+    categoryId: "scat1",
+    partNameId: "spn1",
+    quantity: 3,
+    createdAt: d(10),
+    createdBy: "u1",
   },
   {
-    id: "a2",
-    caseId: "c2",
-    userId: "u2",
-    userName: "Rahul Verma",
-    action: "Case Created",
-    details: "Status set to New",
-    timestamp: d(3),
+    id: "pur2",
+    vendorName: "Metro Parts Pvt Ltd",
+    invoiceNumber: "INV-2024-002",
+    invoiceDate: d(5).split("T")[0],
+    companyId: "sc2",
+    categoryId: "scat2",
+    partNameId: "spn2",
+    quantity: 2,
+    createdAt: d(5),
+    createdBy: "u1",
+  },
+];
+
+const SEED_PART_ITEMS: PartInventoryItem[] = [
+  {
+    id: "pi1",
+    partCode: "MIDAC-COMP-001",
+    purchaseId: "pur1",
+    companyId: "sc1",
+    categoryId: "scat1",
+    partNameId: "spn1",
+    rackId: "rack1",
+    shelfId: "shelf1",
+    binId: "bin1",
+    status: "in_stock",
+    technicianId: "",
+    caseId: "",
+    issueDate: "",
+    issuedBy: "",
+    installedAt: "",
+    returnedToStoreAt: "",
+    returnRemarks: "",
+    returnedToCompanyAt: "",
+    returnToCompanyReason: "",
+    returnToCompanyRemarks: "",
+    returnedToCompanyBy: "",
+    createdAt: d(10),
   },
   {
-    id: "a3",
-    caseId: "c2",
+    id: "pi2",
+    partCode: "MIDAC-COMP-002",
+    purchaseId: "pur1",
+    companyId: "sc1",
+    categoryId: "scat1",
+    partNameId: "spn1",
+    rackId: "rack1",
+    shelfId: "shelf1",
+    binId: "bin1",
+    status: "in_stock",
+    technicianId: "",
+    caseId: "",
+    issueDate: "",
+    issuedBy: "",
+    installedAt: "",
+    returnedToStoreAt: "",
+    returnRemarks: "",
+    returnedToCompanyAt: "",
+    returnToCompanyReason: "",
+    returnToCompanyRemarks: "",
+    returnedToCompanyBy: "",
+    createdAt: d(10),
+  },
+  {
+    id: "pi3",
+    partCode: "MIDAC-COMP-003",
+    purchaseId: "pur1",
+    companyId: "sc1",
+    categoryId: "scat1",
+    partNameId: "spn1",
+    rackId: "",
+    shelfId: "",
+    binId: "",
+    status: "in_stock",
+    technicianId: "",
+    caseId: "",
+    issueDate: "",
+    issuedBy: "",
+    installedAt: "",
+    returnedToStoreAt: "",
+    returnRemarks: "",
+    returnedToCompanyAt: "",
+    returnToCompanyReason: "",
+    returnToCompanyRemarks: "",
+    returnedToCompanyBy: "",
+    createdAt: d(10),
+  },
+  {
+    id: "pi4",
+    partCode: "TOSBTV-PWR-001",
+    purchaseId: "pur2",
+    companyId: "sc2",
+    categoryId: "scat2",
+    partNameId: "spn2",
+    rackId: "rack2",
+    shelfId: "shelf3",
+    binId: "bin3",
+    status: "in_stock",
+    technicianId: "",
+    caseId: "",
+    issueDate: "",
+    issuedBy: "",
+    installedAt: "",
+    returnedToStoreAt: "",
+    returnRemarks: "",
+    returnedToCompanyAt: "",
+    returnToCompanyReason: "",
+    returnToCompanyRemarks: "",
+    returnedToCompanyBy: "",
+    createdAt: d(5),
+  },
+  {
+    id: "pi5",
+    partCode: "TOSBTV-PWR-002",
+    purchaseId: "pur2",
+    companyId: "sc2",
+    categoryId: "scat2",
+    partNameId: "spn2",
+    rackId: "rack2",
+    shelfId: "shelf3",
+    binId: "bin3",
+    status: "issued",
+    technicianId: "t1",
+    caseId: "MD-2024-004",
+    issueDate: d(2),
+    issuedBy: "Admin",
+    installedAt: "",
+    returnedToStoreAt: "",
+    returnRemarks: "",
+    returnedToCompanyAt: "",
+    returnToCompanyReason: "",
+    returnToCompanyRemarks: "",
+    returnedToCompanyBy: "",
+    createdAt: d(5),
+  },
+];
+
+const SEED_LIFECYCLE: PartLifecycleEntry[] = [
+  {
+    id: "lc1",
+    partId: "pi1",
+    action: "Purchased",
+    details: "Received from Star Electronics, Invoice INV-2024-001",
     userId: "u1",
     userName: "Admin",
-    action: "Status Changed",
-    details: "New → On Route. Assigned to Suresh Singh",
-    timestamp: d(2),
+    timestamp: d(10),
   },
   {
-    id: "a4",
-    caseId: "c3",
-    userId: "u2",
-    userName: "Rahul Verma",
-    action: "Case Created",
-    details: "Status set to New",
-    timestamp: d(9),
-  },
-  {
-    id: "a5",
-    caseId: "c3",
+    id: "lc2",
+    partId: "pi2",
+    action: "Purchased",
+    details: "Received from Star Electronics, Invoice INV-2024-001",
     userId: "u1",
     userName: "Admin",
-    action: "Status Changed",
-    details: "New → On Route",
+    timestamp: d(10),
+  },
+  {
+    id: "lc3",
+    partId: "pi3",
+    action: "Purchased",
+    details: "Received from Star Electronics, Invoice INV-2024-001",
+    userId: "u1",
+    userName: "Admin",
+    timestamp: d(10),
+  },
+  {
+    id: "lc4",
+    partId: "pi4",
+    action: "Purchased",
+    details: "Received from Metro Parts Pvt Ltd, Invoice INV-2024-002",
+    userId: "u1",
+    userName: "Admin",
     timestamp: d(5),
   },
   {
-    id: "a6",
-    caseId: "c3",
+    id: "lc5",
+    partId: "pi5",
+    action: "Purchased",
+    details: "Received from Metro Parts Pvt Ltd, Invoice INV-2024-002",
     userId: "u1",
     userName: "Admin",
-    action: "Status Changed",
-    details: "On Route → Part Required. Part: Compressor COMP-350-R22",
+    timestamp: d(5),
+  },
+  {
+    id: "lc6",
+    partId: "pi5",
+    action: "Issued",
+    details: "Issued to Ramesh Kumar for Case MD-2024-004",
+    userId: "u1",
+    userName: "Admin",
     timestamp: d(2),
   },
 ];
 
-const SEED_SETTINGS: Settings = {
-  supervisorWhatsApp: "919999999999",
-  supervisorName: "Mishra",
-  companyName: "Midea/Toshiba Service Centre",
-  products: [
-    "AC",
-    "Washing Machine",
-    "Refrigerator",
-    "Microwave",
-    "Water Heater",
-    "Air Cooler",
-  ],
-};
-
-const CLOSED_STATUSES = [
-  "closed",
-  "cancelled",
-  "transferred",
-  "adjustment_closed",
-  "replacement_done",
-  "gas_charge_done",
-];
-
-// Auto-notification types that get refreshed on every login
-const AUTO_NOTIF_TYPES = ["overdue", "follow_up", "part_pending", "stale_case"];
+// ── StoreState interface ─────────────────────────────────────────────────────
 
 interface StoreState {
   // Auth
   currentUser: User | null;
   currentPage: PageType;
   selectedCaseId: string | null;
+  selectedPartId: string | null;
   notificationsGeneratedDate: string;
   lastMidnightResetDate: string;
 
@@ -478,18 +561,45 @@ interface StoreState {
   technicians: Technician[];
   cases: Case[];
   auditLog: AuditEntry[];
+  activityLog: ActivityLog[];
   reminders: Reminder[];
   notifications: Notification[];
   settings: Settings;
 
+  // StorePilot data
+  stockCompanies: StockCompany[];
+  stockCategories: StockCategory[];
+  stockPartNames: StockPartName[];
+  racks: WarehouseRack[];
+  shelves: WarehouseShelf[];
+  bins: WarehouseBin[];
+  purchaseEntries: PurchaseEntry[];
+  partItems: PartInventoryItem[];
+  partLifecycle: PartLifecycleEntry[];
+
   // Actions
   login: (email: string, password: string) => boolean;
   logout: () => void;
-  navigate: (page: PageType, caseId?: string) => void;
-  registerUser: (user: Omit<User, "id" | "createdAt" | "status">) => void;
+  navigate: (page: PageType, caseId?: string, partId?: string) => void;
+  registerUser: (
+    user: Omit<
+      User,
+      "id" | "createdAt" | "status" | "lastLogin" | "lastActive" | "isOnline"
+    >,
+  ) => void;
   approveUser: (userId: string) => void;
   rejectUser: (userId: string) => void;
   updateUserRole: (userId: string, role: User["role"]) => void;
+  createUser: (userData: {
+    name: string;
+    email: string;
+    phone: string;
+    role: User["role"];
+    password: string;
+  }) => void;
+  editUser: (userId: string, updates: Partial<User>) => void;
+  deleteUser: (userId: string) => void;
+  updateCurrentUser: (updates: Partial<User>) => void;
   addCase: (
     c: Omit<
       Case,
@@ -538,521 +648,1104 @@ interface StoreState {
       | "onRouteDate"
     >[],
   ) => number;
+
+  // StorePilot actions
+  addStockCompany: (name: string) => void;
+  updateStockCompany: (id: string, name: string) => void;
+  deleteStockCompany: (id: string) => void;
+  addStockCategory: (name: string) => void;
+  updateStockCategory: (id: string, name: string) => void;
+  deleteStockCategory: (id: string) => void;
+  addStockPartName: (name: string) => void;
+  updateStockPartName: (id: string, name: string) => void;
+  deleteStockPartName: (id: string) => void;
+  addRack: (name: string) => void;
+  updateRack: (id: string, name: string) => void;
+  deleteRack: (id: string) => void;
+  addShelf: (name: string, rackId: string) => void;
+  updateShelf: (id: string, updates: Partial<WarehouseShelf>) => void;
+  deleteShelf: (id: string) => void;
+  addBin: (name: string, shelfId: string) => void;
+  updateBin: (id: string, updates: Partial<WarehouseBin>) => void;
+  deleteBin: (id: string) => void;
+  addPurchaseEntry: (
+    entry: Omit<PurchaseEntry, "id" | "createdAt" | "createdBy">,
+    partCodes: Array<{
+      code: string;
+      rackId: string;
+      shelfId: string;
+      binId: string;
+      imageUrl?: string;
+    }>,
+  ) => void;
+  assignPartLocation: (
+    partId: string,
+    rackId: string,
+    shelfId: string,
+    binId: string,
+  ) => void;
+  issuePartToTechnician: (
+    partId: string,
+    technicianId: string,
+    caseId: string,
+  ) => void;
+  markPartInstalled: (partId: string) => void;
+  returnPartToStore: (partId: string, remarks: string) => void;
+  returnPartToCompany: (
+    partId: string,
+    reason: string,
+    remarks: string,
+  ) => void;
 }
 
 export const useStore = create<StoreState>()(
   persist(
-    (set, get) => ({
-      currentUser: null,
-      currentPage: "login",
-      selectedCaseId: null,
-      notificationsGeneratedDate: "",
-      lastMidnightResetDate: "",
-      users: SEED_USERS,
-      technicians: SEED_TECHNICIANS,
-      cases: SEED_CASES,
-      auditLog: SEED_AUDIT,
-      reminders: [],
-      notifications: [],
-      settings: { ...SEED_SETTINGS },
-
-      runMidnightResets: () => {
-        const today = todayStr();
-        if (get().lastMidnightResetDate === today) return;
-        const { cases, currentUser } = get();
-        const staleCases = cases.filter(
-          (c) =>
-            c.status === "on_route" &&
-            c.technicianId &&
-            !c.hasFirstUpdate &&
-            c.onRouteDate &&
-            c.onRouteDate < today,
-        );
-        if (staleCases.length === 0) {
-          set({ lastMidnightResetDate: today });
-          return;
-        }
-        const resetAt = now();
+    (set, get) => {
+      const logActivity = (
+        userId: string,
+        userName: string,
+        action: string,
+        details: string,
+      ) => {
         set((s) => ({
-          lastMidnightResetDate: today,
-          cases: s.cases.map((c) =>
-            staleCases.find((sc) => sc.id === c.id)
-              ? {
-                  ...c,
-                  status: "pending" as CaseStatus,
-                  technicianId: "",
-                  updatedAt: resetAt,
-                }
-              : c,
-          ),
-          auditLog: [
-            ...staleCases.map((c) => ({
-              id: uid(),
-              caseId: c.id,
-              userId: "system",
-              userName: "System (Auto)",
-              action: "Auto Reset",
-              details:
-                "No technician update received. Technician unassigned and case reset to Pending at midnight.",
-              timestamp: resetAt,
-            })),
-            ...s.auditLog,
-          ],
-        }));
-        const newNotifs: Notification[] = staleCases.map((c) => ({
-          id: uid(),
-          userId: currentUser?.id ?? "",
-          message: `Case ${c.caseId} (${c.customerName}) was auto-reset — no technician update received.`,
-          type: "stale_case" as const,
-          isRead: false,
-          caseId: c.id,
-          createdAt: resetAt,
-        }));
-        if (newNotifs.length > 0) {
-          set((s) => ({ notifications: [...newNotifs, ...s.notifications] }));
-        }
-      },
-
-      resetStaleTechnician: (caseId) => {
-        const c = get().cases.find((x) => x.id === caseId);
-        if (!c) return;
-        const resetAt = now();
-        set((s) => ({
-          cases: s.cases.map((x) =>
-            x.id === caseId
-              ? {
-                  ...x,
-                  status: "pending" as CaseStatus,
-                  technicianId: "",
-                  updatedAt: resetAt,
-                }
-              : x,
-          ),
-          auditLog: [
+          activityLog: [
             {
               id: uid(),
-              caseId,
-              userId: get().currentUser?.id ?? "",
-              userName: get().currentUser?.name ?? "User",
-              action: "Manual Reset",
-              details: "Technician manually unassigned. Case reset to Pending.",
-              timestamp: resetAt,
+              userId,
+              userName,
+              action,
+              details,
+              timestamp: now(),
             },
-            ...s.auditLog,
+            ...s.activityLog,
           ],
         }));
-      },
+      };
 
-      login: (email, password) => {
-        const user = get().users.find(
-          (u) =>
-            u.email === email &&
-            u.password === password &&
-            u.status === "approved",
-        );
-        if (user) {
-          // Reset notifications date so they get refreshed on this login
-          set({
-            currentUser: user,
-            currentPage: "dashboard",
-            notificationsGeneratedDate: "",
-          });
-          get().runMidnightResets();
-          get().generateAutoNotifications();
-          return true;
-        }
-        return false;
-      },
+      return {
+        currentUser: null,
+        currentPage: "login" as PageType,
+        selectedCaseId: null,
+        selectedPartId: null,
+        notificationsGeneratedDate: "",
+        lastMidnightResetDate: "",
+        users: SEED_USERS,
+        technicians: SEED_TECHNICIANS,
+        cases: SEED_CASES,
+        auditLog: [],
+        activityLog: [],
+        reminders: [],
+        notifications: [],
+        settings: {
+          supervisorWhatsApp: "",
+          supervisorName: "Supervisor",
+          companyName: "Service Centre",
+          products: [
+            "AC",
+            "Washing Machine",
+            "Refrigerator",
+            "TV",
+            "Microwave",
+          ],
+        },
+        stockCompanies: SEED_STOCK_COMPANIES,
+        stockCategories: SEED_STOCK_CATEGORIES,
+        stockPartNames: SEED_STOCK_PART_NAMES,
+        racks: SEED_RACKS,
+        shelves: SEED_SHELVES,
+        bins: SEED_BINS,
+        purchaseEntries: SEED_PURCHASES,
+        partItems: SEED_PART_ITEMS,
+        partLifecycle: SEED_LIFECYCLE,
 
-      logout: () =>
-        set({
-          currentUser: null,
-          currentPage: "login",
-          selectedCaseId: null,
-          notificationsGeneratedDate: "",
-        }),
-
-      navigate: (page, caseId) =>
-        set({
-          currentPage: page,
-          selectedCaseId: caseId ?? get().selectedCaseId,
-        }),
-
-      generateAutoNotifications: () => {
-        const today = todayStr();
-        // Only generate once per day (not per session) to avoid duplicates on page refresh
-        if (get().notificationsGeneratedDate === today) return;
-
-        const { cases, currentUser } = get();
-        const newNotifications: Notification[] = [];
-        const fiveDaysAgo = new Date(Date.now() - 5 * 86400000).toISOString();
-
-        for (const c of cases) {
-          if (CLOSED_STATUSES.includes(c.status)) continue;
-          const ageDays = Math.floor(
-            (Date.now() - new Date(c.createdAt).getTime()) / 86400000,
+        login: (email, password) => {
+          const user = get().users.find(
+            (u) =>
+              u.email === email &&
+              u.password === password &&
+              u.status === "approved",
           );
-          if (ageDays >= 8) {
-            newNotifications.push({
-              id: uid(),
-              userId: currentUser?.id ?? "",
-              message: `Case ${c.caseId} (${c.customerName}) is overdue — ${ageDays} days old`,
-              type: "overdue",
-              isRead: false,
-              caseId: c.id,
-              createdAt: now(),
-            });
-          }
-          if (c.nextActionDate && c.nextActionDate.split("T")[0] === today) {
-            newNotifications.push({
-              id: uid(),
-              userId: currentUser?.id ?? "",
-              message: `Follow-up due today for case ${c.caseId} — ${c.customerName}`,
-              type: "follow_up",
-              isRead: false,
-              caseId: c.id,
-              createdAt: now(),
-            });
-          }
-          if (
-            (c.status === "part_required" || c.status === "part_ordered") &&
-            c.updatedAt < fiveDaysAgo
-          ) {
-            newNotifications.push({
-              id: uid(),
-              userId: currentUser?.id ?? "",
-              message: `Part pending >5 days for case ${c.caseId} — ${c.partName || "Unknown part"}`,
-              type: "part_pending",
-              isRead: false,
-              caseId: c.id,
-              createdAt: now(),
-            });
-          }
-          // Stale case detection
-          if (
-            c.status === "on_route" &&
-            c.technicianId &&
-            !c.hasFirstUpdate &&
-            c.onRouteDate &&
-            c.onRouteDate < today
-          ) {
-            newNotifications.push({
-              id: uid(),
-              userId: currentUser?.id ?? "",
-              message: `Case ${c.caseId} (${c.customerName}) is On Route with no technician update — will auto-reset at midnight`,
-              type: "stale_case",
-              isRead: false,
-              caseId: c.id,
-              createdAt: now(),
-            });
-          }
-        }
-
-        set((s) => ({
-          // Remove all previous auto-generated notifications and replace with fresh ones
-          notifications: [
-            ...newNotifications,
-            ...s.notifications.filter(
-              (n) => !AUTO_NOTIF_TYPES.includes(n.type),
+          if (!user) return false;
+          const loginTime = now();
+          set((s) => ({
+            currentUser: { ...user, isOnline: true, lastLogin: loginTime },
+            currentPage: "dashboard" as PageType,
+            users: s.users.map((u) =>
+              u.id === user.id
+                ? {
+                    ...u,
+                    isOnline: true,
+                    lastLogin: loginTime,
+                    lastActive: loginTime,
+                  }
+                : u,
             ),
-          ],
-          notificationsGeneratedDate: today,
-        }));
-      },
+          }));
+          logActivity(user.id, user.name, "Login", "User logged in");
+          get().generateAutoNotifications();
+          get().runMidnightResets();
+          return true;
+        },
 
-      registerUser: (userData) => {
-        const newUser: User = {
-          ...userData,
-          id: uid(),
-          status: "pending",
-          createdAt: now(),
-        };
-        set((s) => ({ users: [...s.users, newUser] }));
-      },
+        logout: () => {
+          const cu = get().currentUser;
+          if (cu) {
+            logActivity(cu.id, cu.name, "Logout", "User logged out");
+            set((s) => ({
+              users: s.users.map((u) =>
+                u.id === cu.id
+                  ? { ...u, isOnline: false, lastActive: now() }
+                  : u,
+              ),
+            }));
+          }
+          set({ currentUser: null, currentPage: "login" as PageType });
+        },
 
-      approveUser: (userId) => {
-        set((s) => ({
-          users: s.users.map((u) =>
-            u.id === userId ? { ...u, status: "approved" } : u,
-          ),
-        }));
-      },
+        navigate: (page, caseId, partId) =>
+          set({
+            currentPage: page,
+            selectedCaseId: caseId ?? get().selectedCaseId,
+            selectedPartId: partId ?? get().selectedPartId,
+          }),
 
-      rejectUser: (userId) => {
-        set((s) => ({
-          users: s.users.map((u) =>
-            u.id === userId ? { ...u, status: "rejected" } : u,
-          ),
-        }));
-      },
+        generateAutoNotifications: () => {
+          const today = todayStr();
+          if (get().notificationsGeneratedDate === today) return;
+          const cu = get().currentUser;
+          if (!cu) return;
+          const { cases } = get();
+          const newNotifs: Omit<Notification, "id" | "createdAt">[] = [];
+          for (const c of cases) {
+            if (["closed", "cancelled", "transferred"].includes(c.status))
+              continue;
+            const ageMs = Date.now() - new Date(c.createdAt).getTime();
+            const ageDays = Math.floor(ageMs / 86400000);
+            if (
+              ageDays > 7 &&
+              ![
+                "closed",
+                "cancelled",
+                "adjustment_closed",
+                "replacement_done",
+                "gas_charge_done",
+              ].includes(c.status)
+            ) {
+              newNotifs.push({
+                userId: cu.id,
+                message: `Case ${c.caseId} (${c.customerName}) is ${ageDays} days old and still open`,
+                type: "overdue",
+                isRead: false,
+                caseId: c.id,
+              });
+            }
+            if (c.nextActionDate && c.nextActionDate === today) {
+              newNotifs.push({
+                userId: cu.id,
+                message: `Follow-up due today for ${c.customerName} (${c.caseId})`,
+                type: "follow_up",
+                isRead: false,
+                caseId: c.id,
+              });
+            }
+            if (["part_required", "part_ordered"].includes(c.status)) {
+              newNotifs.push({
+                userId: cu.id,
+                message: `Part pending for case ${c.caseId} (${c.customerName})`,
+                type: "part_pending",
+                isRead: false,
+                caseId: c.id,
+              });
+            }
+          }
+          set((s) => ({
+            notifications: [
+              ...newNotifs.map((n) => ({ ...n, id: uid(), createdAt: now() })),
+              ...s.notifications,
+            ],
+            notificationsGeneratedDate: today,
+          }));
+        },
 
-      updateUserRole: (userId, role) => {
-        set((s) => ({
-          users: s.users.map((u) => (u.id === userId ? { ...u, role } : u)),
-        }));
-      },
+        runMidnightResets: () => {
+          const today = todayStr();
+          if (get().lastMidnightResetDate === today) return;
+          const { cases } = get();
+          const cu = get().currentUser;
+          for (const c of cases) {
+            if (
+              c.status === "on_route" &&
+              c.onRouteDate &&
+              c.onRouteDate < today &&
+              !c.hasFirstUpdate
+            ) {
+              get().resetStaleTechnician(c.id);
+            }
+          }
+          set({ lastMidnightResetDate: today });
+          if (cu) {
+            const staleCount = cases.filter(
+              (c) =>
+                c.status === "on_route" &&
+                c.onRouteDate &&
+                c.onRouteDate < today &&
+                !c.hasFirstUpdate,
+            ).length;
+            if (staleCount > 0) {
+              set((s) => ({
+                notifications: [
+                  {
+                    id: uid(),
+                    userId: cu.id,
+                    message: `${staleCount} case(s) had no technician update overnight and have been reset`,
+                    type: "stale_case" as const,
+                    isRead: false,
+                    createdAt: now(),
+                  },
+                  ...s.notifications,
+                ],
+              }));
+            }
+          }
+        },
 
-      addCase: (caseData) => {
-        const newCase: Case = {
-          ...caseData,
-          id: uid(),
-          photos: [],
-          createdAt: now(),
-          updatedAt: now(),
-          createdBy: get().currentUser?.id ?? "",
-          closedAt: "",
-          hasFirstUpdate: false,
-          onRouteDate: "",
-        };
-        set((s) => ({ cases: [newCase, ...s.cases] }));
-        get().addAuditEntry({
-          caseId: newCase.id,
-          userId: get().currentUser?.id ?? "",
-          userName: get().currentUser?.name ?? "",
-          action: "Case Created",
-          details: `Case ${newCase.caseId} created. Status: New`,
-        });
-        return newCase;
-      },
+        resetStaleTechnician: (caseId) => {
+          const c = get().cases.find((x) => x.id === caseId);
+          if (!c) return;
+          set((s) => ({
+            cases: s.cases.map((x) =>
+              x.id === caseId
+                ? {
+                    ...x,
+                    technicianId: "",
+                    status: "pending" as CaseStatus,
+                    updatedAt: now(),
+                  }
+                : x,
+            ),
+          }));
+        },
 
-      updateCase: (id, updates) => {
-        set((s) => ({
-          cases: s.cases.map((c) =>
-            c.id === id ? { ...c, ...updates, updatedAt: now() } : c,
-          ),
-        }));
-      },
+        registerUser: (user) => {
+          set((s) => ({
+            users: [
+              ...s.users,
+              {
+                ...user,
+                id: uid(),
+                createdAt: now(),
+                status: "pending" as const,
+                lastLogin: "",
+                lastActive: "",
+                isOnline: false,
+              },
+            ],
+          }));
+        },
 
-      deleteCase: (id) => {
-        const c = get().cases.find((x) => x.id === id);
-        if (!c) return;
-        get().addAuditEntry({
-          caseId: id,
-          userId: get().currentUser?.id ?? "",
-          userName: get().currentUser?.name ?? "",
-          action: "Case Deleted",
-          details: `Case ${c.caseId} deleted by admin`,
-        });
-        set((s) => ({ cases: s.cases.filter((x) => x.id !== id) }));
-      },
+        approveUser: (userId) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            users: s.users.map((u) =>
+              u.id === userId ? { ...u, status: "approved" as const } : u,
+            ),
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "User Approved",
+              `Approved user ${userId}`,
+            );
+        },
 
-      deleteCases: (ids) => {
-        const { cases, currentUser } = get();
-        const toDelete = cases.filter((c) => ids.includes(c.id));
-        if (toDelete.length === 0) return;
-        const auditEntries: AuditEntry[] = toDelete.map((c) => ({
-          id: uid(),
-          caseId: c.id,
-          userId: currentUser?.id ?? "",
-          userName: currentUser?.name ?? "",
-          action: "Case Deleted",
-          details: `Case ${c.caseId} deleted by admin (bulk delete)`,
-          timestamp: now(),
-        }));
-        set((s) => ({
-          cases: s.cases.filter((c) => !ids.includes(c.id)),
-          auditLog: [...auditEntries, ...s.auditLog],
-        }));
-      },
+        rejectUser: (userId) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            users: s.users.map((u) =>
+              u.id === userId ? { ...u, status: "rejected" as const } : u,
+            ),
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "User Rejected",
+              `Rejected user ${userId}`,
+            );
+        },
 
-      addAuditEntry: (entry) => {
-        const newEntry: AuditEntry = { ...entry, id: uid(), timestamp: now() };
-        set((s) => ({ auditLog: [newEntry, ...s.auditLog] }));
-      },
+        updateUserRole: (userId, role) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            users: s.users.map((u) => (u.id === userId ? { ...u, role } : u)),
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Role Updated",
+              `Updated role for user ${userId} to ${role}`,
+            );
+        },
 
-      addTechnician: (t) => {
-        set((s) => ({
-          technicians: [
-            ...s.technicians,
-            { ...t, id: uid(), createdAt: now() },
-          ],
-        }));
-      },
+        createUser: (userData) => {
+          const cu = get().currentUser;
+          const newUser: User = {
+            ...userData,
+            id: uid(),
+            createdAt: now(),
+            status: "approved",
+            lastLogin: "",
+            lastActive: "",
+            isOnline: false,
+          };
+          set((s) => ({ users: [...s.users, newUser] }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "User Created",
+              `Created user ${userData.name} (${userData.email})`,
+            );
+        },
 
-      updateTechnician: (id, updates) => {
-        set((s) => ({
-          technicians: s.technicians.map((t) =>
-            t.id === id ? { ...t, ...updates } : t,
-          ),
-        }));
-      },
+        editUser: (userId, updates) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            users: s.users.map((u) =>
+              u.id === userId ? { ...u, ...updates } : u,
+            ),
+          }));
+          if (cu)
+            logActivity(cu.id, cu.name, "User Edited", `Edited user ${userId}`);
+        },
 
-      deleteTechnician: (id) => {
-        set((s) => ({ technicians: s.technicians.filter((t) => t.id !== id) }));
-      },
+        deleteUser: (userId) => {
+          const cu = get().currentUser;
+          set((s) => ({ users: s.users.filter((u) => u.id !== userId) }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "User Deleted",
+              `Deleted user ${userId}`,
+            );
+        },
 
-      addReminder: (r) => {
-        set((s) => ({
-          reminders: [...s.reminders, { ...r, id: uid(), createdAt: now() }],
-        }));
-      },
+        updateCurrentUser: (updates) => {
+          const cu = get().currentUser;
+          if (!cu) return;
+          set((s) => ({
+            currentUser: { ...cu, ...updates },
+            users: s.users.map((u) =>
+              u.id === cu.id ? { ...u, ...updates } : u,
+            ),
+          }));
+          logActivity(
+            cu.id,
+            cu.name,
+            "Profile Updated",
+            "User updated profile",
+          );
+        },
 
-      completeReminder: (id) => {
-        set((s) => ({
-          reminders: s.reminders.map((r) =>
-            r.id === id ? { ...r, isDone: true } : r,
-          ),
-        }));
-      },
-
-      markNotificationRead: (id) => {
-        set((s) => ({
-          notifications: s.notifications.map((n) =>
-            n.id === id ? { ...n, isRead: true } : n,
-          ),
-        }));
-      },
-
-      markAllNotificationsRead: () => {
-        set((s) => ({
-          notifications: s.notifications.map((n) => ({ ...n, isRead: true })),
-        }));
-      },
-
-      addNotification: (n) => {
-        set((s) => ({
-          notifications: [
-            { ...n, id: uid(), createdAt: now() },
-            ...s.notifications,
-          ],
-        }));
-      },
-
-      updateSettings: (s) => {
-        set((state) => ({ settings: { ...state.settings, ...s } }));
-      },
-
-      addPhotoToCase: (caseId, photo) => {
-        const newPhoto: CasePhoto = { ...photo, id: uid() };
-        set((s) => ({
-          cases: s.cases.map((c) =>
-            c.id === caseId
-              ? { ...c, photos: [...c.photos, newPhoto], updatedAt: now() }
-              : c,
-          ),
-        }));
-      },
-
-      changeStatus: (caseId, newStatus, details) => {
-        const c = get().cases.find((x) => x.id === caseId);
-        if (!c) return;
-        const oldStatus = c.status;
-        const updates: Partial<Case> = { status: newStatus, updatedAt: now() };
-        if (
-          newStatus === "closed" ||
-          newStatus === "adjustment_closed" ||
-          newStatus === "replacement_done" ||
-          newStatus === "gas_charge_done"
-        ) {
-          updates.closedAt = now();
-        }
-        // Track on_route date and first update flag
-        if (newStatus === "on_route") {
-          updates.onRouteDate = todayStr();
-          updates.hasFirstUpdate = false;
-        } else if (oldStatus === "on_route") {
-          // Any status change away from on_route = first update received
-          updates.hasFirstUpdate = true;
-        }
-        get().updateCase(caseId, updates);
-        get().addAuditEntry({
-          caseId,
-          userId: get().currentUser?.id ?? "",
-          userName: get().currentUser?.name ?? "",
-          action: "Status Changed",
-          details: `${oldStatus.replace(/_/g, " ")} → ${newStatus.replace(/_/g, " ")}${details ? `. ${details}` : ""}`,
-        });
-      },
-
-      importCases: (newCasesData) => {
-        const { currentUser, cases } = get();
-        // Generate next case ID number
-        const existingNums = cases
-          .map((c) => {
-            const m = c.caseId.match(/(\d+)$/);
-            return m ? Number.parseInt(m[1]) : 0;
-          })
-          .filter((n) => !Number.isNaN(n));
-        let nextNum =
-          existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
-
-        const imported: Case[] = newCasesData.map((data) => {
+        addCase: (c) => {
+          const cu = get().currentUser;
+          const { cases } = get();
+          const existingNums = cases
+            .map((x) => {
+              const m = x.caseId.match(/(\d+)$/);
+              return m ? Number.parseInt(m[1]) : 0;
+            })
+            .filter((n) => !Number.isNaN(n));
+          const nextNum =
+            existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
           const caseNum = String(nextNum).padStart(3, "0");
-          nextNum++;
-          const createdAt = now();
-          return {
-            ...data,
+          const newCase: Case = {
+            ...c,
             id: uid(),
             caseId: `MD-${new Date().getFullYear()}-${caseNum}`,
             photos: [],
-            createdAt,
-            updatedAt: createdAt,
-            createdBy: currentUser?.id ?? "",
+            createdAt: now(),
+            updatedAt: now(),
+            createdBy: cu?.id ?? "",
             closedAt: "",
             hasFirstUpdate: false,
             onRouteDate: "",
           };
-        });
+          set((s) => ({ cases: [newCase, ...s.cases] }));
+          get().addAuditEntry({
+            caseId: newCase.id,
+            userId: cu?.id ?? "",
+            userName: cu?.name ?? "",
+            action: "Case Created",
+            details: `New case created for ${c.customerName}`,
+          });
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Case Created",
+              `Created case ${newCase.caseId} for ${c.customerName}`,
+            );
+          return newCase;
+        },
 
-        const auditEntries: AuditEntry[] = imported.map((c) => ({
-          id: uid(),
-          caseId: c.id,
-          userId: currentUser?.id ?? "",
-          userName: currentUser?.name ?? "",
-          action: "Case Imported",
-          details: `Case ${c.caseId} imported via CSV`,
-          timestamp: c.createdAt,
-        }));
+        updateCase: (id, updates) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            cases: s.cases.map((c) =>
+              c.id === id ? { ...c, ...updates, updatedAt: now() } : c,
+            ),
+          }));
+          if (cu)
+            logActivity(cu.id, cu.name, "Case Updated", `Updated case ${id}`);
+        },
 
-        set((s) => ({
-          cases: [...imported, ...s.cases],
-          auditLog: [...auditEntries, ...s.auditLog],
-        }));
+        deleteCase: (id) => {
+          const cu = get().currentUser;
+          const c = get().cases.find((x) => x.id === id);
+          set((s) => ({ cases: s.cases.filter((x) => x.id !== id) }));
+          if (cu && c)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Case Deleted",
+              `Deleted case ${c.caseId}`,
+            );
+        },
 
-        return imported.length;
-      },
-    }),
-    { name: "servicedesk-storage" },
+        deleteCases: (ids) => {
+          const cu = get().currentUser;
+          set((s) => ({ cases: s.cases.filter((x) => !ids.includes(x.id)) }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Bulk Delete",
+              `Deleted ${ids.length} cases`,
+            );
+        },
+
+        addAuditEntry: (entry) => {
+          set((s) => ({
+            auditLog: [
+              { ...entry, id: uid(), timestamp: now() },
+              ...s.auditLog,
+            ],
+          }));
+        },
+
+        addTechnician: (t) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            technicians: [
+              ...s.technicians,
+              { ...t, id: uid(), createdAt: now() },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Technician Added",
+              `Added technician ${t.name}`,
+            );
+        },
+
+        updateTechnician: (id, updates) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            technicians: s.technicians.map((t) =>
+              t.id === id ? { ...t, ...updates } : t,
+            ),
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Technician Updated",
+              `Updated technician ${id}`,
+            );
+        },
+
+        deleteTechnician: (id) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            technicians: s.technicians.filter((t) => t.id !== id),
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Technician Deleted",
+              `Deleted technician ${id}`,
+            );
+        },
+
+        addReminder: (r) => {
+          set((s) => ({
+            reminders: [...s.reminders, { ...r, id: uid(), createdAt: now() }],
+          }));
+        },
+
+        completeReminder: (id) => {
+          set((s) => ({
+            reminders: s.reminders.map((r) =>
+              r.id === id ? { ...r, isDone: true } : r,
+            ),
+          }));
+        },
+
+        markNotificationRead: (id) => {
+          set((s) => ({
+            notifications: s.notifications.map((n) =>
+              n.id === id ? { ...n, isRead: true } : n,
+            ),
+          }));
+        },
+
+        markAllNotificationsRead: () => {
+          set((s) => ({
+            notifications: s.notifications.map((n) => ({ ...n, isRead: true })),
+          }));
+        },
+
+        addNotification: (n) => {
+          set((s) => ({
+            notifications: [
+              { ...n, id: uid(), createdAt: now() },
+              ...s.notifications,
+            ],
+          }));
+        },
+
+        updateSettings: (s) => {
+          const cu = get().currentUser;
+          set((state) => ({ settings: { ...state.settings, ...s } }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Settings Updated",
+              "Admin updated settings",
+            );
+        },
+
+        addPhotoToCase: (caseId, photo) => {
+          const newPhoto: CasePhoto = { ...photo, id: uid() };
+          set((s) => ({
+            cases: s.cases.map((c) =>
+              c.id === caseId
+                ? { ...c, photos: [...c.photos, newPhoto], updatedAt: now() }
+                : c,
+            ),
+          }));
+        },
+
+        changeStatus: (caseId, newStatus, details) => {
+          const c = get().cases.find((x) => x.id === caseId);
+          const cu = get().currentUser;
+          if (!c) return;
+          const oldStatus = c.status;
+          const updates: Partial<Case> = {
+            status: newStatus,
+            updatedAt: now(),
+          };
+          if (
+            newStatus === "closed" ||
+            newStatus === "adjustment_closed" ||
+            newStatus === "replacement_done" ||
+            newStatus === "gas_charge_done"
+          ) {
+            updates.closedAt = now();
+          }
+          if (newStatus === "on_route") {
+            updates.onRouteDate = todayStr();
+            updates.hasFirstUpdate = false;
+          } else if (oldStatus === "on_route") {
+            updates.hasFirstUpdate = true;
+          }
+          get().updateCase(caseId, updates);
+          get().addAuditEntry({
+            caseId,
+            userId: cu?.id ?? "",
+            userName: cu?.name ?? "",
+            action: "Status Changed",
+            details: `${oldStatus.replace(/_/g, " ")} → ${newStatus.replace(/_/g, " ")}${details ? `. ${details}` : ""}`,
+          });
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Status Changed",
+              `Case ${c.caseId}: ${oldStatus} → ${newStatus}`,
+            );
+        },
+
+        importCases: (newCasesData) => {
+          const { currentUser, cases } = get();
+          const existingNums = cases
+            .map((c) => {
+              const m = c.caseId.match(/(\d+)$/);
+              return m ? Number.parseInt(m[1]) : 0;
+            })
+            .filter((n) => !Number.isNaN(n));
+          let nextNum =
+            existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+
+          const imported: Case[] = newCasesData.map((data) => {
+            const caseNum = String(nextNum).padStart(3, "0");
+            nextNum++;
+            const createdAt = now();
+            return {
+              ...data,
+              id: uid(),
+              caseId: `MD-${new Date().getFullYear()}-${caseNum}`,
+              photos: [],
+              createdAt,
+              updatedAt: createdAt,
+              createdBy: currentUser?.id ?? "",
+              closedAt: "",
+              hasFirstUpdate: false,
+              onRouteDate: "",
+            };
+          });
+
+          const auditEntries: AuditEntry[] = imported.map((c) => ({
+            id: uid(),
+            caseId: c.id,
+            userId: currentUser?.id ?? "",
+            userName: currentUser?.name ?? "",
+            action: "Case Imported",
+            details: `Case imported from CSV for ${c.customerName}`,
+            timestamp: now(),
+          }));
+
+          set((s) => ({
+            cases: [...imported, ...s.cases],
+            auditLog: [...auditEntries, ...s.auditLog],
+          }));
+
+          if (currentUser)
+            logActivity(
+              currentUser.id,
+              currentUser.name,
+              "CSV Import",
+              `Imported ${imported.length} cases`,
+            );
+
+          return imported.length;
+        },
+
+        // ── StorePilot actions ────────────────────────────────────────────────
+
+        addStockCompany: (name) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            stockCompanies: [
+              ...s.stockCompanies,
+              { id: uid(), name, createdAt: now() },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Stock Company Added",
+              `Added company: ${name}`,
+            );
+        },
+        updateStockCompany: (id, name) => {
+          set((s) => ({
+            stockCompanies: s.stockCompanies.map((c) =>
+              c.id === id ? { ...c, name } : c,
+            ),
+          }));
+        },
+        deleteStockCompany: (id) => {
+          set((s) => ({
+            stockCompanies: s.stockCompanies.filter((c) => c.id !== id),
+          }));
+        },
+
+        addStockCategory: (name) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            stockCategories: [
+              ...s.stockCategories,
+              { id: uid(), name, createdAt: now() },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Stock Category Added",
+              `Added category: ${name}`,
+            );
+        },
+        updateStockCategory: (id, name) => {
+          set((s) => ({
+            stockCategories: s.stockCategories.map((c) =>
+              c.id === id ? { ...c, name } : c,
+            ),
+          }));
+        },
+        deleteStockCategory: (id) => {
+          set((s) => ({
+            stockCategories: s.stockCategories.filter((c) => c.id !== id),
+          }));
+        },
+
+        addStockPartName: (name) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            stockPartNames: [
+              ...s.stockPartNames,
+              { id: uid(), name, createdAt: now() },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Stock Part Name Added",
+              `Added part name: ${name}`,
+            );
+        },
+        updateStockPartName: (id, name) => {
+          set((s) => ({
+            stockPartNames: s.stockPartNames.map((p) =>
+              p.id === id ? { ...p, name } : p,
+            ),
+          }));
+        },
+        deleteStockPartName: (id) => {
+          set((s) => ({
+            stockPartNames: s.stockPartNames.filter((p) => p.id !== id),
+          }));
+        },
+
+        addRack: (name) => {
+          set((s) => ({
+            racks: [...s.racks, { id: uid(), name, createdAt: now() }],
+          }));
+        },
+        updateRack: (id, name) => {
+          set((s) => ({
+            racks: s.racks.map((r) => (r.id === id ? { ...r, name } : r)),
+          }));
+        },
+        deleteRack: (id) => {
+          set((s) => ({ racks: s.racks.filter((r) => r.id !== id) }));
+        },
+
+        addShelf: (name, rackId) => {
+          set((s) => ({
+            shelves: [
+              ...s.shelves,
+              { id: uid(), name, rackId, createdAt: now() },
+            ],
+          }));
+        },
+        updateShelf: (id, updates) => {
+          set((s) => ({
+            shelves: s.shelves.map((sh) =>
+              sh.id === id ? { ...sh, ...updates } : sh,
+            ),
+          }));
+        },
+        deleteShelf: (id) => {
+          set((s) => ({ shelves: s.shelves.filter((sh) => sh.id !== id) }));
+        },
+
+        addBin: (name, shelfId) => {
+          set((s) => ({
+            bins: [...s.bins, { id: uid(), name, shelfId, createdAt: now() }],
+          }));
+        },
+        updateBin: (id, updates) => {
+          set((s) => ({
+            bins: s.bins.map((b) => (b.id === id ? { ...b, ...updates } : b)),
+          }));
+        },
+        deleteBin: (id) => {
+          set((s) => ({ bins: s.bins.filter((b) => b.id !== id) }));
+        },
+
+        addPurchaseEntry: (entry, partCodes) => {
+          const cu = get().currentUser;
+          const purchaseId = uid();
+          const purchase: PurchaseEntry = {
+            ...entry,
+            id: purchaseId,
+            createdAt: now(),
+            createdBy: cu?.id ?? "",
+          };
+          const { stockCompanies } = get();
+          const companyName =
+            stockCompanies.find((c) => c.id === entry.companyId)?.name ?? "";
+          const items: PartInventoryItem[] = partCodes.map((pc) => ({
+            id: uid(),
+            partCode: pc.code,
+            purchaseId,
+            companyId: entry.companyId,
+            categoryId: entry.categoryId,
+            partNameId: entry.partNameId,
+            rackId: pc.rackId,
+            shelfId: pc.shelfId,
+            binId: pc.binId,
+            imageUrl: pc.imageUrl ?? "",
+            status: "in_stock" as PartItemStatus,
+            technicianId: "",
+            caseId: "",
+            issueDate: "",
+            issuedBy: "",
+            installedAt: "",
+            returnedToStoreAt: "",
+            returnRemarks: "",
+            returnedToCompanyAt: "",
+            returnToCompanyReason: "",
+            returnToCompanyRemarks: "",
+            returnedToCompanyBy: "",
+            createdAt: now(),
+          }));
+          const lifecycles: PartLifecycleEntry[] = items.map((item) => ({
+            id: uid(),
+            partId: item.id,
+            action: "Purchased",
+            details: `Received from ${entry.vendorName}, Invoice ${entry.invoiceNumber}`,
+            userId: cu?.id ?? "",
+            userName: cu?.name ?? "",
+            timestamp: now(),
+          }));
+          set((s) => ({
+            purchaseEntries: [...s.purchaseEntries, purchase],
+            partItems: [...s.partItems, ...items],
+            partLifecycle: [...s.partLifecycle, ...lifecycles],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Purchase Entry",
+              `Added purchase from ${entry.vendorName} — ${partCodes.length} part(s) (${companyName})`,
+            );
+        },
+
+        assignPartLocation: (partId, rackId, shelfId, binId) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            partItems: s.partItems.map((p) =>
+              p.id === partId ? { ...p, rackId, shelfId, binId } : p,
+            ),
+            partLifecycle: [
+              ...s.partLifecycle,
+              {
+                id: uid(),
+                partId,
+                action: "Location Assigned",
+                details: "Location updated",
+                userId: cu?.id ?? "",
+                userName: cu?.name ?? "",
+                timestamp: now(),
+              },
+            ],
+          }));
+        },
+
+        issuePartToTechnician: (partId, technicianId, caseId) => {
+          const cu = get().currentUser;
+          const tech = get().technicians.find((t) => t.id === technicianId);
+          const issueDate = now();
+          set((s) => ({
+            partItems: s.partItems.map((p) =>
+              p.id === partId
+                ? {
+                    ...p,
+                    status: "issued" as PartItemStatus,
+                    technicianId,
+                    caseId,
+                    issueDate,
+                    issuedBy: cu?.name ?? "",
+                  }
+                : p,
+            ),
+            partLifecycle: [
+              ...s.partLifecycle,
+              {
+                id: uid(),
+                partId,
+                action: "Issued",
+                details: `Issued to ${tech?.name ?? technicianId} for Case ${caseId}`,
+                userId: cu?.id ?? "",
+                userName: cu?.name ?? "",
+                timestamp: issueDate,
+              },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Part Issued",
+              `Part issued to ${tech?.name} for case ${caseId}`,
+            );
+        },
+
+        markPartInstalled: (partId) => {
+          const cu = get().currentUser;
+          const installedAt = now();
+          set((s) => ({
+            partItems: s.partItems.map((p) =>
+              p.id === partId
+                ? { ...p, status: "installed" as PartItemStatus, installedAt }
+                : p,
+            ),
+            partLifecycle: [
+              ...s.partLifecycle,
+              {
+                id: uid(),
+                partId,
+                action: "Installed",
+                details: "Part marked as installed by supervisor",
+                userId: cu?.id ?? "",
+                userName: cu?.name ?? "",
+                timestamp: installedAt,
+              },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Part Installed",
+              `Part ${partId} marked installed`,
+            );
+        },
+
+        returnPartToStore: (partId, remarks) => {
+          const cu = get().currentUser;
+          const returnedAt = now();
+          set((s) => ({
+            partItems: s.partItems.map((p) =>
+              p.id === partId
+                ? {
+                    ...p,
+                    status: "in_stock" as PartItemStatus,
+                    technicianId: "",
+                    caseId: "",
+                    issueDate: "",
+                    issuedBy: "",
+                    returnedToStoreAt: returnedAt,
+                    returnRemarks: remarks,
+                  }
+                : p,
+            ),
+            partLifecycle: [
+              ...s.partLifecycle,
+              {
+                id: uid(),
+                partId,
+                action: "Returned to Store",
+                details: remarks ? `Remarks: ${remarks}` : "Returned to store",
+                userId: cu?.id ?? "",
+                userName: cu?.name ?? "",
+                timestamp: returnedAt,
+              },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Part Returned to Store",
+              `Part ${partId} returned to store`,
+            );
+        },
+
+        returnPartToCompany: (partId, reason, remarks) => {
+          const cu = get().currentUser;
+          const returnedAt = now();
+          set((s) => ({
+            partItems: s.partItems.map((p) =>
+              p.id === partId
+                ? {
+                    ...p,
+                    status: "returned_to_company" as PartItemStatus,
+                    returnedToCompanyAt: returnedAt,
+                    returnToCompanyReason: reason,
+                    returnToCompanyRemarks: remarks,
+                    returnedToCompanyBy: cu?.name ?? "",
+                  }
+                : p,
+            ),
+            partLifecycle: [
+              ...s.partLifecycle,
+              {
+                id: uid(),
+                partId,
+                action: "Returned to Company",
+                details: `Reason: ${reason}${remarks ? `. Remarks: ${remarks}` : ""}`,
+                userId: cu?.id ?? "",
+                userName: cu?.name ?? "",
+                timestamp: returnedAt,
+              },
+            ],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Part Returned to Company",
+              `Part ${partId} returned to company. Reason: ${reason}`,
+            );
+        },
+      };
+    },
+    { name: "servicedesk-store" },
   ),
 );
 
-export const getAgeing = (createdAt: string) => {
-  const diff = Date.now() - new Date(createdAt).getTime();
-  return Math.floor(diff / 86400000);
-};
+// Helper exports used by other components
+export const getAgeing = (createdAt: string): number =>
+  Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
 
-export const STATUS_TRANSITIONS: Record<string, CaseStatus[]> = {
-  new: ["printed", "cancelled"],
-  printed: ["confirmed", "cancelled", "transferred"],
-  confirmed: ["on_route", "pending", "cancelled", "transferred"],
-  pending: ["confirmed", "cancelled"],
+export const STATUS_TRANSITIONS: Record<string, string[]> = {
+  new: ["printed", "confirmed", "pending", "cancelled"],
+  printed: ["confirmed", "pending", "cancelled"],
+  confirmed: ["pending", "on_route", "cancelled"],
+  pending: ["on_route", "cancelled", "rescheduled"],
   on_route: [
+    "pending",
+    "part_required",
+    "gas_charge_pending",
     "closed",
     "adjustment_closed",
-    "gas_charge_pending",
-    "part_required",
-    "rescheduled",
-    "cancelled",
+    "replacement_done",
+    "re_open",
   ],
-  gas_charge_pending: ["gas_charge_done"],
+  rescheduled: ["pending", "on_route", "cancelled"],
+  part_required: ["part_ordered", "cancelled"],
+  part_ordered: ["part_received", "cancelled"],
+  part_received: ["on_route", "pending"],
+  gas_charge_pending: ["gas_charge_done", "on_route"],
   gas_charge_done: ["closed"],
-  part_required: ["part_ordered"],
-  part_ordered: ["part_received"],
-  part_received: ["re_open"],
-  re_open: ["on_route"],
-  rescheduled: ["on_route", "cancelled"],
+  re_open: ["on_route", "pending", "cancelled"],
+  transferred: [],
+  cancelled: [],
+  closed: ["re_open"],
   adjustment_closed: [],
   replacement_done: [],
-  closed: [],
-  cancelled: [],
-  transferred: [],
 };
 
-export const photoTypeLabel: Record<PhotoType, string> = {
-  product: "Product",
+export const photoTypeLabel: Record<string, string> = {
+  product: "Product Photo",
   serial: "Serial Number",
   invoice: "Invoice",
-  before: "Before Work",
-  after: "After Work",
-  part: "Part",
+  before: "Before Repair",
+  after: "After Repair",
+  part: "Part Photo",
 };

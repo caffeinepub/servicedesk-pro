@@ -30,6 +30,7 @@ export default function TechniciansPage() {
     phone: "",
     specialization: "",
     isActive: true,
+    technicianCode: "",
   });
 
   const open = (t?: Technician) => {
@@ -40,10 +41,17 @@ export default function TechniciansPage() {
         phone: t.phone,
         specialization: t.specialization,
         isActive: t.isActive,
+        technicianCode: t.technicianCode ?? "",
       });
     } else {
       setEditing(null);
-      setForm({ name: "", phone: "", specialization: "", isActive: true });
+      setForm({
+        name: "",
+        phone: "",
+        specialization: "",
+        isActive: true,
+        technicianCode: "",
+      });
     }
     setDialog(true);
   };
@@ -108,6 +116,11 @@ export default function TechniciansPage() {
                     <p className="font-semibold text-gray-900">{t.name}</p>
                     <p className="text-sm text-gray-500">{t.specialization}</p>
                     <p className="text-xs text-gray-400">{t.phone}</p>
+                    {t.technicianCode && (
+                      <p className="text-xs text-blue-500 font-mono">
+                        {t.technicianCode}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -190,6 +203,16 @@ export default function TechniciansPage() {
                 value={form.specialization}
                 onChange={(e) =>
                   setForm({ ...form, specialization: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Employee ID / Tech Code (optional)</Label>
+              <Input
+                placeholder="e.g. TECH-005"
+                value={form.technicianCode}
+                onChange={(e) =>
+                  setForm({ ...form, technicianCode: e.target.value })
                 }
               />
             </div>

@@ -1,6 +1,9 @@
 import {
   BarChart2,
+  BookOpen,
+  Boxes,
   ChevronLeft,
+  ClipboardList,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -9,8 +12,10 @@ import {
   PlusCircle,
   Settings,
   Shield,
-  UserCog,
+  ShoppingCart,
+  UserCircle,
   Users,
+  Warehouse,
   Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -21,7 +26,7 @@ import type { PageType } from "../types";
 import NotificationPanel from "./NotificationPanel";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 
-const NAV_ITEMS: {
+const MAIN_NAV: {
   icon: React.ElementType;
   label: string;
   page: PageType;
@@ -36,19 +41,34 @@ const NAV_ITEMS: {
   { icon: BarChart2, label: "Reports", page: "reports" },
   { icon: Settings, label: "Settings", page: "settings" },
   { icon: Shield, label: "Admin Panel", page: "admin", adminOnly: true },
+  { icon: UserCircle, label: "My Profile", page: "profile" },
 ];
 
-function NavItems({
+const INVENTORY_NAV: {
+  icon: React.ElementType;
+  label: string;
+  page: PageType;
+  adminOnly?: boolean;
+}[] = [
+  { icon: Boxes, label: "Inventory", page: "inventory" },
+  { icon: ShoppingCart, label: "Purchase Entry", page: "purchase" },
+  { icon: ClipboardList, label: "Issued Parts", page: "issued-parts" },
+  { icon: Warehouse, label: "Warehouse", page: "warehouse" },
+  { icon: BookOpen, label: "Masters", page: "masters", adminOnly: true },
+];
+
+const ALL_NAV = [...MAIN_NAV, ...INVENTORY_NAV];
+
+function NavContent({
+  collapsed,
   onNavigate,
-}: {
-  onNavigate?: () => void;
-}) {
+}: { collapsed?: boolean; onNavigate?: () => void }) {
   const { currentUser, currentPage, navigate } = useStore();
   const isAdmin = currentUser?.role === "admin";
 
   return (
     <nav className="flex-1 py-2 overflow-y-auto">
-      {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => (
+      {MAIN_NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
         <button
           key={item.page}
           type="button"
@@ -61,11 +81,49 @@ function NavItems({
               ? "bg-blue-600 text-white"
               : "text-slate-300 hover:bg-slate-800 hover:text-white"
           }`}
+          data-ocid="layout.link"
         >
           <item.icon className="h-4 w-4 flex-shrink-0" />
-          <span className="truncate">{item.label}</span>
+          {!collapsed && <span className="truncate">{item.label}</span>}
         </button>
       ))}
+
+      {/* Inventory section - only for admin and supervisor */}
+      {(currentUser?.role === "admin" ||
+        currentUser?.role === "supervisor") && (
+        <>
+          {!collapsed && (
+            <div className="px-4 pt-4 pb-1">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Inventory
+              </span>
+            </div>
+          )}
+          {collapsed && <div className="my-1 border-t border-slate-700 mx-3" />}
+        </>
+      )}
+      {(currentUser?.role === "admin" || currentUser?.role === "supervisor") &&
+        INVENTORY_NAV.filter((item) => !item.adminOnly || isAdmin).map(
+          (item) => (
+            <button
+              key={item.page}
+              type="button"
+              onClick={() => {
+                navigate(item.page);
+                onNavigate?.();
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                currentPage === item.page
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              }`}
+              data-ocid="layout.link"
+            >
+              <item.icon className="h-4 w-4 flex-shrink-0" />
+              {!collapsed && <span className="truncate">{item.label}</span>}
+            </button>
+          ),
+        )}
     </nav>
   );
 }
@@ -76,10 +134,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMobile = useIsMobile();
 
-  const isAdmin = currentUser?.role === "admin";
-
   const pageTitle =
-    NAV_ITEMS.find((i) => i.page === currentPage)?.label ?? "ServiceDesk Pro";
+    ALL_NAV.find((i) => i.page === currentPage)?.label ?? "ServiceDesk Pro";
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
@@ -101,26 +157,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          {/* Nav */}
-          <nav className="flex-1 py-4 overflow-y-auto">
-            {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map(
-              (item) => (
-                <button
-                  key={item.page}
-                  type="button"
-                  onClick={() => navigate(item.page)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                    currentPage === item.page
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  }`}
-                >
-                  <item.icon className="h-4 w-4 flex-shrink-0" />
-                  {!collapsed && <span className="truncate">{item.label}</span>}
-                </button>
-              ),
-            )}
-          </nav>
+          <NavContent collapsed={collapsed} />
 
           {/* Collapse + User */}
           <div className="border-t border-slate-700 p-3">
@@ -168,7 +205,6 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-          {/* Mobile hamburger */}
           {isMobile && (
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
@@ -190,7 +226,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                       ServiceDesk Pro
                     </span>
                   </div>
-                  <NavItems onNavigate={() => setMobileOpen(false)} />
+                  <NavContent onNavigate={() => setMobileOpen(false)} />
                   <div className="border-t border-slate-700 p-3">
                     <div className="flex items-center gap-2 px-1 py-2 mb-2">
                       <div className="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-xs font-bold text-white">
@@ -229,12 +265,17 @@ export default function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
           <NotificationPanel />
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => navigate("profile")}
+            className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 hover:bg-blue-700 transition-colors"
+            title="My Profile"
+            data-ocid="layout.link"
+          >
             {currentUser?.name?.[0] ?? "U"}
-          </div>
+          </button>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-6">
           {children}
         </main>

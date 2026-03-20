@@ -1,8 +1,14 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Package, ShoppingCart, Warehouse } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
 import { getAgeing, useStore } from "../store";
 
-export default function DashboardPage() {
+function CaseDashboard() {
   const { cases, technicians, navigate } = useStore();
 
   const today = new Date().toISOString().split("T")[0];
@@ -75,19 +81,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Dashboard</h2>
-        <p className="text-sm text-gray-500">
-          Performance Overview &mdash;{" "}
-          {new Date().toLocaleDateString("en-IN", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </p>
-      </div>
-
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
@@ -397,6 +390,278 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function StoreDashboard() {
+  const {
+    partItems,
+    purchaseEntries,
+    stockCompanies,
+    stockPartNames,
+    technicians,
+    navigate,
+  } = useStore();
+
+  const inStock = partItems.filter((p) => p.status === "in_stock");
+  const issued = partItems.filter(
+    (p) => p.status === "issued" || p.status === "installed",
+  );
+  const locationPending = partItems.filter(
+    (p) => p.status === "in_stock" && !p.rackId,
+  );
+
+  const recentIssued = [...partItems]
+    .filter((p) => p.status === "issued" || p.status === "installed")
+    .sort(
+      (a, b) =>
+        new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime(),
+    )
+    .slice(0, 8);
+
+  const stockByCompany = stockCompanies
+    .map((company) => ({
+      ...company,
+      count: inStock.filter((p) => p.companyId === company.id).length,
+    }))
+    .filter((c) => c.count > 0);
+
+  const getPartName = (id: string) =>
+    stockPartNames.find((p) => p.id === id)?.name ?? "—";
+  const getCompanyName = (id: string) =>
+    stockCompanies.find((c) => c.id === id)?.name ?? "—";
+  const getTechName = (id: string) =>
+    technicians.find((t) => t.id === id)?.name ?? "—";
+
+  return (
+    <div className="space-y-6">
+      {/* Store KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          {
+            label: "In Stock",
+            value: inStock.length,
+            color: "text-green-600",
+            bg: "bg-green-50",
+            icon: <Package className="h-5 w-5 text-green-500" />,
+          },
+          {
+            label: "Issued / Active",
+            value: issued.length,
+            color: "text-amber-600",
+            bg: "bg-amber-50",
+            icon: <Warehouse className="h-5 w-5 text-amber-500" />,
+          },
+          {
+            label: "Total Purchases",
+            value: purchaseEntries.length,
+            color: "text-blue-600",
+            bg: "bg-blue-50",
+            icon: <ShoppingCart className="h-5 w-5 text-blue-500" />,
+          },
+          {
+            label: "Location Pending",
+            value: locationPending.length,
+            color: "text-red-600",
+            bg: "bg-red-50",
+            icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
+          },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className={`${card.bg} rounded-xl p-4 border border-white shadow-sm`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              {card.icon}
+              <p className="text-xs text-gray-500 font-medium">{card.label}</p>
+            </div>
+            <p className={`text-3xl font-bold ${card.color}`}>{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Issued Parts */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between px-5 py-4 border-b">
+            <h3 className="font-semibold text-gray-900">Recent Issued Parts</h3>
+            <button
+              type="button"
+              onClick={() => navigate("issued-parts")}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              View all
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            {recentIssued.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                No issued parts yet
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">
+                      Part Code
+                    </th>
+                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 hidden sm:table-cell">
+                      Company
+                    </th>
+                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500">
+                      Part Name
+                    </th>
+                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 hidden md:table-cell">
+                      Technician
+                    </th>
+                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentIssued.map((p) => (
+                    <tr
+                      key={p.id}
+                      className="border-b last:border-0 hover:bg-slate-50"
+                    >
+                      <td className="px-4 py-2.5 font-mono text-xs font-semibold text-blue-700">
+                        {p.partCode}
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600 hidden sm:table-cell">
+                        {getCompanyName(p.companyId)}
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-700">
+                        {getPartName(p.partNameId)}
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600 hidden md:table-cell">
+                        {getTechName(p.technicianId)}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            p.status === "issued"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {p.status === "issued" ? "Issued" : "Installed"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Stock by Company */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="px-5 py-4 border-b">
+            <h3 className="font-semibold text-gray-900">Stock by Company</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            {stockByCompany.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">
+                No stock data
+              </p>
+            ) : (
+              stockByCompany.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                  <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                    {c.count} units
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const { currentUser } = useStore();
+  const role = currentUser?.role;
+
+  if (role === "supervisor") {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Store Dashboard</h2>
+          <p className="text-sm text-gray-500">
+            Inventory &amp; Stock Overview &mdash;{" "}
+            {new Date().toLocaleDateString("en-IN", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        </div>
+        <StoreDashboard />
+      </div>
+    );
+  }
+
+  if (role === "backend_user") {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Dashboard</h2>
+          <p className="text-sm text-gray-500">
+            Performance Overview &mdash;{" "}
+            {new Date().toLocaleDateString("en-IN", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        </div>
+        <CaseDashboard />
+      </div>
+    );
+  }
+
+  // Admin: two tabs
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">Dashboard</h2>
+        <p className="text-sm text-gray-500">
+          {new Date().toLocaleDateString("en-IN", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
+        </p>
+      </div>
+
+      <Tabs defaultValue="case" className="w-full">
+        <TabsList className="mb-4" data-ocid="dashboard.tab">
+          <TabsTrigger value="case" data-ocid="dashboard.tab">
+            Case Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="store" data-ocid="dashboard.tab">
+            Store Dashboard
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="case">
+          <CaseDashboard />
+        </TabsContent>
+        <TabsContent value="store">
+          <StoreDashboard />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
