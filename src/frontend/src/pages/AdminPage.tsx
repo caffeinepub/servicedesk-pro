@@ -34,14 +34,14 @@ export default function AdminPage() {
   const rejected = users.filter((u) => u.status === "rejected");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-gray-900">Admin Panel</h2>
         <p className="text-sm text-gray-500">Manage users and approvals</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           {
             label: "Pending Approval",
@@ -90,7 +90,7 @@ export default function AdminPage() {
             {pending.map((u) => (
               <div
                 key={u.id}
-                className="flex items-center justify-between bg-yellow-50 border border-yellow-100 px-4 py-3 rounded-lg"
+                className="flex flex-col sm:flex-row sm:items-center justify-between bg-yellow-50 border border-yellow-100 px-4 py-3 rounded-lg gap-3"
               >
                 <div>
                   <p className="font-semibold text-gray-900">{u.name}</p>
@@ -102,11 +102,12 @@ export default function AdminPage() {
                     {new Date(u.createdAt).toLocaleDateString("en-IN")}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-shrink-0">
                   <Button
                     size="sm"
                     onClick={() => approveUser(u.id)}
                     className="bg-green-600 hover:bg-green-700 h-8"
+                    data-ocid="admin.confirm_button"
                   >
                     <CheckCircle className="h-3.5 w-3.5 mr-1" />
                     Approve
@@ -116,6 +117,7 @@ export default function AdminPage() {
                     variant="destructive"
                     onClick={() => rejectUser(u.id)}
                     className="h-8"
+                    data-ocid="admin.delete_button"
                   >
                     <XCircle className="h-3.5 w-3.5 mr-1" />
                     Reject
@@ -134,14 +136,14 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[600px] w-full text-sm">
               <thead>
                 <tr className="border-b">
                   {["Name", "Email", "Phone", "Role", "Status", "Actions"].map(
                     (h) => (
                       <th
                         key={h}
-                        className="text-left px-3 py-2 text-xs font-semibold text-gray-500"
+                        className="text-left px-3 py-2 text-xs font-semibold text-gray-500 whitespace-nowrap"
                       >
                         {h}
                       </th>
@@ -152,11 +154,15 @@ export default function AdminPage() {
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id} className="border-b last:border-0">
-                    <td className="px-3 py-3 font-medium text-gray-900">
+                    <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">
                       {u.name}
                     </td>
-                    <td className="px-3 py-3 text-gray-500">{u.email}</td>
-                    <td className="px-3 py-3 text-gray-500">{u.phone}</td>
+                    <td className="px-3 py-3 text-gray-500 text-xs">
+                      {u.email}
+                    </td>
+                    <td className="px-3 py-3 text-gray-500 text-xs whitespace-nowrap">
+                      {u.phone}
+                    </td>
                     <td className="px-3 py-3">
                       <Select
                         value={u.role}

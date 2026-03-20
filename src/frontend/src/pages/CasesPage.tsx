@@ -7,8 +7,10 @@ import {
   History,
   PlusCircle,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import StatusBadge from "../components/StatusBadge";
 import { Button } from "../components/ui/button";
 import {
@@ -26,7 +28,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { getAgeing, useStore } from "../store";
-import type { Case, CaseStatus } from "../types";
+import type { Case, CaseStatus, ComplaintType } from "../types";
 
 function CustomerHistoryDialog({
   open,
@@ -88,6 +90,393 @@ function CustomerHistoryDialog({
   );
 }
 
+// ---- CSV Import Dialog ----
+type ImportRow = {
+  customerName: string;
+  phone: string;
+  altPhone: string;
+  address: string;
+  product: string;
+  productType: string;
+  complaintType: ComplaintType;
+  status: CaseStatus;
+  remarks: string;
+  partCode: string;
+  partName: string;
+  nextActionDate: string;
+};
+
+function parseCSV(text: string): ImportRow[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+
+  // Parse header
+  const header = lines[0]
+    .split(",")
+    .map((h) => h.replace(/^"|"$/g, "").trim().toLowerCase());
+
+  const col = (row: string[], names: string[]): string => {
+    for (const name of names) {
+      const idx = header.indexOf(name);
+      if (idx >= 0 && row[idx]) return row[idx].replace(/^"|"$/g, "").trim();
+    }
+    return "";
+  };
+
+  const rows: ImportRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    // Basic CSV split (handles quoted commas)
+    const cells: string[] = [];
+    let current = "";
+    let inQuote = false;
+    for (const ch of lines[i]) {
+      if (ch === '"') {
+        inQuote = !inQuote;
+      } else if (ch === "," && !inQuote) {
+        cells.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current);
+
+    const name = col(cells, ["customer name", "customer", "name"]);
+    const phone = col(cells, ["phone", "mobile", "contact"]);
+    if (!name || !phone) continue;
+
+    const rawType = col(cells, ["complaint type", "type"])
+      .toLowerCase()
+      .replace(/\s+/g, "_");
+    const complaintType: ComplaintType =
+      rawType === "installation"
+        ? "installation"
+        : rawType === "stock_repair"
+          ? "stock_repair"
+          : "breakdown";
+
+    const rawStatus = col(cells, ["status"]).toLowerCase().replace(/\s+/g, "_");
+    const validStatuses: CaseStatus[] = [
+      "new",
+      "printed",
+      "confirmed",
+      "pending",
+      "on_route",
+      "cancelled",
+      "transferred",
+      "rescheduled",
+      "part_required",
+      "part_ordered",
+      "part_received",
+      "re_open",
+      "gas_charge_pending",
+      "gas_charge_done",
+      "adjustment_closed",
+      "replacement_done",
+      "closed",
+    ];
+    const status: CaseStatus = validStatuses.includes(rawStatus as CaseStatus)
+      ? (rawStatus as CaseStatus)
+      : "new";
+
+    const followUp = col(cells, [
+      "follow-up date",
+      "follow up date",
+      "followup",
+      "next action",
+    ]);
+    let nextActionDate = "";
+    if (followUp) {
+      try {
+        const parsed = new Date(followUp);
+        if (!Number.isNaN(parsed.getTime()))
+          nextActionDate = parsed.toISOString().split("T")[0];
+      } catch {
+        /* ignore */
+      }
+    }
+
+    rows.push({
+      customerName: name,
+      phone,
+      altPhone: col(cells, ["alt phone", "alternate phone", "alt mobile"]),
+      address: col(cells, ["address"]),
+      product: col(cells, ["product"]) || "Unknown",
+      productType: col(cells, ["product type", "model"]),
+      complaintType,
+      status,
+      remarks: col(cells, ["remarks", "notes", "description"]),
+      partCode: col(cells, ["part code", "partcode"]),
+      partName: col(cells, ["part name", "partname"]),
+      nextActionDate,
+    });
+  }
+  return rows;
+}
+
+function ImportCSVDialog({
+  open,
+  onClose,
+  onImport,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onImport: (rows: ImportRow[]) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [error, setError] = useState("");
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setError("");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length === 0) {
+        setError(
+          "No valid rows found. Make sure the CSV has Customer Name and Phone columns.",
+        );
+        setRows([]);
+      } else {
+        setRows(parsed);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImport = () => {
+    if (rows.length > 0) {
+      onImport(rows);
+      setRows([]);
+      setFileName("");
+      onClose();
+    }
+  };
+
+  const downloadTemplate = () => {
+    const headers =
+      "Customer Name,Phone,Alt Phone,Address,Product,Product Type,Complaint Type,Status,Remarks,Part Code,Part Name,Follow-up Date";
+    const sample =
+      "Priya Sharma,9812345678,,12 MG Road Delhi,AC,1.5 Ton Split,installation,new,New installation,,, ";
+    const csv = `${headers}\n${sample}`;
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "import-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setRows([]);
+          setFileName("");
+          setError("");
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-w-2xl mx-4 sm:mx-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5 text-blue-600" />
+            Import Cases from CSV
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+            <p className="font-medium mb-1">Expected CSV columns:</p>
+            <p className="text-xs text-blue-700">
+              Customer Name, Phone, Alt Phone, Address, Product, Product Type,
+              Complaint Type (installation/breakdown/stock_repair), Status,
+              Remarks, Part Code, Part Name, Follow-up Date
+            </p>
+            <button
+              type="button"
+              onClick={downloadTemplate}
+              className="mt-2 text-xs text-blue-600 underline hover:text-blue-800"
+            >
+              Download template CSV
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+            onClick={() => fileRef.current?.click()}
+          >
+            <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-600">
+              {fileName ? (
+                <span className="text-blue-700 font-medium">{fileName}</span>
+              ) : (
+                "Click to select CSV file"
+              )}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Supports .csv files</p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleFile}
+            />
+          </button>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-start gap-2">
+              <X className="h-4 w-4 shrink-0 mt-0.5" />
+              {error}
+            </div>
+          )}
+
+          {rows.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Preview — {rows.length} case{rows.length !== 1 ? "s" : ""} ready
+                to import
+              </p>
+              <div className="overflow-x-auto max-h-48 border rounded-lg">
+                <table className="min-w-max w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      {[
+                        "Customer",
+                        "Phone",
+                        "Product",
+                        "Type",
+                        "Status",
+                        "Remarks",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.slice(0, 10).map((r, i) => (
+                      <tr key={`${r.phone}-${i}`} className="border-t">
+                        <td className="px-3 py-1.5 whitespace-nowrap">
+                          {r.customerName}
+                        </td>
+                        <td className="px-3 py-1.5 whitespace-nowrap">
+                          {r.phone}
+                        </td>
+                        <td className="px-3 py-1.5 whitespace-nowrap">
+                          {r.product}
+                        </td>
+                        <td className="px-3 py-1.5 whitespace-nowrap capitalize">
+                          {r.complaintType.replace(/_/g, " ")}
+                        </td>
+                        <td className="px-3 py-1.5 whitespace-nowrap capitalize">
+                          {r.status.replace(/_/g, " ")}
+                        </td>
+                        <td className="px-3 py-1.5 max-w-[150px] truncate">
+                          {r.remarks}
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length > 10 && (
+                      <tr className="border-t">
+                        <td
+                          colSpan={6}
+                          className="px-3 py-1.5 text-center text-gray-400"
+                        >
+                          ...and {rows.length - 10} more rows
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRows([]);
+                setFileName("");
+                setError("");
+                onClose();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={rows.length === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Import {rows.length > 0 ? `${rows.length} Cases` : ""}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---- Bulk Delete Confirm Dialog ----
+function BulkDeleteDialog({
+  open,
+  count,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  count: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onCancel();
+      }}
+    >
+      <DialogContent className="max-w-sm mx-4 sm:mx-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <Trash2 className="h-5 w-5" />
+            Delete {count} Case{count !== 1 ? "s" : ""}?
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-600">
+          This will permanently delete {count} selected case
+          {count !== 1 ? "s" : ""}. This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            <Trash2 className="h-4 w-4 mr-1" />
+            Delete {count} Case{count !== 1 ? "s" : ""}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const normalizePhone = (ph: string) => ph.replace(/\D/g, "");
 
 const checkStale = (c: Case, today: string) =>
@@ -106,6 +495,8 @@ export default function CasesPage() {
     addAuditEntry,
     currentUser,
     deleteCase,
+    deleteCases,
+    importCases,
   } = useStore();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -120,6 +511,9 @@ export default function CasesPage() {
     caseId: string;
     cases: Case[];
   } | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [importSuccess, setImportSuccess] = useState<number | null>(null);
   const PER_PAGE = 20;
 
   const today = new Date().toISOString().split("T")[0];
@@ -133,6 +527,7 @@ export default function CasesPage() {
           c.caseId.toLowerCase().includes(q) ||
           c.customerName.toLowerCase().includes(q) ||
           c.phone.includes(q) ||
+          (c.altPhone || "").includes(q) ||
           c.partCode.toLowerCase().includes(q);
 
         if (filterStatus === "stale") {
@@ -223,15 +618,52 @@ export default function CasesPage() {
     setBulkStatus("");
   };
 
+  const handleBulkDelete = () => {
+    deleteCases(Array.from(selected));
+    setSelected(new Set());
+    setShowBulkDelete(false);
+  };
+
+  const handleImport = (rows: ImportRow[]) => {
+    const count = importCases(
+      rows.map((r) => ({
+        caseId: "", // will be auto-generated in store
+        customerName: r.customerName,
+        phone: r.phone,
+        altPhone: r.altPhone,
+        address: r.address,
+        product: r.product,
+        productType: r.productType,
+        complaintType: r.complaintType,
+        status: r.status,
+        technicianId: "",
+        technicianFeedback: "",
+        partCode: r.partCode,
+        partName: r.partName,
+        partPhotoUrl: "",
+        poNumber: "",
+        orderDate: "",
+        receivedDate: "",
+        nextActionDate: r.nextActionDate,
+        remarks: r.remarks,
+        additionalNotes: "",
+      })),
+    );
+    setImportSuccess(count);
+    setTimeout(() => setImportSuccess(null), 4000);
+  };
+
   const exportCSV = () => {
     const headers = [
       "Case ID",
       "Customer",
       "Phone",
+      "Alt Phone",
+      "Complaint Type",
       "Product",
-      "Type",
       "Status",
       "Technician",
+      "Follow-up Date",
       "Part Code",
       "Ageing",
       "Last Updated",
@@ -240,10 +672,14 @@ export default function CasesPage() {
       c.caseId,
       c.customerName,
       c.phone,
+      c.altPhone || "",
+      c.complaintType.replace(/_/g, " "),
       c.product,
-      c.complaintType,
       c.status,
       technicians.find((t) => t.id === c.technicianId)?.name ?? "",
+      c.nextActionDate
+        ? new Date(c.nextActionDate).toLocaleDateString("en-IN")
+        : "",
       c.partCode,
       `${getAgeing(c.createdAt)}d`,
       new Date(c.updatedAt).toLocaleDateString("en-IN"),
@@ -277,6 +713,16 @@ export default function CasesPage() {
     return "hover:bg-blue-50";
   };
 
+  const formatFollowUp = (dateStr: string | undefined) => {
+    if (!dateStr) return "—";
+    try {
+      const d = new Date(dateStr);
+      return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    } catch {
+      return "—";
+    }
+  };
+
   const isAdmin = currentUser?.role === "admin";
 
   const quickFilters = [
@@ -285,6 +731,7 @@ export default function CasesPage() {
       label: `No Update${staleCount > 0 ? ` (${staleCount})` : ""}`,
       value: "stale",
     },
+    { label: "New", value: "new" },
     { label: "Pending", value: "pending" },
     { label: "On Route", value: "on_route" },
     { label: "Part Required", value: "part_required" },
@@ -298,7 +745,20 @@ export default function CasesPage() {
           <h2 className="text-xl font-bold text-gray-900">All Cases</h2>
           <p className="text-sm text-gray-500">{filtered.length} cases found</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {importSuccess !== null && (
+            <span className="text-xs text-green-700 bg-green-100 border border-green-200 rounded-full px-3 py-1.5 font-medium">
+              {importSuccess} cases imported successfully
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowImport(true)}
+          >
+            <Upload className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Import CSV</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Export CSV</span>
@@ -464,7 +924,7 @@ export default function CasesPage() {
 
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 font-medium">
               {selected.size} selected
             </span>
             <Select value={bulkStatus} onValueChange={setBulkStatus}>
@@ -472,9 +932,16 @@ export default function CasesPage() {
                 <SelectValue placeholder="Change status" />
               </SelectTrigger>
               <SelectContent>
-                {["pending", "confirmed", "cancelled"].map((s) => (
+                {[
+                  "pending",
+                  "confirmed",
+                  "on_route",
+                  "part_required",
+                  "closed",
+                  "cancelled",
+                ].map((s) => (
                   <SelectItem key={s} value={s}>
-                    {s}
+                    {s.replace(/_/g, " ")}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -482,6 +949,17 @@ export default function CasesPage() {
             <Button size="sm" onClick={applyBulkStatus} disabled={!bulkStatus}>
               Apply
             </Button>
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowBulkDelete(true)}
+                className="flex items-center gap-1"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Selected ({selected.size})
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -493,10 +971,10 @@ export default function CasesPage() {
         )}
       </div>
 
-      {/* Table */}
+      {/* Table — horizontally scrollable with all columns always visible */}
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-[1200px] w-full text-sm">
             <thead>
               <tr className="border-b bg-gray-50">
                 <th className="px-3 py-3 w-8">
@@ -509,32 +987,38 @@ export default function CasesPage() {
                     className="rounded"
                   />
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
                   Case ID
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">
-                  Customer
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                  Customer Name
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                  Mobile
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                  Complaint Type
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
                   Product
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">
-                  Type
-                </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
                   Status
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
                   Technician
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                  Follow-up
+                </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
                   Age
                 </th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
                   Cust. History
                 </th>
                 {isAdmin && (
-                  <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">
+                  <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">
                     Del
                   </th>
                 )}
@@ -544,7 +1028,7 @@ export default function CasesPage() {
               {paginated.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isAdmin ? 10 : 9}
+                    colSpan={isAdmin ? 12 : 11}
                     className="py-10 text-center text-gray-400 text-sm"
                     data-ocid="cases.empty_state"
                   >
@@ -580,7 +1064,7 @@ export default function CasesPage() {
                         className="rounded"
                       />
                     </td>
-                    <td className="px-3 py-3 font-medium text-blue-700">
+                    <td className="px-3 py-3 font-medium text-blue-700 whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         {stale && (
                           <span title="No technician update">
@@ -590,26 +1074,56 @@ export default function CasesPage() {
                         <span>{c.caseId}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-gray-700 hidden sm:table-cell">
-                      <div>
-                        <p className="font-medium">{c.customerName}</p>
-                        <p className="text-xs text-gray-400">{c.phone}</p>
+                    <td className="px-3 py-3 text-gray-800 font-medium whitespace-nowrap">
+                      {c.customerName}
+                    </td>
+                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap">
+                      <div className="text-xs">
+                        <div>{c.phone}</div>
+                        {c.altPhone && (
+                          <div className="text-gray-400">{c.altPhone}</div>
+                        )}
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-gray-600 hidden md:table-cell">
+                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap capitalize text-xs">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          c.complaintType === "installation"
+                            ? "bg-blue-100 text-blue-700"
+                            : c.complaintType === "breakdown"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-purple-100 text-purple-700"
+                        }`}
+                      >
+                        {c.complaintType.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
                       {c.product}
                     </td>
-                    <td className="px-3 py-3 text-gray-500 hidden lg:table-cell capitalize">
-                      {c.complaintType.replace("_", " ")}
-                    </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       <StatusBadge status={c.status} />
                     </td>
-                    <td className="px-3 py-3 text-gray-600 text-xs hidden md:table-cell">
-                      {tech?.name ?? "—"}
+                    <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
+                      {tech?.name ?? <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-xs whitespace-nowrap">
+                      {c.nextActionDate ? (
+                        <span
+                          className={`font-medium ${
+                            new Date(c.nextActionDate) < new Date(today)
+                              ? "text-red-600"
+                              : "text-blue-600"
+                          }`}
+                        >
+                          {formatFollowUp(c.nextActionDate)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
                     <td
-                      className={`px-3 py-3 font-medium text-xs hidden sm:table-cell ${
+                      className={`px-3 py-3 font-bold text-xs whitespace-nowrap ${
                         age >= 8
                           ? "text-red-600"
                           : age >= 4
@@ -620,7 +1134,7 @@ export default function CasesPage() {
                       {age}d
                     </td>
                     <td
-                      className="px-3 py-3"
+                      className="px-3 py-3 whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
                     >
@@ -642,7 +1156,7 @@ export default function CasesPage() {
                     </td>
                     {isAdmin && (
                       <td
-                        className="px-3 py-3"
+                        className="px-3 py-3 whitespace-nowrap"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
@@ -667,9 +1181,9 @@ export default function CasesPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-            <p className="text-xs text-gray-500">
-              Page {page} of {totalPages} · {filtered.length} total
-            </p>
+            <span className="text-xs text-gray-500">
+              Page {page} of {totalPages} · {filtered.length} cases
+            </span>
             <div className="flex gap-1">
               <Button
                 variant="outline"
@@ -694,15 +1208,31 @@ export default function CasesPage() {
         )}
       </div>
 
+      {/* Customer History Dialog */}
       {historyDialog && (
         <CustomerHistoryDialog
-          open
+          open={!!historyDialog}
           onClose={() => setHistoryDialog(null)}
           relatedCases={historyDialog.cases}
           currentCaseId={historyDialog.caseId}
           onNavigate={(id) => navigate("case-detail", id)}
         />
       )}
+
+      {/* Import CSV Dialog */}
+      <ImportCSVDialog
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onImport={handleImport}
+      />
+
+      {/* Bulk Delete Confirm */}
+      <BulkDeleteDialog
+        open={showBulkDelete}
+        count={selected.size}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setShowBulkDelete(false)}
+      />
     </div>
   );
 }

@@ -462,12 +462,15 @@ const CLOSED_STATUSES = [
   "gas_charge_done",
 ];
 
+// Auto-notification types that get refreshed on every login
+const AUTO_NOTIF_TYPES = ["overdue", "follow_up", "part_pending", "stale_case"];
+
 interface StoreState {
   // Auth
   currentUser: User | null;
   currentPage: PageType;
   selectedCaseId: string | null;
-  notificationsGenerated: boolean;
+  notificationsGeneratedDate: string;
   lastMidnightResetDate: string;
 
   // Data
@@ -502,6 +505,7 @@ interface StoreState {
   ) => Case;
   updateCase: (id: string, updates: Partial<Case>) => void;
   deleteCase: (id: string) => void;
+  deleteCases: (ids: string[]) => void;
   addAuditEntry: (entry: Omit<AuditEntry, "id" | "timestamp">) => void;
   addTechnician: (t: Omit<Technician, "id" | "createdAt">) => void;
   updateTechnician: (id: string, updates: Partial<Technician>) => void;
@@ -521,6 +525,19 @@ interface StoreState {
   generateAutoNotifications: () => void;
   runMidnightResets: () => void;
   resetStaleTechnician: (caseId: string) => void;
+  importCases: (
+    newCases: Omit<
+      Case,
+      | "id"
+      | "createdAt"
+      | "updatedAt"
+      | "createdBy"
+      | "closedAt"
+      | "photos"
+      | "hasFirstUpdate"
+      | "onRouteDate"
+    >[],
+  ) => number;
 }
 
 export const useStore = create<StoreState>()(
@@ -529,7 +546,7 @@ export const useStore = create<StoreState>()(
       currentUser: null,
       currentPage: "login",
       selectedCaseId: null,
-      notificationsGenerated: false,
+      notificationsGeneratedDate: "",
       lastMidnightResetDate: "",
       users: SEED_USERS,
       technicians: SEED_TECHNICIANS,
@@ -634,7 +651,12 @@ export const useStore = create<StoreState>()(
             u.status === "approved",
         );
         if (user) {
-          set({ currentUser: user, currentPage: "dashboard" });
+          // Reset notifications date so they get refreshed on this login
+          set({
+            currentUser: user,
+            currentPage: "dashboard",
+            notificationsGeneratedDate: "",
+          });
           get().runMidnightResets();
           get().generateAutoNotifications();
           return true;
@@ -647,7 +669,7 @@ export const useStore = create<StoreState>()(
           currentUser: null,
           currentPage: "login",
           selectedCaseId: null,
-          notificationsGenerated: false,
+          notificationsGeneratedDate: "",
         }),
 
       navigate: (page, caseId) =>
@@ -657,9 +679,11 @@ export const useStore = create<StoreState>()(
         }),
 
       generateAutoNotifications: () => {
-        if (get().notificationsGenerated) return;
+        const today = todayStr();
+        // Only generate once per day (not per session) to avoid duplicates on page refresh
+        if (get().notificationsGeneratedDate === today) return;
+
         const { cases, currentUser } = get();
-        const today = new Date().toISOString().split("T")[0];
         const newNotifications: Notification[] = [];
         const fiveDaysAgo = new Date(Date.now() - 5 * 86400000).toISOString();
 
@@ -724,14 +748,16 @@ export const useStore = create<StoreState>()(
           }
         }
 
-        if (newNotifications.length > 0) {
-          set((s) => ({
-            notifications: [...newNotifications, ...s.notifications],
-            notificationsGenerated: true,
-          }));
-        } else {
-          set({ notificationsGenerated: true });
-        }
+        set((s) => ({
+          // Remove all previous auto-generated notifications and replace with fresh ones
+          notifications: [
+            ...newNotifications,
+            ...s.notifications.filter(
+              (n) => !AUTO_NOTIF_TYPES.includes(n.type),
+            ),
+          ],
+          notificationsGeneratedDate: today,
+        }));
       },
 
       registerUser: (userData) => {
@@ -808,6 +834,25 @@ export const useStore = create<StoreState>()(
           details: `Case ${c.caseId} deleted by admin`,
         });
         set((s) => ({ cases: s.cases.filter((x) => x.id !== id) }));
+      },
+
+      deleteCases: (ids) => {
+        const { cases, currentUser } = get();
+        const toDelete = cases.filter((c) => ids.includes(c.id));
+        if (toDelete.length === 0) return;
+        const auditEntries: AuditEntry[] = toDelete.map((c) => ({
+          id: uid(),
+          caseId: c.id,
+          userId: currentUser?.id ?? "",
+          userName: currentUser?.name ?? "",
+          action: "Case Deleted",
+          details: `Case ${c.caseId} deleted by admin (bulk delete)`,
+          timestamp: now(),
+        }));
+        set((s) => ({
+          cases: s.cases.filter((c) => !ids.includes(c.id)),
+          auditLog: [...auditEntries, ...s.auditLog],
+        }));
       },
 
       addAuditEntry: (entry) => {
@@ -917,6 +962,54 @@ export const useStore = create<StoreState>()(
           action: "Status Changed",
           details: `${oldStatus.replace(/_/g, " ")} → ${newStatus.replace(/_/g, " ")}${details ? `. ${details}` : ""}`,
         });
+      },
+
+      importCases: (newCasesData) => {
+        const { currentUser, cases } = get();
+        // Generate next case ID number
+        const existingNums = cases
+          .map((c) => {
+            const m = c.caseId.match(/(\d+)$/);
+            return m ? Number.parseInt(m[1]) : 0;
+          })
+          .filter((n) => !Number.isNaN(n));
+        let nextNum =
+          existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+
+        const imported: Case[] = newCasesData.map((data) => {
+          const caseNum = String(nextNum).padStart(3, "0");
+          nextNum++;
+          const createdAt = now();
+          return {
+            ...data,
+            id: uid(),
+            caseId: `MD-${new Date().getFullYear()}-${caseNum}`,
+            photos: [],
+            createdAt,
+            updatedAt: createdAt,
+            createdBy: currentUser?.id ?? "",
+            closedAt: "",
+            hasFirstUpdate: false,
+            onRouteDate: "",
+          };
+        });
+
+        const auditEntries: AuditEntry[] = imported.map((c) => ({
+          id: uid(),
+          caseId: c.id,
+          userId: currentUser?.id ?? "",
+          userName: currentUser?.name ?? "",
+          action: "Case Imported",
+          details: `Case ${c.caseId} imported via CSV`,
+          timestamp: c.createdAt,
+        }));
+
+        set((s) => ({
+          cases: [...imported, ...s.cases],
+          auditLog: [...auditEntries, ...s.auditLog],
+        }));
+
+        return imported.length;
       },
     }),
     { name: "servicedesk-storage" },
