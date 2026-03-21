@@ -93,7 +93,13 @@ export interface Notification {
   id: string;
   userId: string;
   message: string;
-  type: "follow_up" | "overdue" | "part_pending" | "general" | "stale_case";
+  type:
+    | "follow_up"
+    | "overdue"
+    | "part_pending"
+    | "general"
+    | "stale_case"
+    | "part_request";
   isRead: boolean;
   caseId?: string;
   createdAt: string;
@@ -156,7 +162,13 @@ export type PageType =
   | "part-detail"
   | "issued-parts"
   | "warehouse"
-  | "masters";
+  | "masters"
+  | "part-requests"
+  | "vendors"
+  | "return-to-company"
+  | "lifecycle"
+  | "ai-engine"
+  | "notifications";
 
 // ── StorePilot Types ────────────────────────────────────────────────────────
 
@@ -178,9 +190,17 @@ export interface StockPartName {
   createdAt: string;
 }
 
+export interface Warehouse {
+  id: string;
+  name: string;
+  address: string;
+  createdAt: string;
+}
+
 export interface WarehouseRack {
   id: string;
   name: string;
+  warehouseId: string;
   createdAt: string;
 }
 
@@ -229,11 +249,22 @@ export interface PartInventoryItem {
   returnedToCompanyBy: string;
   createdAt: string;
   imageUrl?: string;
+  partImageUrls?: string[];
+}
+
+export interface Vendor {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  createdAt: string;
 }
 
 export interface PurchaseEntry {
   id: string;
   vendorName: string;
+  vendorId?: string;
   invoiceNumber: string;
   invoiceDate: string;
   companyId: string;
@@ -243,6 +274,7 @@ export interface PurchaseEntry {
   createdAt: string;
   createdBy: string;
   invoiceImageUrl?: string;
+  costPrice?: number;
 }
 
 export interface PartLifecycleEntry {
@@ -253,4 +285,42 @@ export interface PartLifecycleEntry {
   userId: string;
   userName: string;
   timestamp: string;
+}
+
+export interface StoreNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: "part_issued" | "part_returned" | "low_stock" | "reminder" | "ai";
+  priority: "low" | "medium" | "high" | "critical";
+  isRead: boolean;
+  relatedPartCode?: string;
+  createdAt: string;
+  reminderAt?: string;
+}
+
+// ── Part Request Types ────────────────────────────────────────────────────────
+
+export type PartRequestStatus = "pending" | "issued" | "rejected";
+
+export interface PartRequest {
+  id: string;
+  caseId: string;
+  caseDbId: string;
+  customerName: string;
+  partName: string;
+  partCode: string;
+  partPhotoUrl: string;
+  requestedBy: string;
+  requestedByName: string;
+  requestedAt: string;
+  status: PartRequestStatus;
+  technicianId: string;
+  issuedAt: string;
+  issuedBy: string;
+  issuedByName: string;
+  rejectedReason: string;
+  rejectedAt: string;
+  rejectedBy: string;
+  rejectedByName: string;
 }

@@ -79,6 +79,7 @@ export default function CaseDetailPage() {
     settings,
     deleteCase,
     resetStaleTechnician,
+    addPartRequest,
   } = useStore();
 
   const caseData = cases.find((c) => c.id === selectedCaseId);
@@ -684,6 +685,31 @@ export default function CaseDetailPage() {
                       <MessageSquare className="h-3 w-3" /> Check Part
                       Availability (WhatsApp Supervisor)
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!partName && !caseData.partName) {
+                          toast.error(
+                            "Please enter part name before requesting.",
+                          );
+                          return;
+                        }
+                        addPartRequest({
+                          caseId: caseData.caseId,
+                          caseDbId: caseData.id,
+                          customerName: caseData.customerName,
+                          partName: partName || caseData.partName,
+                          partCode: partCode || caseData.partCode,
+                          partPhotoUrl: partPhotoUrl || caseData.partPhotoUrl,
+                          requestedBy: currentUser?.id ?? "",
+                          requestedByName: currentUser?.name ?? "",
+                        });
+                        toast.success("Part request sent to supervisor!");
+                      }}
+                      className="flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-100 w-full justify-center"
+                    >
+                      <span>📦</span> Request Part from Supervisor
+                    </button>
                   </div>
                 )}
 

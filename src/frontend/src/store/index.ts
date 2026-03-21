@@ -11,6 +11,8 @@ import type {
   PartInventoryItem,
   PartItemStatus,
   PartLifecycleEntry,
+  PartRequest,
+  PartRequestStatus,
   PhotoType,
   PurchaseEntry,
   Reminder,
@@ -18,8 +20,11 @@ import type {
   StockCategory,
   StockCompany,
   StockPartName,
+  StoreNotification,
   Technician,
   User,
+  Vendor,
+  Warehouse,
   WarehouseBin,
   WarehouseRack,
   WarehouseShelf,
@@ -321,9 +326,18 @@ const SEED_STOCK_PART_NAMES: StockPartName[] = [
   { id: "spn6", name: "Thermostat", createdAt: now() },
 ];
 
+const SEED_WAREHOUSES: Warehouse[] = [
+  {
+    id: "wh1",
+    name: "Main Warehouse",
+    address: "Plot 12, Industrial Area, Delhi",
+    createdAt: now(),
+  },
+];
+
 const SEED_RACKS: WarehouseRack[] = [
-  { id: "rack1", name: "Rack A", createdAt: now() },
-  { id: "rack2", name: "Rack B", createdAt: now() },
+  { id: "rack1", name: "Rack A", warehouseId: "wh1", createdAt: now() },
+  { id: "rack2", name: "Rack B", warehouseId: "wh1", createdAt: now() },
 ];
 
 const SEED_SHELVES: WarehouseShelf[] = [
@@ -338,10 +352,38 @@ const SEED_BINS: WarehouseBin[] = [
   { id: "bin3", name: "Bin B1-1", shelfId: "shelf3", createdAt: now() },
 ];
 
+const SEED_VENDORS: Vendor[] = [
+  {
+    id: "v1",
+    name: "Star Electronics",
+    phone: "9100001111",
+    email: "star@electronics.com",
+    address: "12 Industrial Area, Chennai",
+    createdAt: d(30),
+  },
+  {
+    id: "v2",
+    name: "Metro Parts Pvt Ltd",
+    phone: "9200002222",
+    email: "metro@parts.com",
+    address: "45 Trade Centre, Mumbai",
+    createdAt: d(25),
+  },
+  {
+    id: "v3",
+    name: "Global Spares Co.",
+    phone: "9300003333",
+    email: "global@spares.com",
+    address: "78 Electronics Market, Delhi",
+    createdAt: d(20),
+  },
+];
+
 const SEED_PURCHASES: PurchaseEntry[] = [
   {
     id: "pur1",
     vendorName: "Star Electronics",
+    vendorId: "v1",
     invoiceNumber: "INV-2024-001",
     invoiceDate: d(10).split("T")[0],
     companyId: "sc1",
@@ -350,10 +392,12 @@ const SEED_PURCHASES: PurchaseEntry[] = [
     quantity: 3,
     createdAt: d(10),
     createdBy: "u1",
+    costPrice: 2500,
   },
   {
     id: "pur2",
     vendorName: "Metro Parts Pvt Ltd",
+    vendorId: "v2",
     invoiceNumber: "INV-2024-002",
     invoiceDate: d(5).split("T")[0],
     companyId: "sc2",
@@ -362,6 +406,21 @@ const SEED_PURCHASES: PurchaseEntry[] = [
     quantity: 2,
     createdAt: d(5),
     createdBy: "u1",
+    costPrice: 1800,
+  },
+  {
+    id: "pur3",
+    vendorName: "Global Spares Co.",
+    vendorId: "v3",
+    invoiceNumber: "INV-2024-003",
+    invoiceDate: d(15).split("T")[0],
+    companyId: "sc1",
+    categoryId: "scat3",
+    partNameId: "spn5",
+    quantity: 4,
+    createdAt: d(15),
+    createdBy: "u1",
+    costPrice: 650,
   },
 ];
 
@@ -486,6 +545,54 @@ const SEED_PART_ITEMS: PartInventoryItem[] = [
     returnedToCompanyBy: "",
     createdAt: d(5),
   },
+  {
+    id: "pi6",
+    partCode: "MIDWM-BELT-001",
+    purchaseId: "pur3",
+    companyId: "sc1",
+    categoryId: "scat3",
+    partNameId: "spn5",
+    rackId: "rack1",
+    shelfId: "shelf2",
+    binId: "bin2",
+    status: "in_stock",
+    technicianId: "",
+    caseId: "",
+    issueDate: "",
+    issuedBy: "",
+    installedAt: "",
+    returnedToStoreAt: "",
+    returnRemarks: "",
+    returnedToCompanyAt: "",
+    returnToCompanyReason: "",
+    returnToCompanyRemarks: "",
+    returnedToCompanyBy: "",
+    createdAt: d(15),
+  },
+  {
+    id: "pi7",
+    partCode: "MIDWM-BELT-002",
+    purchaseId: "pur3",
+    companyId: "sc1",
+    categoryId: "scat3",
+    partNameId: "spn5",
+    rackId: "rack1",
+    shelfId: "shelf2",
+    binId: "bin2",
+    status: "installed",
+    technicianId: "t2",
+    caseId: "MD-2024-005",
+    issueDate: d(12),
+    issuedBy: "Admin",
+    installedAt: d(8),
+    returnedToStoreAt: "",
+    returnRemarks: "",
+    returnedToCompanyAt: "",
+    returnToCompanyReason: "",
+    returnToCompanyRemarks: "",
+    returnedToCompanyBy: "",
+    createdAt: d(15),
+  },
 ];
 
 const SEED_LIFECYCLE: PartLifecycleEntry[] = [
@@ -543,6 +650,75 @@ const SEED_LIFECYCLE: PartLifecycleEntry[] = [
     userName: "Admin",
     timestamp: d(2),
   },
+  {
+    id: "lc7",
+    partId: "pi6",
+    action: "Purchased",
+    details: "Received from Global Spares Co., Invoice INV-2024-003",
+    userId: "u1",
+    userName: "Admin",
+    timestamp: d(15),
+  },
+  {
+    id: "lc8",
+    partId: "pi7",
+    action: "Purchased",
+    details: "Received from Global Spares Co., Invoice INV-2024-003",
+    userId: "u1",
+    userName: "Admin",
+    timestamp: d(15),
+  },
+  {
+    id: "lc9",
+    partId: "pi7",
+    action: "Issued",
+    details: "Issued to Suresh Singh for Case MD-2024-005",
+    userId: "u1",
+    userName: "Admin",
+    timestamp: d(12),
+  },
+  {
+    id: "lc10",
+    partId: "pi7",
+    action: "Installed",
+    details: "Part marked as installed by supervisor",
+    userId: "u1",
+    userName: "Admin",
+    timestamp: d(8),
+  },
+];
+
+const SEED_STORE_NOTIFICATIONS: StoreNotification[] = [
+  {
+    id: "sn1",
+    title: "Part Issued",
+    message: "TOSBTV-PWR-002 issued to Ramesh Kumar for case MD-2024-004",
+    type: "part_issued",
+    priority: "medium",
+    isRead: false,
+    relatedPartCode: "TOSBTV-PWR-002",
+    createdAt: d(2),
+  },
+  {
+    id: "sn2",
+    title: "Part Installed",
+    message: "MIDWM-BELT-002 marked as installed for case MD-2024-005",
+    type: "part_returned",
+    priority: "low",
+    isRead: true,
+    relatedPartCode: "MIDWM-BELT-002",
+    createdAt: d(8),
+  },
+  {
+    id: "sn3",
+    title: "Low Stock Alert",
+    message: "Toshiba Power Board stock is running low (2 units remaining)",
+    type: "low_stock",
+    priority: "high",
+    isRead: false,
+    relatedPartCode: "TOSBTV-PWR",
+    createdAt: d(1),
+  },
 ];
 
 // ── StoreState interface ─────────────────────────────────────────────────────
@@ -570,12 +746,16 @@ interface StoreState {
   stockCompanies: StockCompany[];
   stockCategories: StockCategory[];
   stockPartNames: StockPartName[];
+  warehouses: Warehouse[];
   racks: WarehouseRack[];
   shelves: WarehouseShelf[];
   bins: WarehouseBin[];
+  vendors: Vendor[];
   purchaseEntries: PurchaseEntry[];
   partItems: PartInventoryItem[];
   partLifecycle: PartLifecycleEntry[];
+  partRequests: PartRequest[];
+  storeNotifications: StoreNotification[];
 
   // Actions
   login: (email: string, password: string) => boolean;
@@ -649,6 +829,19 @@ interface StoreState {
     >[],
   ) => number;
 
+  // Vendor actions
+  addVendor: (v: Omit<Vendor, "id" | "createdAt">) => void;
+  updateVendor: (id: string, updates: Partial<Vendor>) => void;
+  deleteVendor: (id: string) => void;
+
+  // Store notification actions
+  addStoreNotification: (
+    n: Omit<StoreNotification, "id" | "createdAt">,
+  ) => void;
+  markStoreNotificationRead: (id: string) => void;
+  markAllStoreNotificationsRead: () => void;
+  deleteStoreNotification: (id: string) => void;
+
   // StorePilot actions
   addStockCompany: (name: string) => void;
   updateStockCompany: (id: string, name: string) => void;
@@ -659,6 +852,10 @@ interface StoreState {
   addStockPartName: (name: string) => void;
   updateStockPartName: (id: string, name: string) => void;
   deleteStockPartName: (id: string) => void;
+  addWarehouse: (name: string, address: string) => void;
+  updateWarehouse: (id: string, name: string, address: string) => void;
+  deleteWarehouse: (id: string) => void;
+  addRackToWarehouse: (name: string, warehouseId: string) => void;
   addRack: (name: string) => void;
   updateRack: (id: string, name: string) => void;
   deleteRack: (id: string) => void;
@@ -696,6 +893,30 @@ interface StoreState {
     reason: string,
     remarks: string,
   ) => void;
+
+  // Part Request actions
+  addPartRequest: (
+    req: Omit<
+      PartRequest,
+      | "id"
+      | "requestedAt"
+      | "status"
+      | "technicianId"
+      | "issuedAt"
+      | "issuedBy"
+      | "issuedByName"
+      | "rejectedReason"
+      | "rejectedAt"
+      | "rejectedBy"
+      | "rejectedByName"
+    >,
+  ) => void;
+  issuePartRequest: (id: string, technicianId: string) => void;
+  rejectPartRequest: (id: string, reason: string) => void;
+  addPartImages: (partId: string, imageUrls: string[]) => void;
+  removePartImage: (partId: string, imageUrl: string) => void;
+  updatePurchaseInvoiceImage: (purchaseId: string, imageUrl: string) => void;
+  removePurchaseInvoiceImage: (purchaseId: string) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -751,12 +972,16 @@ export const useStore = create<StoreState>()(
         stockCompanies: SEED_STOCK_COMPANIES,
         stockCategories: SEED_STOCK_CATEGORIES,
         stockPartNames: SEED_STOCK_PART_NAMES,
+        warehouses: SEED_WAREHOUSES,
         racks: SEED_RACKS,
         shelves: SEED_SHELVES,
         bins: SEED_BINS,
+        vendors: SEED_VENDORS,
         purchaseEntries: SEED_PURCHASES,
         partItems: SEED_PART_ITEMS,
         partLifecycle: SEED_LIFECYCLE,
+        partRequests: [],
+        storeNotifications: SEED_STORE_NOTIFICATIONS,
 
         login: (email, password) => {
           const user = get().users.find(
@@ -1339,6 +1564,61 @@ export const useStore = create<StoreState>()(
           return imported.length;
         },
 
+        // ── Vendor actions ────────────────────────────────────────────────
+        addVendor: (v) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            vendors: [...s.vendors, { ...v, id: uid(), createdAt: now() }],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Vendor Added",
+              `Added vendor: ${v.name}`,
+            );
+        },
+        updateVendor: (id, updates) => {
+          set((s) => ({
+            vendors: s.vendors.map((v) =>
+              v.id === id ? { ...v, ...updates } : v,
+            ),
+          }));
+        },
+        deleteVendor: (id) => {
+          set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) }));
+        },
+
+        // ── Store notification actions ────────────────────────────────────────────
+        addStoreNotification: (n) => {
+          set((s) => ({
+            storeNotifications: [
+              { ...n, id: uid(), createdAt: now() },
+              ...s.storeNotifications,
+            ],
+          }));
+        },
+        markStoreNotificationRead: (id) => {
+          set((s) => ({
+            storeNotifications: s.storeNotifications.map((n) =>
+              n.id === id ? { ...n, isRead: true } : n,
+            ),
+          }));
+        },
+        markAllStoreNotificationsRead: () => {
+          set((s) => ({
+            storeNotifications: s.storeNotifications.map((n) => ({
+              ...n,
+              isRead: true,
+            })),
+          }));
+        },
+        deleteStoreNotification: (id) => {
+          set((s) => ({
+            storeNotifications: s.storeNotifications.filter((n) => n.id !== id),
+          }));
+        },
+
         // ── StorePilot actions ────────────────────────────────────────────────
 
         addStockCompany: (name) => {
@@ -1428,9 +1708,43 @@ export const useStore = create<StoreState>()(
           }));
         },
 
+        addWarehouse: (name, address) => {
+          set((s) => ({
+            warehouses: [
+              ...s.warehouses,
+              { id: uid(), name, address, createdAt: now() },
+            ],
+          }));
+        },
+        updateWarehouse: (id, name, address) => {
+          set((s) => ({
+            warehouses: s.warehouses.map((w) =>
+              w.id === id ? { ...w, name, address } : w,
+            ),
+          }));
+        },
+        deleteWarehouse: (id) => {
+          set((s) => ({ warehouses: s.warehouses.filter((w) => w.id !== id) }));
+        },
+        addRackToWarehouse: (name, warehouseId) => {
+          set((s) => ({
+            racks: [
+              ...s.racks,
+              { id: uid(), name, warehouseId, createdAt: now() },
+            ],
+          }));
+        },
         addRack: (name) => {
           set((s) => ({
-            racks: [...s.racks, { id: uid(), name, createdAt: now() }],
+            racks: [
+              ...s.racks,
+              {
+                id: uid(),
+                name,
+                warehouseId: s.warehouses[0]?.id ?? "wh1",
+                createdAt: now(),
+              },
+            ],
           }));
         },
         updateRack: (id, name) => {
@@ -1484,9 +1798,6 @@ export const useStore = create<StoreState>()(
             createdAt: now(),
             createdBy: cu?.id ?? "",
           };
-          const { stockCompanies } = get();
-          const companyName =
-            stockCompanies.find((c) => c.id === entry.companyId)?.name ?? "";
           const items: PartInventoryItem[] = partCodes.map((pc) => ({
             id: uid(),
             partCode: pc.code,
@@ -1531,7 +1842,7 @@ export const useStore = create<StoreState>()(
               cu.id,
               cu.name,
               "Purchase Entry",
-              `Added purchase from ${entry.vendorName} — ${partCodes.length} part(s) (${companyName})`,
+              `Purchased ${partCodes.length} parts from ${entry.vendorName}`,
             );
         },
 
@@ -1547,7 +1858,7 @@ export const useStore = create<StoreState>()(
                 id: uid(),
                 partId,
                 action: "Location Assigned",
-                details: "Location updated",
+                details: "Assigned to Rack/Shelf/Bin",
                 userId: cu?.id ?? "",
                 userName: cu?.name ?? "",
                 timestamp: now(),
@@ -1586,6 +1897,17 @@ export const useStore = create<StoreState>()(
               },
             ],
           }));
+          const part = get().partItems.find((p) => p.id === partId);
+          if (part) {
+            get().addStoreNotification({
+              title: "Part Issued",
+              message: `${part.partCode} issued to ${tech?.name ?? "technician"} for case ${caseId || "N/A"}`,
+              type: "part_issued",
+              priority: "medium",
+              isRead: false,
+              relatedPartCode: part.partCode,
+            });
+          }
           if (cu)
             logActivity(
               cu.id,
@@ -1657,12 +1979,23 @@ export const useStore = create<StoreState>()(
               },
             ],
           }));
+          const part = get().partItems.find((p) => p.id === partId);
+          if (part) {
+            get().addStoreNotification({
+              title: "Part Returned to Store",
+              message: `${part.partCode} returned to store`,
+              type: "part_returned",
+              priority: "low",
+              isRead: false,
+              relatedPartCode: part.partCode,
+            });
+          }
           if (cu)
             logActivity(
               cu.id,
               cu.name,
               "Part Returned to Store",
-              `Part ${partId} returned to store`,
+              `Part ${partId} returned`,
             );
         },
 
@@ -1688,7 +2021,7 @@ export const useStore = create<StoreState>()(
                 id: uid(),
                 partId,
                 action: "Returned to Company",
-                details: `Reason: ${reason}${remarks ? `. Remarks: ${remarks}` : ""}`,
+                details: `Reason: ${reason}${remarks ? `. ${remarks}` : ""}`,
                 userId: cu?.id ?? "",
                 userName: cu?.name ?? "",
                 timestamp: returnedAt,
@@ -1700,16 +2033,177 @@ export const useStore = create<StoreState>()(
               cu.id,
               cu.name,
               "Part Returned to Company",
-              `Part ${partId} returned to company. Reason: ${reason}`,
+              `Part ${partId} returned to company`,
             );
+        },
+
+        // ── Part Request actions ────────────────────────────────────────────
+        addPartRequest: (req) => {
+          set((s) => ({
+            partRequests: [
+              {
+                ...req,
+                id: uid(),
+                requestedAt: now(),
+                status: "pending" as PartRequestStatus,
+                technicianId: "",
+                issuedAt: "",
+                issuedBy: "",
+                issuedByName: "",
+                rejectedReason: "",
+                rejectedAt: "",
+                rejectedBy: "",
+                rejectedByName: "",
+              },
+              ...s.partRequests,
+            ],
+          }));
+        },
+
+        issuePartRequest: (id, technicianId) => {
+          const cu = get().currentUser;
+          const tech = get().technicians.find((t) => t.id === technicianId);
+          set((s) => ({
+            partRequests: s.partRequests.map((r) =>
+              r.id === id
+                ? {
+                    ...r,
+                    status: "issued" as PartRequestStatus,
+                    technicianId,
+                    issuedAt: now(),
+                    issuedBy: cu?.id ?? "",
+                    issuedByName: cu?.name ?? "",
+                  }
+                : r,
+            ),
+          }));
+          const req = get().partRequests.find((r) => r.id === id);
+          if (req) {
+            get().addNotification({
+              userId: req.requestedBy,
+              message: `Your part request for case ${req.caseId} has been approved. Part issued to ${tech?.name ?? "technician"}`,
+              type: "part_request",
+              isRead: false,
+              caseId: req.caseDbId,
+            });
+          }
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Part Request Issued",
+              `Part request ${id} issued to ${tech?.name}`,
+            );
+        },
+
+        rejectPartRequest: (id, reason) => {
+          const cu = get().currentUser;
+          set((s) => ({
+            partRequests: s.partRequests.map((r) =>
+              r.id === id
+                ? {
+                    ...r,
+                    status: "rejected" as PartRequestStatus,
+                    rejectedReason: reason,
+                    rejectedAt: now(),
+                    rejectedBy: cu?.id ?? "",
+                    rejectedByName: cu?.name ?? "",
+                  }
+                : r,
+            ),
+          }));
+          const req = get().partRequests.find((r) => r.id === id);
+          if (req) {
+            get().addNotification({
+              userId: req.requestedBy,
+              message: `Your part request for case ${req.caseId} was rejected. Reason: ${reason}`,
+              type: "part_request",
+              isRead: false,
+              caseId: req.caseDbId,
+            });
+          }
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Part Request Rejected",
+              `Part request ${id} rejected`,
+            );
+        },
+        addPartImages: (partId, imageUrls) => {
+          set((s) => ({
+            partItems: s.partItems.map((p) =>
+              p.id === partId
+                ? {
+                    ...p,
+                    partImageUrls: [...(p.partImageUrls ?? []), ...imageUrls],
+                  }
+                : p,
+            ),
+          }));
+        },
+        removePartImage: (partId, imageUrl) => {
+          set((s) => ({
+            partItems: s.partItems.map((p) =>
+              p.id === partId
+                ? {
+                    ...p,
+                    partImageUrls: (p.partImageUrls ?? []).filter(
+                      (u) => u !== imageUrl,
+                    ),
+                  }
+                : p,
+            ),
+          }));
+        },
+        updatePurchaseInvoiceImage: (purchaseId, imageUrl) => {
+          set((s) => ({
+            purchaseEntries: s.purchaseEntries.map((pe) =>
+              pe.id === purchaseId ? { ...pe, invoiceImageUrl: imageUrl } : pe,
+            ),
+          }));
+        },
+        removePurchaseInvoiceImage: (purchaseId) => {
+          set((s) => ({
+            purchaseEntries: s.purchaseEntries.map((pe) =>
+              pe.id === purchaseId ? { ...pe, invoiceImageUrl: undefined } : pe,
+            ),
+          }));
         },
       };
     },
-    { name: "servicedesk-store" },
+    {
+      name: "servicedesk-storage",
+      partialize: (state) => ({
+        users: state.users,
+        currentUser: state.currentUser,
+        cases: state.cases,
+        auditLog: state.auditLog,
+        activityLog: state.activityLog,
+        reminders: state.reminders,
+        notifications: state.notifications,
+        settings: state.settings,
+        stockCompanies: state.stockCompanies,
+        stockCategories: state.stockCategories,
+        stockPartNames: state.stockPartNames,
+        warehouses: state.warehouses,
+        racks: state.racks,
+        shelves: state.shelves,
+        bins: state.bins,
+        vendors: state.vendors,
+        purchaseEntries: state.purchaseEntries,
+        partItems: state.partItems,
+        partLifecycle: state.partLifecycle,
+        partRequests: state.partRequests,
+        storeNotifications: state.storeNotifications,
+        technicians: state.technicians,
+        notificationsGeneratedDate: state.notificationsGeneratedDate,
+        lastMidnightResetDate: state.lastMidnightResetDate,
+      }),
+    },
   ),
 );
 
-// Helper exports used by other components
 export const getAgeing = (createdAt: string): number =>
   Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
 

@@ -7,6 +7,13 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import {
@@ -27,6 +34,7 @@ interface PartCodeEntry {
 }
 
 const emptyForm = () => ({
+  vendorId: "",
   vendorName: "",
   invoiceNumber: "",
   invoiceDate: "",
@@ -34,6 +42,7 @@ const emptyForm = () => ({
   categoryId: "",
   partNameId: "",
   quantity: 0,
+  costPrice: 0,
 });
 
 const readFileAsDataURL = (file: File): Promise<string> =>
@@ -52,6 +61,7 @@ export default function PurchasePage() {
     racks,
     shelves,
     bins,
+    vendors,
     addPurchaseEntry,
   } = useStore();
 
@@ -61,6 +71,7 @@ export default function PurchasePage() {
   const [success, setSuccess] = useState(false);
   const [invoiceImageUrl, setInvoiceImageUrl] = useState("");
   const [partImages, setPartImages] = useState<Record<number, string>>({});
+  const [deleteInvoiceDialog, setDeleteInvoiceDialog] = useState(false);
 
   const setField = (key: string, value: string | number) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -83,6 +94,15 @@ export default function PurchasePage() {
       } else {
         setPartCodes([]);
       }
+    }
+    if (key === "vendorId") {
+      const vendor = vendors.find((v) => v.id === value);
+      if (vendor)
+        setForm((prev) => ({
+          ...prev,
+          vendorId: String(value),
+          vendorName: vendor.name,
+        }));
     }
   };
 
@@ -126,7 +146,7 @@ export default function PurchasePage() {
 
   const validate = () => {
     const errs: Record<string, string> = {};
-    if (!form.vendorName.trim()) errs.vendorName = "Required";
+    if (!form.vendorName.trim()) errs.vendorName = "Select or enter a vendor";
     if (!form.invoiceNumber.trim()) errs.invoiceNumber = "Required";
     if (!form.invoiceDate) errs.invoiceDate = "Required";
     if (!form.companyId) errs.companyId = "Required";
@@ -134,7 +154,6 @@ export default function PurchasePage() {
     if (!form.partNameId) errs.partNameId = "Required";
     if (!form.quantity || form.quantity < 1)
       errs.quantity = "Must be at least 1";
-    // Only check for duplicates within this form — same code can be purchased again from different invoices
     partCodes.forEach((pc, i) => {
       if (!pc.code.trim()) errs[`code_${i}`] = "Required";
       else {
@@ -154,7 +173,18 @@ export default function PurchasePage() {
       return;
     }
     addPurchaseEntry(
-      { ...form, quantity: Number(form.quantity), invoiceImageUrl },
+      {
+        vendorName: form.vendorName,
+        vendorId: form.vendorId || undefined,
+        invoiceNumber: form.invoiceNumber,
+        invoiceDate: form.invoiceDate,
+        companyId: form.companyId,
+        categoryId: form.categoryId,
+        partNameId: form.partNameId,
+        quantity: Number(form.quantity),
+        invoiceImageUrl: invoiceImageUrl || undefined,
+        costPrice: Number(form.costPrice) || undefined,
+      },
       partCodes.map((pc, i) => ({
         code: pc.code.trim(),
         rackId: pc.rackId,
@@ -200,24 +230,53 @@ export default function PurchasePage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Vendor Name *</Label>
+          {/* Vendor Dropdown */}
+          <div>
+            <Label>Vendor *</Label>
+            {vendors.length > 0 ? (
+              <Select
+                value={form.vendorId}
+                onValueChange={(v) => {
+                  const vendor = vendors.find((x) => x.id === v);
+                  setForm((prev) => ({
+                    ...prev,
+                    vendorId: v,
+                    vendorName: vendor?.name ?? "",
+                  }));
+                }}
+              >
+                <SelectTrigger data-ocid="purchase.select">
+                  <SelectValue placeholder="Select vendor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendors.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
               <Input
                 value={form.vendorName}
-                onChange={(e) => setField("vendorName", e.target.value)}
-                placeholder="Vendor name"
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, vendorName: e.target.value }))
+                }
+                placeholder="Enter vendor name"
                 data-ocid="purchase.input"
               />
-              {errors.vendorName && (
-                <p
-                  className="text-xs text-red-500 mt-1"
-                  data-ocid="purchase.error_state"
-                >
-                  {errors.vendorName}
-                </p>
-              )}
-            </div>
+            )}
+            {errors.vendorName && (
+              <p
+                className="text-xs text-red-500 mt-1"
+                data-ocid="purchase.error_state"
+              >
+                {errors.vendorName}
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Invoice Number *</Label>
               <Input
@@ -253,24 +312,55 @@ export default function PurchasePage() {
               )}
             </div>
             <div>
-              <Label>Invoice Image (optional)</Label>
+              <Label>Cost Price per Unit (optional)</Label>
+              <Input
+                type="number"
+                value={form.costPrice || ""}
+                onChange={(e) => setField("costPrice", e.target.value)}
+                placeholder="0"
+                data-ocid="purchase.input"
+              />
+            </div>
+          </div>
+
+          {/* Invoice Image Upload */}
+          <div>
+            <Label>Invoice Image (optional)</Label>
+            <div className="flex items-center gap-3">
               <Input
                 type="file"
                 accept="image/*"
                 onChange={handleInvoiceImage}
-                className="cursor-pointer"
+                className="cursor-pointer flex-1"
                 data-ocid="purchase.upload_button"
               />
               {invoiceImageUrl && (
-                <img
-                  src={invoiceImageUrl}
-                  alt="Invoice"
-                  className="mt-2 h-20 rounded border object-cover w-full"
-                />
+                <button
+                  type="button"
+                  onClick={() => setDeleteInvoiceDialog(true)}
+                  className="text-xs text-red-500 hover:text-red-700 whitespace-nowrap"
+                >
+                  Delete
+                </button>
               )}
             </div>
+            {invoiceImageUrl && (
+              <img
+                src={invoiceImageUrl}
+                alt="Invoice"
+                className="mt-2 h-20 rounded border border-slate-200 object-cover"
+              />
+            )}
           </div>
+        </CardContent>
+      </Card>
 
+      {/* Part Selection */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Part Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Company *</Label>
@@ -279,7 +369,7 @@ export default function PurchasePage() {
                 onValueChange={(v) => setField("companyId", v)}
               >
                 <SelectTrigger data-ocid="purchase.select">
-                  <SelectValue placeholder="Select company" />
+                  <SelectValue placeholder="Company" />
                 </SelectTrigger>
                 <SelectContent>
                   {stockCompanies.map((c) => (
@@ -305,7 +395,7 @@ export default function PurchasePage() {
                 onValueChange={(v) => setField("categoryId", v)}
               >
                 <SelectTrigger data-ocid="purchase.select">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
                   {stockCategories.map((c) => (
@@ -331,7 +421,7 @@ export default function PurchasePage() {
                 onValueChange={(v) => setField("partNameId", v)}
               >
                 <SelectTrigger data-ocid="purchase.select">
-                  <SelectValue placeholder="Select part" />
+                  <SelectValue placeholder="Part Name" />
                 </SelectTrigger>
                 <SelectContent>
                   {stockPartNames.map((p) => (
@@ -352,20 +442,15 @@ export default function PurchasePage() {
             </div>
           </div>
 
-          <div className="max-w-xs">
-            <Label>Quantity * (1-50)</Label>
+          <div className="max-w-32">
+            <Label>Quantity *</Label>
             <Input
               type="number"
               min={1}
               max={50}
               value={form.quantity || ""}
-              onChange={(e) =>
-                setField(
-                  "quantity",
-                  e.target.value ? Number.parseInt(e.target.value) : 0,
-                )
-              }
-              placeholder="Enter quantity"
+              onChange={(e) => setField("quantity", e.target.value)}
+              placeholder="0"
               data-ocid="purchase.input"
             />
             {errors.quantity && (
@@ -380,57 +465,70 @@ export default function PurchasePage() {
         </CardContent>
       </Card>
 
+      {/* Part Codes */}
       {partCodes.length > 0 && (
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              Part Codes &amp; Locations
-            </CardTitle>
+            <CardTitle className="text-base">Part Codes & Location</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {partCodes.map((pc, i) => (
               <div
-                key={pc.id ?? i}
-                className="border border-slate-200 rounded-lg p-4 space-y-3"
-                data-ocid={`purchase.item.${i + 1}`}
+                key={pc.id}
+                className="border border-slate-200 rounded-lg p-3 space-y-3 bg-slate-50"
               >
-                <div className="font-medium text-sm text-slate-700">
-                  Part {i + 1}
-                </div>
-                <div>
-                  <Label>Part Code {i + 1} *</Label>
-                  <Input
-                    value={pc.code}
-                    onChange={(e) => setPartCode(i, "code", e.target.value)}
-                    placeholder={`e.g. MIDAC-COMP-${String(i + 4).padStart(3, "0")}`}
-                    className="font-mono"
-                    data-ocid="purchase.input"
-                  />
-                  {errors[`code_${i}`] && (
-                    <p
-                      className="text-xs text-red-500 mt-1"
-                      data-ocid="purchase.error_state"
-                    >
-                      {errors[`code_${i}`]}
-                    </p>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <p className="text-xs font-semibold text-slate-500">
+                  Part #{i + 1}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-slate-500">
-                      Rack (optional)
-                    </Label>
+                    <Label className="text-xs">Part Code *</Label>
+                    <Input
+                      value={pc.code}
+                      onChange={(e) => setPartCode(i, "code", e.target.value)}
+                      placeholder={`PART-CODE-${String(i + 1).padStart(3, "0")}`}
+                      className="font-mono text-xs"
+                      data-ocid="purchase.input"
+                    />
+                    {errors[`code_${i}`] && (
+                      <p
+                        className="text-xs text-red-500 mt-1"
+                        data-ocid="purchase.error_state"
+                      >
+                        {errors[`code_${i}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs">Part Image (optional)</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePartImage(i, e)}
+                      className="cursor-pointer text-xs"
+                      data-ocid="purchase.upload_button"
+                    />
+                    {partImages[i] && (
+                      <img
+                        src={partImages[i]}
+                        alt={`Part ${i + 1}`}
+                        className="mt-1 h-12 rounded border border-slate-200 object-cover"
+                      />
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Rack (opt)</Label>
                     <Select
                       value={pc.rackId}
                       onValueChange={(v) => setPartCode(i, "rackId", v)}
                     >
-                      <SelectTrigger
-                        className="h-8 text-xs"
-                        data-ocid="purchase.select"
-                      >
+                      <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Rack" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">None</SelectItem>
                         {racks.map((r) => (
                           <SelectItem key={r.id} value={r.id}>
                             {r.name}
@@ -440,21 +538,17 @@ export default function PurchasePage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-500">
-                      Shelf (optional)
-                    </Label>
+                    <Label className="text-xs">Shelf (opt)</Label>
                     <Select
                       value={pc.shelfId}
                       onValueChange={(v) => setPartCode(i, "shelfId", v)}
                       disabled={!pc.rackId}
                     >
-                      <SelectTrigger
-                        className="h-8 text-xs"
-                        data-ocid="purchase.select"
-                      >
+                      <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Shelf" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">None</SelectItem>
                         {shelves
                           .filter((s) => s.rackId === pc.rackId)
                           .map((s) => (
@@ -466,21 +560,17 @@ export default function PurchasePage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-500">
-                      Bin (optional)
-                    </Label>
+                    <Label className="text-xs">Bin (opt)</Label>
                     <Select
                       value={pc.binId}
                       onValueChange={(v) => setPartCode(i, "binId", v)}
                       disabled={!pc.shelfId}
                     >
-                      <SelectTrigger
-                        className="h-8 text-xs"
-                        data-ocid="purchase.select"
-                      >
+                      <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Bin" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">None</SelectItem>
                         {bins
                           .filter((b) => b.shelfId === pc.shelfId)
                           .map((b) => (
@@ -492,55 +582,54 @@ export default function PurchasePage() {
                     </Select>
                   </div>
                 </div>
-                {/* Per-part image upload */}
-                <div>
-                  <Label className="text-xs text-slate-500">
-                    Part Image (optional)
-                  </Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handlePartImage(i, e)}
-                    className="cursor-pointer h-8 text-xs"
-                    data-ocid="purchase.upload_button"
-                  />
-                  {partImages[i] && (
-                    <img
-                      src={partImages[i]}
-                      alt="Part"
-                      className="mt-1 h-16 rounded border object-cover"
-                    />
-                  )}
-                </div>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
 
-      <div className="flex gap-3">
-        <Button
-          className="bg-blue-600 hover:bg-blue-700"
-          onClick={submit}
-          disabled={partCodes.length === 0}
-          data-ocid="purchase.submit_button"
-        >
-          Save Purchase Entry
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setForm(emptyForm());
-            setPartCodes([]);
-            setErrors({});
-            setInvoiceImageUrl("");
-            setPartImages({});
-          }}
-          data-ocid="purchase.secondary_button"
-        >
-          Reset
-        </Button>
-      </div>
+      <Button
+        onClick={submit}
+        className="bg-blue-600 hover:bg-blue-700 w-full"
+        disabled={partCodes.length === 0}
+        data-ocid="purchase.submit_button"
+      >
+        Save Purchase Entry
+      </Button>
+
+      {/* Delete Invoice Dialog */}
+      <Dialog open={deleteInvoiceDialog} onOpenChange={setDeleteInvoiceDialog}>
+        <DialogContent data-ocid="purchase.dialog">
+          <DialogHeader>
+            <DialogTitle>Delete Invoice Image</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            Are you sure you want to delete this invoice image? This cannot be
+            undone.
+          </p>
+          <DialogFooter>
+            <button
+              type="button"
+              className="px-4 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
+              onClick={() => setDeleteInvoiceDialog(false)}
+              data-ocid="purchase.cancel_button"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+              onClick={() => {
+                setInvoiceImageUrl("");
+                setDeleteInvoiceDialog(false);
+              }}
+              data-ocid="purchase.confirm_button"
+            >
+              Delete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
