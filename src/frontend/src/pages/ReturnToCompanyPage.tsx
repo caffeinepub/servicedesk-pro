@@ -40,6 +40,7 @@ export default function ReturnToCompanyPage() {
   const {
     partItems,
     stockCompanies,
+    stockCategories,
     stockPartNames,
     purchaseEntries,
     vendors,
@@ -49,9 +50,8 @@ export default function ReturnToCompanyPage() {
 
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showFinalConfirm, setShowFinalConfirm] = useState(false);
   const [returns, setReturns] = useState<ReturnRecord[]>(() => {
-    // Generate initial returns from existing returned_to_company parts
     return partItems
       .filter((p) => p.status === "returned_to_company")
       .map((p) => {
@@ -92,16 +92,14 @@ export default function ReturnToCompanyPage() {
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Eligible parts: in_stock or installed (NOT issued)
-  const eligibleParts = partItems.filter(
-    (p) => p.status === "in_stock" || p.status === "installed",
-  );
+  // Eligible parts: in_stock only (not issued, not returned)
+  const eligibleParts = partItems.filter((p) => p.status === "in_stock");
 
-  const searchedParts = eligibleParts.filter(
-    (p) =>
-      !partSearch ||
-      p.partCode.toLowerCase().includes(partSearch.toLowerCase()),
-  );
+  const searchedParts = partSearch.trim()
+    ? eligibleParts.filter((p) =>
+        p.partCode.toLowerCase().includes(partSearch.toLowerCase()),
+      )
+    : [];
 
   const selectedPart = partItems.find((p) => p.id === selectedPartId);
   const selectedPurchase = selectedPart
@@ -125,7 +123,22 @@ export default function ReturnToCompanyPage() {
     setShowModal(true);
   };
 
-  const handleSubmit = () => {
+  const getPartBreadcrumb = (p: (typeof partItems)[0]) => {
+    const company =
+      stockCompanies.find((c) => c.id === p.companyId)?.name ?? "";
+    const category =
+      stockCategories.find((c) => c.id === p.categoryId)?.name ?? "";
+    const partName =
+      stockPartNames.find((n) => n.id === p.partNameId)?.name ?? "";
+    return [company, category, partName].filter(Boolean).join(" > ");
+  };
+
+  const getPartStatus = (p: (typeof partItems)[0]) => {
+    if (p.binId) return "In Warehouse";
+    return "Pending Location";
+  };
+
+  const validateAndConfirm = () => {
     const errs: Record<string, string> = {};
     if (!selectedPartId) errs.part = "Please select a part";
     if (!reason.trim()) errs.reason = "Reason is required";
@@ -133,6 +146,10 @@ export default function ReturnToCompanyPage() {
       setErrors(errs);
       return;
     }
+    setShowFinalConfirm(true);
+  };
+
+  const handleSubmit = () => {
     returnPartToCompany(selectedPartId, reason, notes);
     const part = partItems.find((p) => p.id === selectedPartId)!;
     const partName =
@@ -156,6 +173,7 @@ export default function ReturnToCompanyPage() {
       },
       ...prev,
     ]);
+    setShowFinalConfirm(false);
     setShowModal(false);
   };
 
@@ -179,7 +197,7 @@ export default function ReturnToCompanyPage() {
           </p>
         </div>
         <Button
-          onClick={() => setShowConfirm(true)}
+          onClick={openModal}
           className="bg-blue-600 hover:bg-blue-700"
           data-ocid="rtc.open_modal_button"
         >
@@ -273,45 +291,7 @@ export default function ReturnToCompanyPage() {
         </CardContent>
       </Card>
 
-      {/* Confirm before opening form */}
-      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent className="max-w-sm" data-ocid="rtc.dialog">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-700">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Confirm Return to Company
-            </DialogTitle>
-          </DialogHeader>
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2 my-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-700">
-              Are you sure you want to return this part to the company? This
-              action is permanent and cannot be undone.
-            </p>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowConfirm(false)}
-              data-ocid="rtc.cancel_button"
-            >
-              Cancel
-            </Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700"
-              onClick={() => {
-                setShowConfirm(false);
-                openModal();
-              }}
-              data-ocid="rtc.confirm_button"
-            >
-              Yes, Proceed
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Record Return Modal */}
+      {/* Record Return Modal -- opens directly, no pre-warning */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-lg" data-ocid="rtc.modal">
           <DialogHeader>
@@ -322,107 +302,134 @@ export default function ReturnToCompanyPage() {
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Part Search */}
-            {!selectedPartId ? (
-              <div>
-                <Label>Search Part Code *</Label>
-                <div className="relative">
-                  <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    className="pl-9"
-                    placeholder="Enter part code to search..."
-                    value={partSearch}
-                    onChange={(e) => setPartSearch(e.target.value)}
-                    data-ocid="rtc.search_input"
-                  />
-                </div>
-                {errors.part && (
-                  <p
-                    className="text-xs text-red-500 mt-1"
-                    data-ocid="rtc.error_state"
-                  >
-                    {errors.part}
-                  </p>
-                )}
-                {partSearch && (
-                  <div className="mt-1 border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
-                    {searchedParts.length === 0 ? (
-                      <p className="text-sm text-slate-400 p-3">
-                        No eligible parts found
-                      </p>
-                    ) : (
-                      searchedParts.map((p) => (
+            {/* Part Search -- always visible, stays active after selection */}
+            <div>
+              <Label>Search Part Code *</Label>
+              <div className="relative">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input
+                  className="pl-9"
+                  placeholder="Type part code to search..."
+                  value={partSearch}
+                  onChange={(e) => {
+                    setPartSearch(e.target.value);
+                    if (selectedPartId) setSelectedPartId("");
+                  }}
+                  data-ocid="rtc.part_search_input"
+                />
+              </div>
+              {errors.part && (
+                <p
+                  className="text-xs text-red-500 mt-1"
+                  data-ocid="rtc.error_state"
+                >
+                  {errors.part}
+                </p>
+              )}
+
+              {/* Search suggestions */}
+              {partSearch.trim() && !selectedPartId && (
+                <div className="mt-1 border border-slate-200 rounded-lg max-h-44 overflow-y-auto shadow-sm">
+                  {searchedParts.length === 0 ? (
+                    <p className="text-sm text-slate-400 p-3">
+                      No eligible parts found
+                    </p>
+                  ) : (
+                    searchedParts.map((p) => {
+                      const breadcrumb = getPartBreadcrumb(p);
+                      const statusLabel = getPartStatus(p);
+                      const isInWarehouse = statusLabel === "In Warehouse";
+                      return (
                         <button
                           key={p.id}
                           type="button"
-                          className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-slate-100 last:border-0"
+                          className="w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-2"
                           onClick={() => {
                             setSelectedPartId(p.id);
-                            setPartSearch("");
                           }}
                         >
-                          <span className="font-mono font-semibold text-blue-600">
-                            {p.partCode}
-                          </span>
-                          <span className="text-slate-400 ml-2">
-                            (
-                            {stockPartNames.find((n) => n.id === p.partNameId)
-                              ?.name ?? ""}
-                            )
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono font-semibold text-blue-600 text-sm shrink-0">
+                              {p.partCode}
+                            </span>
+                            {breadcrumb && (
+                              <span className="text-xs text-slate-500 truncate">
+                                {breadcrumb}
+                              </span>
+                            )}
+                          </div>
                           <span
-                            className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-                              p.status === "in_stock"
+                            className={`text-xs px-2 py-0.5 rounded-full shrink-0 font-medium ${
+                              isInWarehouse
                                 ? "bg-green-100 text-green-700"
-                                : "bg-blue-100 text-blue-700"
+                                : "bg-amber-100 text-amber-700"
                             }`}
                           >
-                            {p.status === "in_stock" ? "In Stock" : "Installed"}
+                            {statusLabel}
                           </span>
                         </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="bg-blue-50 rounded-lg p-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-blue-600" />
-                  <div>
-                    <p className="font-mono text-sm font-semibold text-blue-700">
-                      {selectedPart?.partCode}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {
-                        stockPartNames.find(
-                          (n) => n.id === selectedPart?.partNameId,
-                        )?.name
-                      }{" "}
-                      •{" "}
-                      <span
-                        className={`${
-                          selectedPart?.status === "in_stock"
-                            ? "text-green-600"
-                            : "text-blue-600"
-                        }`}
-                      >
-                        {selectedPart?.status === "in_stock"
-                          ? "In Stock"
-                          : "Installed"}
-                      </span>
-                    </p>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Selected part detail card */}
+              {selectedPartId && selectedPart && (
+                <div className="mt-2 border border-blue-200 rounded-lg bg-blue-50 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      <Package className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-500 w-20">
+                            Part Code
+                          </span>
+                          <span className="font-mono text-sm font-semibold text-blue-700">
+                            {selectedPart.partCode}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-500 w-20">
+                            Part Name
+                          </span>
+                          <span className="text-sm text-slate-700">
+                            {stockPartNames.find(
+                              (n) => n.id === selectedPart.partNameId,
+                            )?.name ?? "-"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-500 w-20">
+                            Status
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              getPartStatus(selectedPart) === "In Warehouse"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {getPartStatus(selectedPart)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 shrink-0 mt-0.5"
+                      onClick={() => {
+                        setSelectedPartId("");
+                        setPartSearch("");
+                      }}
+                      data-ocid="rtc.change_part_button"
+                    >
+                      <X className="h-3 w-3" /> Change
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                  onClick={() => setSelectedPartId("")}
-                >
-                  <X className="h-3 w-3" /> Change
-                </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Vendor (auto-filled) */}
             <div>
@@ -492,13 +499,6 @@ export default function ReturnToCompanyPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2 mx-1">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700">
-              This action is permanent and cannot be undone. The part will be
-              removed from inventory permanently.
-            </p>
-          </div>
           <DialogFooter>
             <Button
               variant="outline"
@@ -508,11 +508,55 @@ export default function ReturnToCompanyPage() {
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit}
+              onClick={validateAndConfirm}
               className="bg-red-600 hover:bg-red-700"
               data-ocid="rtc.confirm_button"
             >
               Record Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Final confirmation warning -- appears only after filling details and clicking Record Return */}
+      <Dialog open={showFinalConfirm} onOpenChange={setShowFinalConfirm}>
+        <DialogContent className="max-w-sm" data-ocid="rtc.confirm_dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Confirm Return to Company
+            </DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2 my-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-amber-800">
+                This action is permanent and cannot be undone.
+              </p>
+              <p className="text-sm text-amber-700">
+                Part{" "}
+                <span className="font-mono font-semibold">
+                  {selectedPart?.partCode}
+                </span>{" "}
+                will be permanently removed from inventory and marked as
+                returned to company.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowFinalConfirm(false)}
+              data-ocid="rtc.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleSubmit}
+              data-ocid="rtc.final_confirm_button"
+            >
+              Yes, Return to Company
             </Button>
           </DialogFooter>
         </DialogContent>

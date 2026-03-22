@@ -1,0 +1,772 @@
+import {
+  AlignCenter,
+  AlignLeft,
+  Bold,
+  Calendar,
+  CheckCircle,
+  ChevronDown,
+  Clock,
+  Edit2,
+  Eye,
+  Italic,
+  Megaphone,
+  Pause,
+  Play,
+  Plus,
+  Settings,
+  Trash2,
+  Type,
+} from "lucide-react";
+import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Switch } from "../components/ui/switch";
+import { Textarea } from "../components/ui/textarea";
+import { useStore } from "../store";
+import type { AdminNotice } from "../types";
+
+const COLOR_OPTIONS = [
+  {
+    value: "amber",
+    label: "Amber",
+    cls: "bg-amber-500",
+    preview: "bg-gradient-to-r from-amber-500 to-orange-500",
+  },
+  {
+    value: "blue",
+    label: "Blue",
+    cls: "bg-blue-500",
+    preview: "bg-gradient-to-r from-blue-600 to-blue-500",
+  },
+  {
+    value: "rose",
+    label: "Rose",
+    cls: "bg-rose-500",
+    preview: "bg-gradient-to-r from-rose-600 to-pink-600",
+  },
+  {
+    value: "emerald",
+    label: "Emerald",
+    cls: "bg-emerald-500",
+    preview: "bg-gradient-to-r from-emerald-600 to-teal-600",
+  },
+  {
+    value: "purple",
+    label: "Purple",
+    cls: "bg-violet-500",
+    preview: "bg-gradient-to-r from-violet-600 to-purple-600",
+  },
+  {
+    value: "orange",
+    label: "Orange",
+    cls: "bg-orange-500",
+    preview: "bg-gradient-to-r from-orange-500 to-amber-600",
+  },
+  {
+    value: "teal",
+    label: "Teal",
+    cls: "bg-teal-500",
+    preview: "bg-gradient-to-r from-teal-500 to-cyan-600",
+  },
+  {
+    value: "dark",
+    label: "Dark",
+    cls: "bg-slate-800",
+    preview: "bg-gradient-to-r from-slate-800 to-slate-900",
+  },
+];
+
+const SPEED_OPTIONS = [
+  { value: "slow", label: "Slow", desc: "30s" },
+  { value: "normal", label: "Normal", desc: "18s" },
+  { value: "fast", label: "Fast", desc: "10s" },
+];
+
+const FONT_SIZE_OPTIONS = [
+  { value: "sm", label: "Small" },
+  { value: "base", label: "Medium" },
+  { value: "lg", label: "Large" },
+];
+
+function getStatus(notice: AdminNotice) {
+  if (!notice.isActive)
+    return { label: "Inactive", cls: "bg-slate-100 text-slate-500" };
+  if (notice.expiryDate && new Date(notice.expiryDate) < new Date()) {
+    return { label: "Expired", cls: "bg-red-100 text-red-600" };
+  }
+  return { label: "Active", cls: "bg-emerald-100 text-emerald-700" };
+}
+
+function formatDate(s?: string) {
+  if (!s) return "No expiry";
+  try {
+    return new Date(s).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return s;
+  }
+}
+
+type FormState = {
+  title: string;
+  message: string;
+  startDate: string;
+  expiryDate: string;
+  isActive: boolean;
+  direction: "ltr" | "rtl";
+  color: string;
+  speed: "slow" | "normal" | "fast";
+  fontSize: "sm" | "base" | "lg";
+  bold: boolean;
+  italic: boolean;
+  paused: boolean;
+};
+
+const defaultForm: FormState = {
+  title: "",
+  message: "",
+  startDate: "",
+  expiryDate: "",
+  isActive: true,
+  direction: "rtl",
+  color: "amber",
+  speed: "normal",
+  fontSize: "base",
+  bold: false,
+  italic: false,
+  paused: false,
+};
+
+export default function AdminNoticesPage() {
+  const {
+    currentUser,
+    adminNotices,
+    addAdminNotice,
+    deleteAdminNotice,
+    updateAdminNotice,
+  } = useStore();
+
+  const [open, setOpen] = useState(false);
+  const [editNotice, setEditNotice] = useState<AdminNotice | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(true);
+  const [form, setForm] = useState<FormState>(defaultForm);
+
+  if (currentUser?.role !== "admin") {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Megaphone className="h-16 w-16 mx-auto mb-4 text-slate-300" />
+          <h2 className="text-xl font-bold text-slate-600">
+            Access Restricted
+          </h2>
+          <p className="text-slate-400 mt-2">
+            Notices management is only accessible to administrators.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const openNew = () => {
+    setForm(defaultForm);
+    setEditNotice(null);
+    setOpen(true);
+  };
+
+  const openEdit = (n: AdminNotice) => {
+    setForm({
+      title: n.title,
+      message: n.message,
+      startDate: (n as any).startDate
+        ? String((n as any).startDate).slice(0, 10)
+        : "",
+      expiryDate: n.expiryDate ? n.expiryDate.slice(0, 10) : "",
+      isActive: n.isActive,
+      direction: (n.direction as "ltr" | "rtl") ?? "rtl",
+      color: n.color ?? "amber",
+      speed: (n.speed as "slow" | "normal" | "fast") ?? "normal",
+      fontSize: ((n as any).fontSize as "sm" | "base" | "lg") ?? "base",
+      bold: (n as any).bold ?? false,
+      italic: (n as any).italic ?? false,
+      paused: (n as any).paused ?? false,
+    });
+    setEditNotice(n);
+    setOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!form.title.trim() || !form.message.trim()) return;
+    const payload = {
+      title: form.title,
+      message: form.message,
+      startDate: form.startDate
+        ? new Date(form.startDate).toISOString()
+        : undefined,
+      expiryDate: form.expiryDate
+        ? new Date(form.expiryDate).toISOString()
+        : undefined,
+      isActive: form.isActive,
+      createdBy: currentUser?.name ?? "Admin",
+      direction: form.direction,
+      color: form.color,
+      speed: form.speed,
+      fontSize: form.fontSize,
+      bold: form.bold,
+      italic: form.italic,
+      paused: form.paused,
+    };
+    if (editNotice) {
+      updateAdminNotice(editNotice.id, payload);
+    } else {
+      addAdminNotice(payload);
+    }
+    setOpen(false);
+  };
+
+  const colorOption =
+    COLOR_OPTIONS.find((c) => c.value === form.color) ?? COLOR_OPTIONS[0];
+  const activeCount = adminNotices.filter(
+    (n) => n.isActive && (!n.expiryDate || new Date(n.expiryDate) > new Date()),
+  ).length;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-rose-600 to-pink-600 text-white px-6 py-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl">
+              <Megaphone className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Notices</h1>
+              <p className="text-rose-200 text-sm">
+                Broadcast announcements to all users
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
+              <CheckCircle className="h-4 w-4" />
+              <span className="text-sm font-bold">{activeCount}</span>
+              <span className="text-white/80 text-xs">Active</span>
+            </div>
+            <Button
+              onClick={openNew}
+              variant="secondary"
+              className="bg-white text-rose-600 hover:bg-rose-50"
+              data-ocid="notices.open_modal_button"
+            >
+              <Plus className="h-4 w-4 mr-2" /> New Notice
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 py-6 max-w-5xl mx-auto">
+        {adminNotices.length === 0 && (
+          <div className="text-center py-16 text-slate-400">
+            <Megaphone className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p className="text-lg font-medium">No notices yet</p>
+            <p className="text-sm mt-1">
+              Click "New Notice" to publish your first announcement.
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {adminNotices.map((notice) => {
+            const status = getStatus(notice);
+            const colorOpt =
+              COLOR_OPTIONS.find(
+                (c) => c.value === (notice.color ?? "amber"),
+              ) ?? COLOR_OPTIONS[0];
+            const isPaused = (notice as any).paused ?? false;
+            return (
+              <Card
+                key={notice.id}
+                className="shadow-sm border-slate-200 overflow-hidden"
+              >
+                <div className={`h-1 ${colorOpt.preview}`} />
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-xl ${colorOpt.preview} flex items-center justify-center flex-shrink-0`}
+                      >
+                        <Megaphone className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-slate-800">
+                            {notice.title}
+                          </h3>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.cls}`}
+                          >
+                            {status.label}
+                          </span>
+                          {isPaused && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600 flex items-center gap-1">
+                              <Pause className="h-2.5 w-2.5" /> Paused
+                            </span>
+                          )}
+                          <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                            {notice.direction === "ltr" ? "L→R" : "R←L"} ·{" "}
+                            {notice.speed ?? "normal"}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-sm mt-1 leading-relaxed">
+                          {notice.message}
+                        </p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Expires: {formatDate(notice.expiryDate)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            By {notice.createdBy}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* Pause/Resume */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title={isPaused ? "Resume" : "Pause"}
+                        className={
+                          isPaused
+                            ? "text-emerald-600 hover:bg-emerald-50"
+                            : "text-slate-500 hover:bg-slate-50"
+                        }
+                        onClick={() =>
+                          updateAdminNotice(notice.id, {
+                            paused: !isPaused,
+                          } as any)
+                        }
+                        data-ocid="notices.toggle"
+                      >
+                        {isPaused ? (
+                          <Play className="h-4 w-4" />
+                        ) : (
+                          <Pause className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {/* Active toggle */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title={notice.isActive ? "Deactivate" : "Activate"}
+                        className={
+                          notice.isActive
+                            ? "text-emerald-600 hover:bg-emerald-50"
+                            : "text-slate-400 hover:bg-slate-50"
+                        }
+                        onClick={() =>
+                          updateAdminNotice(notice.id, {
+                            isActive: !notice.isActive,
+                          })
+                        }
+                        data-ocid="notices.toggle"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        onClick={() => openEdit(notice)}
+                        data-ocid="notices.edit_button"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => setDeleteId(notice.id)}
+                        data-ocid="notices.delete_button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          data-ocid="notices.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="h-5 w-5 text-rose-500" />
+              {editNotice ? "Edit Notice" : "New Notice"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Basic Info */}
+            <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                <Type className="h-4 w-4 text-slate-500" /> Content
+              </h3>
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Title *
+                </Label>
+                <Input
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="Notice title"
+                  className="mt-1"
+                  data-ocid="notices.input"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Message *
+                </Label>
+                <Textarea
+                  value={form.message}
+                  onChange={(e) =>
+                    setForm({ ...form, message: e.target.value })
+                  }
+                  placeholder="Notice message..."
+                  className="mt-1 min-h-[80px]"
+                  data-ocid="notices.textarea"
+                />
+              </div>
+              {/* Text Style */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Text Style
+                </Label>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, bold: !form.bold })}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 text-sm font-bold transition-all ${
+                      form.bold
+                        ? "border-slate-800 bg-slate-100"
+                        : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <Bold className="h-3.5 w-3.5" /> Bold
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, italic: !form.italic })}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 text-sm italic transition-all ${
+                      form.italic
+                        ? "border-slate-800 bg-slate-100"
+                        : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <Italic className="h-3.5 w-3.5" /> Italic
+                  </button>
+                </div>
+              </div>
+              {/* Font Size */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Font Size
+                </Label>
+                <div className="flex gap-2 mt-1.5">
+                  {FONT_SIZE_OPTIONS.map((f) => (
+                    <button
+                      type="button"
+                      key={f.value}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          fontSize: f.value as "sm" | "base" | "lg",
+                        })
+                      }
+                      className={`flex-1 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                        form.fontSize === f.value
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Appearance */}
+            <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                <Settings className="h-4 w-4 text-slate-500" /> Appearance &
+                Behavior
+              </h3>
+
+              {/* Color Theme */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Color Theme
+                </Label>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {COLOR_OPTIONS.map((c) => (
+                    <button
+                      type="button"
+                      key={c.value}
+                      onClick={() => setForm({ ...form, color: c.value })}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                        form.color === c.value
+                          ? "border-slate-800 shadow-sm"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className={`w-3 h-3 rounded-full ${c.cls}`} />
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Direction */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Scroll Direction
+                </Label>
+                <div className="flex gap-2 mt-1.5">
+                  {(["rtl", "ltr"] as const).map((d) => (
+                    <button
+                      type="button"
+                      key={d}
+                      onClick={() => setForm({ ...form, direction: d })}
+                      className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                        form.direction === d
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      {d === "rtl" ? "← Right to Left" : "Left to Right →"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Speed */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Scroll Speed
+                </Label>
+                <div className="flex gap-2 mt-1.5">
+                  {SPEED_OPTIONS.map((s) => (
+                    <button
+                      type="button"
+                      key={s.value}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          speed: s.value as "slow" | "normal" | "fast",
+                        })
+                      }
+                      className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                        form.speed === s.value
+                          ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                          : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="block">{s.label}</span>
+                      <span className="text-xs opacity-60">{s.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Scheduling */}
+            <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-slate-500" /> Scheduling
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-medium text-slate-600">
+                    Start Date (optional)
+                  </Label>
+                  <Input
+                    type="date"
+                    value={form.startDate}
+                    onChange={(e) =>
+                      setForm({ ...form, startDate: e.target.value })
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-slate-600">
+                    Expiry Date (optional)
+                  </Label>
+                  <Input
+                    type="date"
+                    value={form.expiryDate}
+                    onChange={(e) =>
+                      setForm({ ...form, expiryDate: e.target.value })
+                    }
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-slate-400" />
+                  <Label className="text-sm font-medium text-slate-700">
+                    Active (visible to users)
+                  </Label>
+                </div>
+                <Switch
+                  checked={form.isActive}
+                  onCheckedChange={(v) => setForm({ ...form, isActive: v })}
+                />
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Pause className="h-4 w-4 text-slate-400" />
+                  <Label className="text-sm font-medium text-slate-700">
+                    Start Paused (scroll stopped)
+                  </Label>
+                </div>
+                <Switch
+                  checked={form.paused}
+                  onCheckedChange={(v) => setForm({ ...form, paused: v })}
+                />
+              </div>
+            </div>
+
+            {/* Live Preview */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowPreview((v) => !v)}
+                className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-800"
+              >
+                <Eye className="h-4 w-4" />
+                Live Preview
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${showPreview ? "rotate-180" : ""}`}
+                />
+              </button>
+              {showPreview && (
+                <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                  <div
+                    className={`px-3 py-2 flex items-center gap-2 text-white overflow-hidden ${colorOption.preview}`}
+                  >
+                    <Megaphone className="h-4 w-4 flex-shrink-0" />
+                    <span className="font-semibold flex-shrink-0 text-sm">
+                      {form.title || "Notice Title"}:
+                    </span>
+                    <span
+                      className={`truncate text-${form.fontSize} ${
+                        form.bold ? "font-bold" : "font-normal"
+                      } ${form.italic ? "italic" : ""}`}
+                    >
+                      {form.message ||
+                        "Your notice message will appear here..."}
+                    </span>
+                  </div>
+                  <div className="bg-slate-50 px-3 py-1 text-xs text-slate-400 flex items-center gap-3">
+                    <span>
+                      Direction:{" "}
+                      {form.direction === "rtl"
+                        ? "Right → Left"
+                        : "Left → Right"}
+                    </span>
+                    <span>Speed: {form.speed}</span>
+                    <span>Font: {form.fontSize}</span>
+                    {form.bold && <span className="font-bold">Bold</span>}
+                    {form.italic && <span className="italic">Italic</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOpen(false)}
+              data-ocid="notices.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!form.title.trim() || !form.message.trim()}
+              className="bg-rose-600 hover:bg-rose-700"
+              data-ocid="notices.submit_button"
+            >
+              <Megaphone className="h-4 w-4 mr-2" />
+              {editNotice ? "Save Changes" : "Publish Notice"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Notice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This notice will be permanently removed and users will no longer
+              see it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="notices.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (deleteId) deleteAdminNotice(deleteId);
+                setDeleteId(null);
+              }}
+              data-ocid="notices.confirm_button"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

@@ -99,10 +99,15 @@ export interface Notification {
     | "part_pending"
     | "general"
     | "stale_case"
-    | "part_request";
+    | "part_request"
+    | "low_stock"
+    | "part_issued"
+    | "part_returned"
+    | "ai_insight";
   isRead: boolean;
   caseId?: string;
   createdAt: string;
+  relatedPartCode?: string;
 }
 
 export interface Case {
@@ -131,6 +136,9 @@ export interface Case {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+  direction?: "ltr" | "rtl";
+  color?: string;
+  speed?: "slow" | "normal" | "fast";
   closedAt: string;
   hasFirstUpdate: boolean;
   onRouteDate: string;
@@ -168,7 +176,10 @@ export type PageType =
   | "return-to-company"
   | "lifecycle"
   | "ai-engine"
-  | "notifications";
+  | "notifications"
+  | "audit-logs"
+  | "notices"
+  | "data-management";
 
 // ── StorePilot Types ────────────────────────────────────────────────────────
 
@@ -273,6 +284,9 @@ export interface PurchaseEntry {
   quantity: number;
   createdAt: string;
   createdBy: string;
+  direction?: "ltr" | "rtl";
+  color?: string;
+  speed?: "slow" | "normal" | "fast";
   invoiceImageUrl?: string;
   costPrice?: number;
 }
@@ -323,4 +337,39 @@ export interface PartRequest {
   rejectedAt: string;
   rejectedBy: string;
   rejectedByName: string;
+}
+
+// ── Admin Notices ────────────────────────────────────────────────────────────
+export interface AdminNotice {
+  id: string;
+  title: string;
+  message: string;
+  expiryDate?: string;
+  isActive: boolean;
+  createdAt: string;
+  createdBy: string;
+  direction?: "ltr" | "rtl";
+  color?: string;
+  speed?: "slow" | "normal" | "fast";
+}
+
+// ── StorePilotAuditLog ────────────────────────────────────────────────────────
+export interface StorePilotAuditLog {
+  id: string;
+  action:
+    | "CREATE"
+    | "UPDATE"
+    | "DELETE"
+    | "ISSUE"
+    | "RETURN"
+    | "LOGIN"
+    | "LOGOUT";
+  module: string;
+  recordId: string;
+  details: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  timestamp: string;
+  partCodes?: string[];
 }

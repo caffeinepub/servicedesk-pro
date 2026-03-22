@@ -1,16 +1,30 @@
 import {
   AlertTriangle,
   Bell,
+  BellOff,
   Bot,
   CheckCheck,
-  PackageCheck,
-  PackageSearch,
+  Clock,
+  Info,
+  Package,
   Plus,
+  Repeat,
   Trash2,
   TrendingDown,
   X,
 } from "lucide-react";
+import type React from "react";
 import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import {
@@ -31,391 +45,653 @@ import {
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { useStore } from "../store";
-import type { StoreNotification } from "../types";
 
-type FilterType =
+type Filter =
   | "all"
   | "unread"
   | "low_stock"
-  | "part_issued"
-  | "part_returned"
-  | "reminder"
+  | "issued"
+  | "returned"
+  | "reminders"
   | "ai";
+type Priority = "all" | "high" | "medium" | "low";
 
-const TYPE_ICONS: Record<string, React.ReactNode> = {
-  part_issued: <PackageSearch className="h-4 w-4 text-amber-600" />,
-  part_returned: <PackageCheck className="h-4 w-4 text-green-600" />,
-  low_stock: <TrendingDown className="h-4 w-4 text-red-600" />,
-  reminder: <Bell className="h-4 w-4 text-blue-600" />,
-  ai: <Bot className="h-4 w-4 text-purple-600" />,
+const TYPE_STYLES: Record<
+  string,
+  {
+    border: string;
+    bg: string;
+    icon: React.ReactElement;
+    label: string;
+    priority: Priority;
+    filter: Filter;
+  }
+> = {
+  follow_up: {
+    border: "border-l-blue-500",
+    bg: "bg-blue-50",
+    icon: <Info className="h-4 w-4 text-blue-500" />,
+    label: "Follow-up",
+    priority: "medium",
+    filter: "all",
+  },
+  overdue: {
+    border: "border-l-red-500",
+    bg: "bg-red-50",
+    icon: <AlertTriangle className="h-4 w-4 text-red-500" />,
+    label: "Overdue",
+    priority: "high",
+    filter: "all",
+  },
+  part_pending: {
+    border: "border-l-amber-500",
+    bg: "bg-amber-50",
+    icon: <Package className="h-4 w-4 text-amber-500" />,
+    label: "Parts",
+    priority: "medium",
+    filter: "all",
+  },
+  general: {
+    border: "border-l-slate-400",
+    bg: "bg-slate-50",
+    icon: <Bell className="h-4 w-4 text-slate-500" />,
+    label: "General",
+    priority: "low",
+    filter: "all",
+  },
+  stale_case: {
+    border: "border-l-orange-500",
+    bg: "bg-orange-50",
+    icon: <AlertTriangle className="h-4 w-4 text-orange-500" />,
+    label: "Stale",
+    priority: "high",
+    filter: "all",
+  },
+  part_request: {
+    border: "border-l-emerald-500",
+    bg: "bg-emerald-50",
+    icon: <Package className="h-4 w-4 text-emerald-500" />,
+    label: "Part Request",
+    priority: "medium",
+    filter: "issued",
+  },
+  low_stock: {
+    border: "border-l-red-400",
+    bg: "bg-red-50",
+    icon: <TrendingDown className="h-4 w-4 text-red-500" />,
+    label: "Low Stock",
+    priority: "high",
+    filter: "low_stock",
+  },
+  part_issued: {
+    border: "border-l-amber-500",
+    bg: "bg-amber-50",
+    icon: <Package className="h-4 w-4 text-amber-500" />,
+    label: "Part Issued",
+    priority: "medium",
+    filter: "issued",
+  },
+  part_returned: {
+    border: "border-l-blue-500",
+    bg: "bg-blue-50",
+    icon: <Package className="h-4 w-4 text-blue-500" />,
+    label: "Part Returned",
+    priority: "low",
+    filter: "returned",
+  },
+  ai_insight: {
+    border: "border-l-violet-500",
+    bg: "bg-violet-50",
+    icon: <Bot className="h-4 w-4 text-violet-500" />,
+    label: "AI Insight",
+    priority: "low",
+    filter: "ai",
+  },
 };
 
-const PRIORITY_STYLES: Record<string, string> = {
-  low: "bg-slate-100 text-slate-600",
-  medium: "bg-blue-100 text-blue-700",
-  high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
+const PRIORITY_BADGE: Record<Priority, string> = {
+  all: "",
+  high: "bg-red-100 text-red-700 border border-red-200",
+  medium: "bg-amber-100 text-amber-700 border border-amber-200",
+  low: "bg-blue-100 text-blue-700 border border-blue-200",
 };
 
-function timeAgo(ts: string) {
-  const diff = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+function relativeTime(ts: string) {
+  const diff = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function reminderCountdown(dateStr: string) {
+  const diff = (new Date(dateStr).getTime() - Date.now()) / 86400000;
+  if (diff < 0) return { label: "Overdue", cls: "bg-red-100 text-red-600" };
+  if (diff < 1) return { label: "Today", cls: "bg-amber-100 text-amber-700" };
+  return {
+    label: `In ${Math.ceil(diff)} day${Math.ceil(diff) > 1 ? "s" : ""}`,
+    cls: "bg-blue-100 text-blue-700",
+  };
 }
 
 export default function NotificationsPage() {
   const {
-    storeNotifications,
-    addStoreNotification,
-    markStoreNotificationRead,
-    markAllStoreNotificationsRead,
-    deleteStoreNotification,
-    partItems,
+    notifications,
+    reminders,
+    markNotificationRead,
+    deleteNotification,
+    addReminder,
+    updateReminder,
+    currentUser,
   } = useStore();
-
-  const [filter, setFilter] = useState<FilterType>("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [showReminderModal, setShowReminderModal] = useState(false);
-  const [reminderForm, setReminderForm] = useState({
-    title: "",
+  const [filter, setFilter] = useState<Filter>("all");
+  const [priority, setPriority] = useState<Priority>("all");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [snoozeId, setSnoozeId] = useState<string | null>(null);
+  const [dismissId, setDismissId] = useState<string | null>(null);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [rForm, setRForm] = useState({
     note: "",
-    reminderAt: "",
-    relatedPartCode: "",
-    priority: "medium" as StoreNotification["priority"],
+    reminderDate: "",
+    repeat: "none",
   });
 
-  const unreadCount = storeNotifications.filter((n) => !n.isRead).length;
-  const highCriticalCount = storeNotifications.filter(
-    (n) => n.priority === "high" || n.priority === "critical",
-  ).length;
-  const reminderCount = storeNotifications.filter(
-    (n) => n.type === "reminder",
-  ).length;
+  const unread = notifications.filter((n) => !n.isRead).length;
+  const read = notifications.filter((n) => n.isRead).length;
 
-  const filtered = storeNotifications.filter((n) => {
-    if (filter === "unread" && n.isRead) return false;
-    if (filter !== "all" && filter !== "unread" && n.type !== filter)
+  const markAllRead = () => {
+    for (const n of notifications.filter((n) => !n.isRead))
+      markNotificationRead(n.id);
+  };
+
+  const clearAllRead = () => {
+    for (const n of notifications.filter((n) => n.isRead))
+      deleteNotification(n.id);
+    setClearAllOpen(false);
+  };
+
+  const filtered = notifications.filter((n) => {
+    const style = TYPE_STYLES[n.type] ?? TYPE_STYLES.general;
+    if (filter === "unread") {
+      if (n.isRead) return false;
+    } else if (filter === "low_stock") {
+      if (n.type !== "low_stock") return false;
+    } else if (filter === "issued") {
+      if (!["part_request", "part_issued"].includes(n.type)) return false;
+    } else if (filter === "returned") {
+      if (n.type !== "part_returned") return false;
+    } else if (filter === "ai") {
+      if (n.type !== "ai_insight") return false;
+    } else if (filter === "reminders") {
       return false;
-    if (priorityFilter !== "all" && n.priority !== priorityFilter) return false;
+    } // handled separately
+    if (priority !== "all" && style.priority !== priority) return false;
     return true;
   });
 
-  const checkLowStock = () => {
-    const lowStockParts = partItems.filter(
-      (p) =>
-        p.status === "in_stock" &&
-        partItems.filter(
-          (x) => x.partNameId === p.partNameId && x.status === "in_stock",
-        ).length <= 2,
-    );
-    const unique = new Set<string>();
-    for (const p of lowStockParts) {
-      if (!unique.has(p.partNameId)) {
-        unique.add(p.partNameId);
-        addStoreNotification({
-          title: "Low Stock Alert",
-          message: `${p.partCode} stock is running low`,
-          type: "low_stock",
-          priority: "high",
-          isRead: false,
-          relatedPartCode: p.partCode,
-        });
-      }
-    }
+  const userReminders = reminders.filter(
+    (r) => !r.isDone && r.userId === currentUser?.id,
+  );
+
+  const handleAddReminder = () => {
+    if (!rForm.note || !rForm.reminderDate) return;
+    addReminder({
+      caseId: "",
+      userId: currentUser?.id ?? "",
+      reminderDate: new Date(rForm.reminderDate).toISOString(),
+      note: rForm.note,
+      isDone: false,
+    });
+    setReminderOpen(false);
+    setRForm({ note: "", reminderDate: "", repeat: "none" });
   };
 
-  const saveReminder = () => {
-    if (!reminderForm.title.trim()) return;
-    addStoreNotification({
-      title: reminderForm.title,
-      message: reminderForm.note,
-      type: "reminder",
-      priority: reminderForm.priority,
-      isRead: false,
-      relatedPartCode: reminderForm.relatedPartCode,
-      reminderAt: reminderForm.reminderAt,
-    });
-    setShowReminderModal(false);
-    setReminderForm({
-      title: "",
-      note: "",
-      reminderAt: "",
-      relatedPartCode: "",
-      priority: "medium",
-    });
+  const handleSnooze = (id: string) => {
+    const r = reminders.find((r) => r.id === id);
+    if (!r) return;
+    const newDate = new Date(r.reminderDate);
+    newDate.setDate(newDate.getDate() + 1);
+    updateReminder(id, { reminderDate: newDate.toISOString() });
+    setSnoozeId(null);
   };
 
-  const FILTER_TABS: { id: FilterType; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "unread", label: "Unread" },
-    { id: "low_stock", label: "Low Stock" },
-    { id: "part_issued", label: "Issued" },
-    { id: "part_returned", label: "Returned" },
-    { id: "reminder", label: "Reminders" },
-    { id: "ai", label: "AI" },
+  const handleDismiss = (id: string) => {
+    updateReminder(id, { isDone: true });
+    setDismissId(null);
+  };
+
+  const FILTER_TABS: { key: Filter; label: string; color: string }[] = [
+    { key: "all", label: "All", color: "bg-amber-500" },
+    { key: "unread", label: "Unread", color: "bg-red-500" },
+    { key: "low_stock", label: "Low Stock", color: "bg-rose-500" },
+    { key: "issued", label: "Issued", color: "bg-amber-500" },
+    { key: "returned", label: "Returned", color: "bg-blue-500" },
+    { key: "reminders", label: "Reminders", color: "bg-purple-500" },
+    { key: "ai", label: "AI", color: "bg-violet-500" },
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Notifications</h1>
-          <p className="text-sm text-slate-500">
-            {unreadCount} unread • {storeNotifications.length} total
-          </p>
+      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl">
+              <Bell className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Notifications</h1>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="bg-white/20 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {unread} unread
+                </span>
+                <span className="bg-white/10 text-white/80 text-xs px-2 py-0.5 rounded-full">
+                  {read} read
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="bg-white/20 hover:bg-white/30 text-white border-0"
+              onClick={markAllRead}
+              data-ocid="notifications.primary_button"
+            >
+              <CheckCheck className="h-4 w-4 mr-1" /> Mark All Read
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="bg-white/20 hover:bg-white/30 text-white border-0"
+              onClick={() => setClearAllOpen(true)}
+              data-ocid="notifications.delete_button"
+            >
+              <X className="h-4 w-4 mr-1" /> Clear Read
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={checkLowStock}
-            data-ocid="notifications.secondary_button"
-          >
-            <AlertTriangle className="h-4 w-4 mr-1 text-amber-500" /> Check Low
-            Stock
-          </Button>
-          <Button
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
-            onClick={() => setShowReminderModal(true)}
-            data-ocid="notifications.open_modal_button"
-          >
-            <Plus className="h-4 w-4 mr-1" /> New Reminder
-          </Button>
+
+        {/* Filter tabs */}
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          {FILTER_TABS.map((f) => (
+            <button
+              type="button"
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                filter === f.key
+                  ? "bg-white text-amber-700 shadow-sm"
+                  : "bg-white/20 text-white hover:bg-white/30"
+              }`}
+              data-ocid="notifications.tab"
+            >
+              {f.label}
+              {f.key === "unread" && unread > 0 && (
+                <span className="ml-1.5 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  {unread}
+                </span>
+              )}
+            </button>
+          ))}
+          {/* Priority filter */}
+          <div className="ml-auto">
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as Priority)}
+              className="bg-white/20 text-white text-xs rounded-full px-3 py-1.5 border-0 outline-none font-semibold cursor-pointer"
+            >
+              <option value="all" className="text-slate-800">
+                All Priority
+              </option>
+              <option value="high" className="text-slate-800">
+                High
+              </option>
+              <option value="medium" className="text-slate-800">
+                Medium
+              </option>
+              <option value="low" className="text-slate-800">
+                Low
+              </option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          {
-            label: "Total",
-            value: storeNotifications.length,
-            color: "text-slate-700",
-          },
-          { label: "Unread", value: unreadCount, color: "text-blue-600" },
-          {
-            label: "High/Critical",
-            value: highCriticalCount,
-            color: "text-red-600",
-          },
-          {
-            label: "Reminders",
-            value: reminderCount,
-            color: "text-purple-600",
-          },
-        ].map((s) => (
-          <Card key={s.label} className="shadow-sm">
-            <CardContent className="p-4">
-              <p className="text-xs text-slate-500 mb-1">{s.label}</p>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <div className="px-6 py-6 max-w-4xl mx-auto space-y-6">
+        {/* Reminders section */}
+        {(filter === "all" || filter === "reminders") && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-slate-700 flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />
+                Active Reminders
+                <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                  {userReminders.length}
+                </span>
+              </h2>
+              <Button
+                size="sm"
+                onClick={() => setReminderOpen(true)}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+                data-ocid="notifications.open_modal_button"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add Reminder
+              </Button>
+            </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {FILTER_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setFilter(tab.id)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              filter === tab.id
-                ? "bg-blue-600 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-            data-ocid="notifications.tab"
-          >
-            {tab.label}
-          </button>
-        ))}
-        <select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value)}
-          className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white"
-          data-ocid="notifications.select"
-        >
-          <option value="all">All Priority</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-          <option value="critical">Critical</option>
-        </select>
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            onClick={markAllStoreNotificationsRead}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800"
-            data-ocid="notifications.primary_button"
-          >
-            <CheckCheck className="h-3.5 w-3.5" /> Mark all read
-          </button>
+            {userReminders.length === 0 ? (
+              <Card
+                className="border-dashed border-2 border-slate-200"
+                data-ocid="notifications.empty_state"
+              >
+                <CardContent className="py-8 text-center text-slate-400">
+                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No active reminders</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {userReminders.map((r) => {
+                  const cd = reminderCountdown(r.reminderDate);
+                  return (
+                    <Card
+                      key={r.id}
+                      className="border-l-4 border-l-amber-400 shadow-sm"
+                    >
+                      <CardContent className="p-4 flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                            <Clock className="h-4 w-4 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-800 text-sm">
+                              {r.note}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {new Date(r.reminderDate).toLocaleString(
+                                "en-IN",
+                                {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                },
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${cd.cls}`}
+                          >
+                            {cd.label}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-blue-600 border-blue-200 hover:bg-blue-50 text-xs"
+                            onClick={() => setSnoozeId(r.id)}
+                          >
+                            <Repeat className="h-3 w-3 mr-1" /> Snooze
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-slate-400 hover:text-red-500"
+                            onClick={() => setDismissId(r.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Notifications list */}
+        {filter !== "reminders" && (
+          <div>
+            <h2 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
+              <Bell className="h-4 w-4 text-amber-500" />
+              Notifications
+              <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-medium">
+                {filtered.length}
+              </span>
+            </h2>
+
+            {filtered.length === 0 && (
+              <div
+                className="text-center py-16 text-slate-400"
+                data-ocid="notifications.empty_state"
+              >
+                <BellOff className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p className="text-lg font-medium">All caught up!</p>
+                <p className="text-sm mt-1">No notifications to show.</p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {filtered.map((n) => {
+                const style = TYPE_STYLES[n.type] ?? TYPE_STYLES.general;
+                const pBadge = PRIORITY_BADGE[style.priority];
+                return (
+                  <Card
+                    key={n.id}
+                    className={`border-l-4 ${style.border} shadow-sm transition-all ${
+                      !n.isRead ? style.bg : "bg-white opacity-75"
+                    } hover:shadow-md cursor-pointer`}
+                    onClick={() => markNotificationRead(n.id)}
+                  >
+                    <CardContent className="p-4 flex items-start gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${n.isRead ? "bg-slate-100" : style.bg}`}
+                      >
+                        {style.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`text-xs font-semibold px-1.5 py-0.5 rounded ${n.isRead ? "bg-slate-100 text-slate-500" : "bg-white/80 text-slate-600"}`}
+                              >
+                                {style.label}
+                              </span>
+                              {pBadge && (
+                                <span
+                                  className={`text-xs px-1.5 py-0.5 rounded font-medium ${pBadge}`}
+                                >
+                                  {style.priority}
+                                </span>
+                              )}
+                              {n.relatedPartCode && (
+                                <span className="text-xs text-slate-400">
+                                  Part: {n.relatedPartCode}
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              className={`text-sm mt-1 ${n.isRead ? "text-slate-500" : "text-slate-800 font-medium"}`}
+                            >
+                              {n.message}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {!n.isRead && (
+                              <div className="w-2 h-2 bg-amber-500 rounded-full" />
+                            )}
+                            <span className="text-xs text-slate-400">
+                              {relativeTime(n.createdAt)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget(n.id);
+                              }}
+                              className="text-slate-300 hover:text-red-500 transition-colors p-1 rounded"
+                              data-ocid="notifications.delete_button"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Notification List */}
-      {filtered.length === 0 ? (
-        <div
-          className="text-center py-12 text-slate-400"
-          data-ocid="notifications.empty_state"
-        >
-          <Bell className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <p>No notifications</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((n, i) => (
-            <button
-              type="button"
-              key={n.id}
-              className={`w-full text-left flex gap-3 p-3 rounded-lg border transition-colors ${
-                n.isRead
-                  ? "bg-white border-slate-200"
-                  : "bg-blue-50 border-blue-200"
-              }`}
-              onClick={() => markStoreNotificationRead(n.id)}
-              data-ocid={`notifications.item.${i + 1}`}
+      {/* Delete notification dialog */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={() => setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete notification?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This notification will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="notifications.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (deleteTarget) deleteNotification(deleteTarget);
+                setDeleteTarget(null);
+              }}
+              data-ocid="notifications.confirm_button"
             >
-              <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
-                {TYPE_ICONS[n.type] ?? (
-                  <Bell className="h-4 w-4 text-slate-400" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p
-                      className={`text-sm font-medium ${
-                        n.isRead ? "text-slate-700" : "text-slate-900"
-                      }`}
-                    >
-                      {n.title}
-                    </p>
-                    <span
-                      className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                        PRIORITY_STYLES[n.priority]
-                      }`}
-                    >
-                      {n.priority}
-                    </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                      {n.type.replace(/_/g, " ")}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="p-1 text-slate-400 hover:text-red-500 flex-shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteStoreNotification(n.id);
-                    }}
-                    data-ocid={`notifications.delete_button.${i + 1}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
-                {n.relatedPartCode && (
-                  <p className="text-xs text-blue-600 mt-0.5 font-mono">
-                    Part: {n.relatedPartCode}
-                  </p>
-                )}
-                <p className="text-xs text-slate-400 mt-1">
-                  {timeAgo(n.createdAt)}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {/* New Reminder Modal */}
-      <Dialog open={showReminderModal} onOpenChange={setShowReminderModal}>
-        <DialogContent data-ocid="notifications.modal">
+      {/* Clear all dialog */}
+      <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all read notifications?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All read notifications will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={clearAllRead}
+            >
+              Clear All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Snooze dialog */}
+      <AlertDialog open={!!snoozeId} onOpenChange={() => setSnoozeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Snooze Reminder?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This reminder will be postponed by 1 day.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (snoozeId) handleSnooze(snoozeId);
+              }}
+            >
+              Snooze 1 Day
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dismiss reminder dialog */}
+      <AlertDialog open={!!dismissId} onOpenChange={() => setDismissId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Dismiss Reminder?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This reminder will be marked as done.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (dismissId) handleDismiss(dismissId);
+              }}
+            >
+              Dismiss
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add reminder dialog */}
+      <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
+        <DialogContent className="max-w-md" data-ocid="notifications.dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-blue-600" /> New Reminder
-            </DialogTitle>
+            <DialogTitle>Add Reminder</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4 py-2">
             <div>
-              <Label>Title *</Label>
+              <Label>Note *</Label>
+              <Textarea
+                value={rForm.note}
+                onChange={(e) => setRForm({ ...rForm, note: e.target.value })}
+                placeholder="What do you need to remember?"
+                className="mt-1"
+                data-ocid="notifications.textarea"
+              />
+            </div>
+            <div>
+              <Label>Date &amp; Time *</Label>
               <Input
-                value={reminderForm.title}
+                type="datetime-local"
+                value={rForm.reminderDate}
                 onChange={(e) =>
-                  setReminderForm((f) => ({ ...f, title: e.target.value }))
+                  setRForm({ ...rForm, reminderDate: e.target.value })
                 }
-                placeholder="Reminder title"
+                className="mt-1"
                 data-ocid="notifications.input"
               />
             </div>
             <div>
-              <Label>Note</Label>
-              <Textarea
-                value={reminderForm.note}
-                onChange={(e) =>
-                  setReminderForm((f) => ({ ...f, note: e.target.value }))
-                }
-                placeholder="Add details..."
-                rows={2}
-                data-ocid="notifications.textarea"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Remind At</Label>
-                <Input
-                  type="datetime-local"
-                  value={reminderForm.reminderAt}
-                  onChange={(e) =>
-                    setReminderForm((f) => ({
-                      ...f,
-                      reminderAt: e.target.value,
-                    }))
-                  }
-                  data-ocid="notifications.input"
-                />
-              </div>
-              <div>
-                <Label>Related Part Code</Label>
-                <Input
-                  value={reminderForm.relatedPartCode}
-                  onChange={(e) =>
-                    setReminderForm((f) => ({
-                      ...f,
-                      relatedPartCode: e.target.value,
-                    }))
-                  }
-                  placeholder="Optional"
-                  data-ocid="notifications.input"
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Priority</Label>
+              <Label>Repeat</Label>
               <Select
-                value={reminderForm.priority}
-                onValueChange={(v) =>
-                  setReminderForm((f) => ({
-                    ...f,
-                    priority: v as StoreNotification["priority"],
-                  }))
-                }
+                value={rForm.repeat}
+                onValueChange={(v) => setRForm({ ...rForm, repeat: v })}
               >
-                <SelectTrigger data-ocid="notifications.select">
+                <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -423,17 +699,17 @@ export default function NotificationsPage() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowReminderModal(false)}
+              onClick={() => setReminderOpen(false)}
               data-ocid="notifications.cancel_button"
             >
               Cancel
             </Button>
             <Button
-              onClick={saveReminder}
-              className="bg-blue-600 hover:bg-blue-700"
-              data-ocid="notifications.save_button"
+              onClick={handleAddReminder}
+              disabled={!rForm.note || !rForm.reminderDate}
+              data-ocid="notifications.submit_button"
             >
-              Create Reminder
+              Add Reminder
             </Button>
           </DialogFooter>
         </DialogContent>

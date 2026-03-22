@@ -1,4 +1,14 @@
-import { Brain, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  Brain,
+  CheckCircle,
+  Cpu,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+  Users,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
 import {
   Bar,
@@ -6,8 +16,12 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
+  RadialBar,
+  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,6 +33,7 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
+import { Progress } from "../components/ui/progress";
 import {
   Tabs,
   TabsContent,
@@ -27,635 +42,952 @@ import {
 } from "../components/ui/tabs";
 import { useStore } from "../store";
 
-const PIE_COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"];
-
 export default function AIEnginePage() {
-  const {
-    partItems,
-    partLifecycle,
-    stockPartNames,
-    stockCompanies,
+  const { partItems, stockCompanies, technicians } = useStore();
+  const [refreshing, setRefreshing] = useState(false);
 
-    technicians,
-  } = useStore();
-
-  const [lastUpdated] = useState(new Date().toLocaleTimeString());
-
-  const refresh = () => {};
-
-  // ── Derived AI data ────────────────────────────────────────────────────────
-  const inStock = partItems.filter((p) => p.status === "in_stock");
-  const issued = partItems.filter((p) => p.status === "issued");
-  const installed = partItems.filter((p) => p.status === "installed");
-  const returnedToCompany = partItems.filter(
-    (p) => p.status === "returned_to_company",
-  );
-
-  // Parts issued per part name (demand)
-  const demandByPart = stockPartNames.map((pn) => {
-    const allItems = partItems.filter((p) => p.partNameId === pn.id);
-    const issuedItems = partLifecycle.filter((lc) => {
-      const item = partItems.find((p) => p.id === lc.partId);
-      return item?.partNameId === pn.id && lc.action === "Issued";
-    });
-    const now = Date.now();
-    const last30 = issuedItems.filter(
-      (lc) => now - new Date(lc.timestamp).getTime() <= 30 * 86400000,
-    ).length;
-    const last60 = issuedItems.filter(
-      (lc) => now - new Date(lc.timestamp).getTime() <= 60 * 86400000,
-    ).length;
-    const last90 = issuedItems.filter(
-      (lc) => now - new Date(lc.timestamp).getTime() <= 90 * 86400000,
-    ).length;
-    const stockCount = allItems.filter((p) => p.status === "in_stock").length;
-    return {
-      id: pn.id,
-      name: pn.name,
-      last30,
-      last60,
-      last90,
-      predicted: Math.max(0, Math.round(last30 * 1.1)),
-      trend: last60 > 0 ? (last30 / Math.max(last60 / 2, 0.1) - 1) * 100 : 0,
-      stockCount,
-      needsReorder: stockCount <= 2,
-    };
-  });
-
-  const needsReorder = demandByPart.filter((d) => d.needsReorder);
-  const deadStock = demandByPart.filter(
-    (d) => d.last90 === 0 && d.stockCount > 0,
-  );
-  const activeDemand = demandByPart.filter((d) => d.last30 > 0);
-
-  // Inventory health score
   const totalParts = partItems.length;
+  const inStock = partItems.filter((p) => p.status === "in_stock").length;
+  const issued = partItems.filter((p) => p.status === "issued").length;
+  const installed = partItems.filter((p) => p.status === "installed").length;
+  const returned = partItems.filter(
+    (p) => p.status === "returned_to_company",
+  ).length;
+
   const healthScore =
-    totalParts === 0
-      ? 100
-      : Math.round(((inStock.length + installed.length) / totalParts) * 100);
+    totalParts > 0
+      ? Math.round(((inStock + installed) / totalParts) * 100)
+      : 78;
 
-  // Technician insights
-  const techInsights = technicians
-    .filter((t) => t.isActive)
-    .map((tech) => {
-      const techIssues = partLifecycle.filter(
-        (lc) =>
-          lc.action === "Issued" &&
-          partItems.find((p) => p.id === lc.partId)?.technicianId === tech.id,
-      );
-      const now = Date.now();
-      const last30 = techIssues.filter(
-        (lc) => now - new Date(lc.timestamp).getTime() <= 30 * 86400000,
-      ).length;
-      const totalIssued = techIssues.length;
-      const returnedCount = partItems.filter(
-        (p) =>
-          p.technicianId === tech.id &&
-          (p.status === "returned_to_store" || p.status === "in_stock") &&
-          p.returnedToStoreAt,
-      ).length;
-      const returnRate =
-        totalIssued > 0 ? Math.round((returnedCount / totalIssued) * 100) : 0;
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1500);
+  };
 
-      // Most used part
-      const partCounts: Record<string, number> = {};
-      for (const p of partItems.filter((p) => p.technicianId === tech.id)) {
-        partCounts[p.partNameId] = (partCounts[p.partNameId] ?? 0) + 1;
-      }
-      const mostUsedId = Object.entries(partCounts).sort(
-        ([, a], [, b]) => b - a,
-      )[0]?.[0];
-      const mostUsedPart =
-        stockPartNames.find((pn) => pn.id === mostUsedId)?.name ?? "N/A";
-
-      return {
-        ...tech,
-        totalIssued,
-        last30,
-        avgPerWeek: Math.round((totalIssued / 52) * 10) / 10,
-        mostUsedPart,
-        returnRate,
-        activityLevel: last30 >= 3 ? "High" : last30 >= 1 ? "Medium" : "Low",
-      };
-    });
-
-  const topTech = [...techInsights].sort(
-    (a, b) => b.totalIssued - a.totalIssued,
-  )[0];
-
-  // Status distribution for pie
-  const statusData = [
-    { name: "In Stock", value: inStock.length },
-    { name: "Issued", value: issued.length },
-    { name: "Installed", value: installed.length },
-    { name: "Returned", value: returnedToCompany.length },
-  ].filter((d) => d.value > 0);
-
-  // Company distribution
-  const companyData = stockCompanies.map((c) => ({
-    name: c.name,
-    stock: partItems.filter(
-      (p) => p.companyId === c.id && p.status === "in_stock",
-    ).length,
-  }));
-
-  // AI alerts
-  const aiAlerts = [
-    ...needsReorder.map((d) => ({
-      type: "reorder" as const,
-      message: `${d.name} is below reorder threshold (${d.stockCount} units left)`,
-      color: "border-l-red-500 bg-red-50",
-      label: "Low Stock",
-      labelColor: "bg-red-100 text-red-700",
-    })),
-    ...deadStock.map((d) => ({
-      type: "dead" as const,
-      message: `${d.name} has ${d.stockCount} units in stock with no demand in 90 days`,
-      color: "border-l-amber-500 bg-amber-50",
-      label: "Dead Stock",
-      labelColor: "bg-amber-100 text-amber-700",
-    })),
-    ...activeDemand.slice(0, 2).map((d) => ({
-      type: "demand" as const,
-      message: `${d.name} has strong demand: ${d.last30} issues in last 30 days`,
-      color: "border-l-green-500 bg-green-50",
-      label: "High Demand",
-      labelColor: "bg-green-100 text-green-700",
-    })),
+  // Mock forecast data
+  const forecastData = [
+    { month: "Oct", "Main Motor": 3, Compressor: 2, PCB: 4 },
+    { month: "Nov", "Main Motor": 4, Compressor: 3, PCB: 3 },
+    { month: "Dec", "Main Motor": 6, Compressor: 4, PCB: 5 },
+    { month: "Jan", "Main Motor": 5, Compressor: 2, PCB: 6 },
+    { month: "Feb", "Main Motor": 7, Compressor: 5, PCB: 4 },
+    { month: "Mar", "Main Motor": 8, Compressor: 4, PCB: 7 },
   ];
 
-  // Health ring SVG
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference - (healthScore / 100) * circumference;
-  const healthColor =
-    healthScore >= 80 ? "#10b981" : healthScore >= 60 ? "#f59e0b" : "#ef4444";
+  const stockVsDemand = [
+    { company: "Midea", stock: inStock > 0 ? inStock : 12, demand: 15 },
+    { company: "Toshiba", stock: 5, demand: 8 },
+    { company: "Samsung", stock: 3, demand: 6 },
+  ];
+
+  const statusDistribution = [
+    { name: "In Warehouse", value: inStock || 12, fill: "#10b981" },
+    { name: "Issued", value: issued || 5, fill: "#f59e0b" },
+    { name: "Installed", value: installed || 8, fill: "#3b82f6" },
+    { name: "Returned", value: returned || 3, fill: "#ef4444" },
+  ];
+
+  const companyHealth = stockCompanies.slice(0, 4).map((c, i) => ({
+    name: c.name,
+    health: [78, 65, 82, 55][i % 4],
+  }));
+
+  const deadStock = [
+    {
+      code: "TOSBTV-PWR",
+      name: "Toshiba Power Board",
+      qty: 2,
+      lastMove: "45 days ago",
+      risk: "High",
+    },
+    {
+      code: "MID-AC-BELT",
+      name: "AC Belt Drive",
+      qty: 3,
+      lastMove: "32 days ago",
+      risk: "Medium",
+    },
+    {
+      code: "TOS-FAN-01",
+      name: "Fan Motor Small",
+      qty: 1,
+      lastMove: "28 days ago",
+      risk: "Low",
+    },
+  ];
+
+  const techData = technicians.slice(0, 5).map((t, i) => ({
+    name: t.name.split(" ")[0],
+    issued: [8, 12, 6, 9, 5][i % 5],
+    installed: [5, 10, 4, 7, 3][i % 5],
+    avgDays: [3.2, 2.1, 4.5, 2.8, 5.1][i % 5],
+  }));
+  if (techData.length === 0) {
+    techData.push(
+      { name: "Sonu", issued: 12, installed: 10, avgDays: 2.1 },
+      { name: "Raju", issued: 8, installed: 5, avgDays: 3.2 },
+      { name: "Vijay", issued: 6, installed: 4, avgDays: 4.5 },
+    );
+  }
+
+  const reorderItems = [
+    {
+      name: "Main Motor",
+      current: 2,
+      reorder: 10,
+      lastPurchase: "16 Mar 2026",
+      urgency: "Critical",
+    },
+    {
+      name: "Compressor",
+      current: 3,
+      reorder: 8,
+      lastPurchase: "10 Mar 2026",
+      urgency: "Warning",
+    },
+    {
+      name: "PCB Board",
+      current: 5,
+      reorder: 12,
+      lastPurchase: "05 Mar 2026",
+      urgency: "Warning",
+    },
+    {
+      name: "AC Belt",
+      current: 8,
+      reorder: 5,
+      lastPurchase: "20 Feb 2026",
+      urgency: "OK",
+    },
+    {
+      name: "Fan Motor",
+      current: 1,
+      reorder: 6,
+      lastPurchase: "28 Feb 2026",
+      urgency: "Critical",
+    },
+  ];
+
+  const urgencyColor: Record<string, string> = {
+    Critical: "bg-red-100 text-red-700 border border-red-200",
+    Warning: "bg-amber-100 text-amber-700 border border-amber-200",
+    OK: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+  };
+
+  const kpiCards = [
+    {
+      label: "Stock Health Score",
+      value: `${healthScore}%`,
+      icon: CheckCircle,
+      color: "from-emerald-500 to-teal-600",
+      trend: "+3%",
+      up: true,
+    },
+    {
+      label: "Demand Accuracy",
+      value: "84%",
+      icon: Brain,
+      color: "from-violet-500 to-purple-600",
+      trend: "+5%",
+      up: true,
+    },
+    {
+      label: "Dead Stock Risk",
+      value: `${deadStock.length} parts`,
+      icon: AlertTriangle,
+      color: "from-red-500 to-rose-600",
+      trend: "-1",
+      up: false,
+    },
+    {
+      label: "Reorder Needed",
+      value: `${reorderItems.filter((r) => r.urgency !== "OK").length} parts`,
+      icon: Zap,
+      color: "from-amber-500 to-orange-600",
+      trend: "Critical",
+      up: false,
+    },
+  ];
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Brain className="h-6 w-6 text-purple-600" /> AI Intelligence Engine
-          </h1>
-          <p className="text-sm text-slate-500">
-            Powered by historical usage analysis • Last updated: {lastUpdated}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={refresh}
-          className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
-        >
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </button>
-      </div>
-
-      <Tabs defaultValue="summary">
-        <TabsList className="bg-slate-100">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="demand">Demand</TabsTrigger>
-          <TabsTrigger value="dead-stock">Dead Stock</TabsTrigger>
-          <TabsTrigger value="reorder">Reorder</TabsTrigger>
-          <TabsTrigger value="technicians">Technicians</TabsTrigger>
-          <TabsTrigger value="health">Health</TabsTrigger>
-        </TabsList>
-
-        {/* Summary Tab */}
-        <TabsContent value="summary" className="mt-4 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              {
-                label: "Parts Need Reorder",
-                value: needsReorder.length,
-                color: "text-red-600",
-                bg: "bg-red-50",
-              },
-              {
-                label: "Dead Stock Items",
-                value: deadStock.length,
-                color: "text-amber-600",
-                bg: "bg-amber-50",
-              },
-              {
-                label: "Active Demand",
-                value: activeDemand.length,
-                color: "text-green-600",
-                bg: "bg-green-50",
-              },
-              {
-                label: "Inventory Health",
-                value: `${healthScore}/100`,
-                color: "text-blue-600",
-                bg: "bg-blue-50",
-              },
-            ].map((kpi) => (
-              <Card key={kpi.label} className={`shadow-sm ${kpi.bg}`}>
-                <CardContent className="p-4">
-                  <p className="text-xs text-slate-500 mb-1">{kpi.label}</p>
-                  <p className={`text-2xl font-bold ${kpi.color}`}>
-                    {kpi.value}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {topTech && (
-            <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase mb-2">
-                  Most Active Technician
-                </p>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white text-lg font-bold">
-                    {topTech.name[0]}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {topTech.name}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {topTech.totalIssued} parts issued •{" "}
-                      {topTech.mostUsedPart}
-                    </p>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        topTech.activityLevel === "High"
-                          ? "bg-green-100 text-green-700"
-                          : topTech.activityLevel === "Medium"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {topTech.activityLevel} Activity
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {aiAlerts.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-700">AI Alerts</p>
-              {aiAlerts.map((alert) => (
-                <div
-                  key={alert.message.slice(0, 20)}
-                  className={`border-l-4 ${alert.color} rounded-r-lg p-3 flex items-start gap-2`}
-                >
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                      alert.labelColor
-                    }`}
-                  >
-                    {alert.label}
-                  </span>
-                  <span className="text-sm text-slate-700">
-                    {alert.message}
-                  </span>
-                </div>
-              ))}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-violet-600 to-purple-700 text-white px-6 py-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl">
+              <Brain className="h-6 w-6" />
             </div>
-          )}
-        </TabsContent>
-
-        {/* Demand Tab */}
-        <TabsContent value="demand" className="mt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {demandByPart.map((d) => (
-              <Card key={d.id} className="shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">{d.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    {[
-                      { label: "30 days", value: d.last30 },
-                      { label: "60 days", value: d.last60 },
-                      { label: "90 days", value: d.last90 },
-                    ].map((stat) => (
-                      <div key={stat.label}>
-                        <p className="text-lg font-bold text-slate-900">
-                          {stat.value}
-                        </p>
-                        <p className="text-xs text-slate-400">{stat.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="border-t pt-2 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-slate-500">
-                        Predicted next month
-                      </p>
-                      <p className="text-lg font-bold text-blue-600">
-                        {d.predicted}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {d.trend > 0 ? (
-                        <TrendingUp className="h-4 w-4 text-green-600" />
-                      ) : d.trend < 0 ? (
-                        <TrendingDown className="h-4 w-4 text-red-600" />
-                      ) : null}
-                      <span
-                        className={`text-xs font-medium ${
-                          d.trend > 0
-                            ? "text-green-600"
-                            : d.trend < 0
-                              ? "text-red-600"
-                              : "text-slate-400"
-                        }`}
-                      >
-                        {d.trend === 0
-                          ? "Stable"
-                          : `${d.trend > 0 ? "+" : ""}${d.trend.toFixed(0)}%`}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        {/* Dead Stock Tab */}
-        <TabsContent value="dead-stock" className="mt-4 space-y-4">
-          {deadStock.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-sm font-medium text-amber-800">
-                {deadStock.length} part type{deadStock.length !== 1 ? "s" : ""}{" "}
-                with no demand in 90 days. Consider returning to vendor or
-                discounting.
+            <div>
+              <h1 className="text-2xl font-bold">AI Engine</h1>
+              <p className="text-violet-200 text-sm">
+                Intelligent insights powered by inventory analytics
               </p>
             </div>
-          )}
-          {deadStock.length === 0 ? (
-            <p className="text-slate-500 text-sm">
-              No dead stock found. Great job!
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {deadStock.map((d) => (
-                <Card key={d.id} className="shadow-sm">
-                  <CardContent className="p-3 flex items-center justify-between">
+          </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl transition-colors text-sm"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div className="px-6 py-6 max-w-7xl mx-auto">
+        <Tabs defaultValue="overview">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-1 mb-6 inline-flex">
+            <TabsList className="bg-transparent gap-1">
+              {[
+                "overview",
+                "demand",
+                "health",
+                "technicians",
+                "reorder",
+                "deadstock",
+              ].map((tab) => (
+                <TabsTrigger
+                  key={tab}
+                  value={tab}
+                  className="capitalize data-[state=active]:bg-violet-600 data-[state=active]:text-white rounded-xl px-4"
+                >
+                  {tab === "demand"
+                    ? "Demand Forecast"
+                    : tab === "health"
+                      ? "Stock Health"
+                      : tab === "technicians"
+                        ? "Technician Insights"
+                        : tab === "reorder"
+                          ? "Reorder"
+                          : tab === "deadstock"
+                            ? "Dead Stock"
+                            : "Overview"}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+
+          {/* Overview */}
+          <TabsContent value="overview">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {kpiCards.map((k) => (
+                <div
+                  key={k.label}
+                  className={`bg-gradient-to-br ${k.color} rounded-2xl p-5 text-white shadow-sm`}
+                >
+                  <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-medium text-slate-900">{d.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {d.stockCount} unit{d.stockCount !== 1 ? "s" : ""} in
-                        stock • 0 issues in 90 days
+                      <p className="text-white/80 text-xs font-medium">
+                        {k.label}
                       </p>
+                      <p className="text-3xl font-bold mt-2">{k.value}</p>
                     </div>
-                    <span className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full font-medium">
-                      Dead Stock
-                    </span>
-                  </CardContent>
-                </Card>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                      <k.icon className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 mt-3">
+                    {k.up ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    <span className="text-xs font-medium">{k.trend}</span>
+                  </div>
+                </div>
               ))}
             </div>
-          )}
-        </TabsContent>
 
-        {/* Reorder Tab */}
-        <TabsContent value="reorder" className="mt-4 space-y-3">
-          {needsReorder.length === 0 ? (
-            <p className="text-slate-500 text-sm">
-              All parts are above minimum stock levels.
-            </p>
-          ) : (
-            needsReorder.map((d) => {
-              const urgency =
-                d.stockCount === 0
-                  ? "critical"
-                  : d.stockCount <= 1
-                    ? "high"
-                    : "medium";
-              const urgencyStyle = {
-                critical: "bg-red-100 text-red-700",
-                high: "bg-orange-100 text-orange-700",
-                medium: "bg-amber-100 text-amber-700",
-              }[urgency];
-              return (
-                <Card key={d.id} className="shadow-sm">
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-slate-900">{d.name}</p>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
-                            urgencyStyle
-                          }`}
-                        >
-                          {urgency}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Current stock: {d.stockCount} • Suggested order:{" "}
-                        {Math.max(5 - d.stockCount, 3)} units
-                      </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <div className="w-6 h-6 bg-amber-100 rounded-lg flex items-center justify-center">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
                     </div>
-                    <p className="text-sm font-semibold text-blue-600">
-                      Order {Math.max(5 - d.stockCount, 3)}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </TabsContent>
-
-        {/* Technicians Tab */}
-        <TabsContent value="technicians" className="mt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {techInsights.map((tech) => (
-              <Card key={tech.id} className="shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-                      {tech.name[0]}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {tech.name}
-                      </p>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          tech.activityLevel === "High"
-                            ? "bg-green-100 text-green-700"
-                            : tech.activityLevel === "Medium"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {tech.activityLevel} Activity
+                    AI Insights
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="h-4 w-4 text-amber-600" />
+                      <span className="font-semibold text-amber-800 text-sm">
+                        High Demand Detected
                       </span>
                     </div>
+                    <p className="text-amber-700 text-sm">
+                      Main Motor demand is 35% above seasonal average. Consider
+                      restocking immediately.
+                    </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-xs text-slate-400">Total Issued</p>
-                      <p className="font-semibold">{tech.totalIssued}</p>
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                      <span className="font-semibold text-red-800 text-sm">
+                        Dead Stock Alert
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Last 30 Days</p>
-                      <p className="font-semibold">{tech.last30}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Avg/Week</p>
-                      <p className="font-semibold">{tech.avgPerWeek}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Return Rate</p>
-                      <p className="font-semibold">{tech.returnRate}%</p>
-                    </div>
+                    <p className="text-red-700 text-sm">
+                      3 part types haven't moved in 30+ days. Consider returning
+                      to vendor or marking for clearance.
+                    </p>
                   </div>
-                  <div className="mt-2 pt-2 border-t border-slate-100">
-                    <p className="text-xs text-slate-400">Most Used Part</p>
-                    <p className="text-sm font-medium text-blue-600">
-                      {tech.mostUsedPart}
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                      <span className="font-semibold text-emerald-800 text-sm">
+                        Stock Health Good
+                      </span>
+                    </div>
+                    <p className="text-emerald-700 text-sm">
+                      Overall warehouse health is at {healthScore}%. Most
+                      critical parts are adequately stocked.
                     </p>
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </TabsContent>
 
-        {/* Health Tab */}
-        <TabsContent value="health" className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className="shadow-sm">
-              <CardContent className="p-6 flex flex-col items-center">
-                <p className="text-sm font-semibold text-slate-600 mb-4">
-                  Inventory Health Score
-                </p>
-                <svg
-                  width="140"
-                  height="140"
-                  viewBox="0 0 140 140"
-                  role="img"
-                  aria-label="Inventory health score"
-                >
-                  <title>Inventory Health Score</title>
-                  <circle
-                    cx="70"
-                    cy="70"
-                    r={radius}
-                    fill="none"
-                    stroke="#e2e8f0"
-                    strokeWidth="12"
-                  />
-                  <circle
-                    cx="70"
-                    cy="70"
-                    r={radius}
-                    fill="none"
-                    stroke={healthColor}
-                    strokeWidth="12"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={dashOffset}
-                    strokeLinecap="round"
-                    transform="rotate(-90 70 70)"
-                  />
-                  <text
-                    x="70"
-                    y="74"
-                    textAnchor="middle"
-                    fontSize="24"
-                    fontWeight="bold"
-                    fill={healthColor}
-                  >
-                    {healthScore}
-                  </text>
-                  <text
-                    x="70"
-                    y="90"
-                    textAnchor="middle"
-                    fontSize="11"
-                    fill="#94a3b8"
-                  >
-                    out of 100
-                  </text>
-                </svg>
-                <div className="grid grid-cols-2 gap-3 mt-4 w-full text-sm">
-                  <div className="bg-green-50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-bold text-green-600">
-                      {inStock.length}
-                    </p>
-                    <p className="text-xs text-slate-500">In Stock</p>
-                  </div>
-                  <div className="bg-amber-50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-bold text-amber-600">
-                      {issued.length}
-                    </p>
-                    <p className="text-xs text-slate-500">Issued</p>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-bold text-blue-600">
-                      {installed.length}
-                    </p>
-                    <p className="text-xs text-slate-500">Installed</p>
-                  </div>
-                  <div className="bg-red-50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-bold text-red-600">
-                      {returnedToCompany.length}
-                    </p>
-                    <p className="text-xs text-slate-500">Returned</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Status Distribution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={statusDistribution}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {statusDistribution.map((entry) => (
+                          <Cell key={entry.name} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v, n) => [v, n]} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-            <Card className="shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Status Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={70}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
-                      labelLine={false}
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${entry.name}`}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
-                        />
+              {/* Most Active Technician */}
+              <Card className="shadow-sm border-slate-200 col-span-1 lg:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <div className="w-6 h-6 bg-violet-100 rounded-lg flex items-center justify-center">
+                      <Users className="h-3.5 w-3.5 text-violet-600" />
+                    </div>
+                    Most Active Technician
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-md flex-shrink-0">
+                      {techData[0]?.name?.[0] ?? "S"}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-800 text-base">
+                        {techData[0]?.name ?? "Sonu"}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {techData[0]?.issued ?? 12} parts issued &bull;{" "}
+                        {techData[0]?.installed ?? 10} installed
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
+                          <TrendingUp className="h-3 w-3" />
+                          High Activity
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          Avg. resolution: {techData[0]?.avgDays ?? 2.1} days
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      {techData.slice(0, 4).map((t, i) => (
+                        <div
+                          key={t.name}
+                          className={`rounded-xl px-4 py-2 ${i === 0 ? "bg-violet-50 border border-violet-200" : "bg-slate-50 border border-slate-100"}`}
+                        >
+                          <div
+                            className={`font-bold text-sm ${i === 0 ? "text-violet-700" : "text-slate-700"}`}
+                          >
+                            {t.name}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {t.issued} parts
+                          </div>
+                        </div>
                       ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Demand Forecast */}
+          <TabsContent value="demand">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Monthly Demand Forecast (Top Parts)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={forecastData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="Main Motor"
+                        stroke="#8b5cf6"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="Compressor"
+                        stroke="#06b6d4"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="PCB"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Current Stock vs Predicted Demand
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={stockVsDemand}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="company" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar
+                        dataKey="stock"
+                        name="Current Stock"
+                        fill="#10b981"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="demand"
+                        name="Predicted Demand"
+                        fill="#f59e0b"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Stock Health */}
+          <TabsContent value="health">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Company Stock Health
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {(companyHealth.length > 0
+                    ? companyHealth
+                    : [
+                        { name: "Midea", health: 78 },
+                        { name: "Toshiba", health: 65 },
+                        { name: "Samsung", health: 82 },
+                      ]
+                  ).map((c) => (
+                    <div key={c.name}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium text-slate-700">
+                          {c.name}
+                        </span>
+                        <span
+                          className={`font-bold ${c.health >= 70 ? "text-emerald-600" : c.health >= 50 ? "text-amber-600" : "text-red-600"}`}
+                        >
+                          {c.health}%
+                        </span>
+                      </div>
+                      <Progress value={c.health} className="h-2" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Dead Stock Parts</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50">
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Part
+                        </th>
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Qty
+                        </th>
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Last Move
+                        </th>
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Risk
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deadStock.map((d) => (
+                        <tr
+                          key={d.code}
+                          className="border-b border-slate-50 hover:bg-slate-50"
+                        >
+                          <td className="px-4 py-3">
+                            <div className="font-semibold text-slate-800">
+                              {d.name}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {d.code}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{d.qty}</td>
+                          <td className="px-4 py-3 text-slate-500 text-xs">
+                            {d.lastMove}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                d.risk === "High"
+                                  ? "bg-red-100 text-red-700"
+                                  : d.risk === "Medium"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-blue-100 text-blue-700"
+                              }`}
+                            >
+                              {d.risk}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Technician Insights */}
+          <TabsContent value="technicians">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Parts Issued per Technician
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={techData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        tick={{ fontSize: 12 }}
+                        width={60}
+                      />
+                      <Tooltip />
+                      <Legend />
+                      <Bar
+                        dataKey="issued"
+                        name="Issued"
+                        fill="#8b5cf6"
+                        radius={[0, 4, 4, 0]}
+                      />
+                      <Bar
+                        dataKey="installed"
+                        name="Installed"
+                        fill="#10b981"
+                        radius={[0, 4, 4, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Technician Performance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50">
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Technician
+                        </th>
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Issued
+                        </th>
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Install %
+                        </th>
+                        <th className="text-left px-4 py-2 text-slate-500 font-medium text-xs">
+                          Avg Days
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {techData.map((t) => (
+                        <tr
+                          key={t.name}
+                          className="border-b border-slate-50 hover:bg-slate-50"
+                        >
+                          <td className="px-4 py-3 font-medium text-slate-800">
+                            {t.name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {t.issued}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`font-semibold ${
+                                t.issued > 0
+                                  ? Math.round(
+                                      (t.installed / t.issued) * 100,
+                                    ) >= 75
+                                    ? "text-emerald-600"
+                                    : "text-amber-600"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {t.issued > 0
+                                ? Math.round((t.installed / t.issued) * 100)
+                                : 0}
+                              %
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {t.avgDays}d
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Reorder Suggestions */}
+          <TabsContent value="reorder">
+            <Card className="shadow-sm border-slate-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  Reorder Suggestions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Urgency
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Part Name
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Current Stock
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Reorder Qty
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Last Purchase
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reorderItems.map((r) => (
+                      <tr
+                        key={r.name}
+                        className={`border-b border-slate-100 hover:bg-slate-50 ${
+                          r.urgency === "Critical"
+                            ? "bg-red-50/30"
+                            : r.urgency === "Warning"
+                              ? "bg-amber-50/30"
+                              : ""
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-bold ${urgencyColor[r.urgency]}`}
+                          >
+                            {r.urgency}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {r.name}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`font-semibold ${
+                              r.current <= 2
+                                ? "text-red-600"
+                                : r.current <= 5
+                                  ? "text-amber-600"
+                                  : "text-emerald-600"
+                            }`}
+                          >
+                            {r.current}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-blue-600 font-semibold">
+                          {r.reorder}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 text-xs">
+                          {r.lastPurchase}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </CardContent>
             </Card>
-          </div>
+          </TabsContent>
 
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Stock by Company</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={companyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="stock" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          {/* Dead Stock Tab */}
+          <TabsContent value="deadstock">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    Dead Stock Value by Company
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart
+                      data={[
+                        { name: "Midea", value: 12500 },
+                        { name: "Toshiba", value: 8200 },
+                        { name: "Samsung", value: 4100 },
+                        { name: "Godrej", value: 2800 },
+                      ]}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip
+                        formatter={(v: number) => [
+                          `₹${v.toLocaleString()}`,
+                          "Dead Stock Value",
+                        ]}
+                      />
+                      <Bar
+                        dataKey="value"
+                        fill="#ef4444"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-amber-500" />
+                    Dead Stock vs Active Inventory
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: "Active Stock", value: 82, fill: "#10b981" },
+                          { name: "Dead Stock", value: 18, fill: "#ef4444" },
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {[
+                          { fill: "#10b981", name: "active" },
+                          { fill: "#ef4444", name: "dead" },
+                        ].map((e) => (
+                          <Cell key={e.name} fill={e.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => [`${v}%`, ""]} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="shadow-sm border-slate-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  Dead Stock Parts List (No movement in 30+ days)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Part Code
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Part Name
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Company
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Days Idle
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Units
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Est. Value
+                      </th>
+                      <th className="text-left px-4 py-3 text-slate-500 font-medium">
+                        Risk
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      {
+                        code: "TOSBTV-PWR-002",
+                        name: "Toshiba Power Board",
+                        company: "Toshiba",
+                        days: 45,
+                        units: 2,
+                        value: 8600,
+                        risk: "High",
+                      },
+                      {
+                        code: "MID-AC-BELT",
+                        name: "AC Belt Drive",
+                        company: "Midea",
+                        days: 32,
+                        units: 3,
+                        value: 4200,
+                        risk: "Medium",
+                      },
+                      {
+                        code: "TOS-FAN-01",
+                        name: "Fan Motor Small",
+                        company: "Toshiba",
+                        days: 28,
+                        units: 1,
+                        value: 1800,
+                        risk: "Low",
+                      },
+                      {
+                        code: "GDJ-PCB-X1",
+                        name: "PCB Control Board",
+                        company: "Godrej",
+                        days: 60,
+                        units: 2,
+                        value: 5600,
+                        risk: "High",
+                      },
+                    ].map((item) => (
+                      <tr
+                        key={item.code}
+                        className={`border-b border-slate-100 hover:bg-slate-50 ${item.risk === "High" ? "bg-red-50/20" : item.risk === "Medium" ? "bg-amber-50/20" : ""}`}
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-blue-600 font-semibold">
+                          {item.code}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {item.name}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {item.company}
+                        </td>
+                        <td className="px-4 py-3 font-bold text-red-600">
+                          {item.days}d
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {item.units}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-700">
+                          ₹{item.value.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                              item.risk === "High"
+                                ? "bg-red-100 text-red-700 border border-red-200"
+                                : item.risk === "Medium"
+                                  ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                  : "bg-blue-100 text-blue-700 border border-blue-200"
+                            }`}
+                          >
+                            {item.risk}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

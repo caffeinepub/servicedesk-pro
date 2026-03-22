@@ -293,7 +293,7 @@ function ImportCSVDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 p-6">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
             <p className="font-medium mb-1">Expected CSV columns:</p>
             <p className="text-xs text-blue-700">

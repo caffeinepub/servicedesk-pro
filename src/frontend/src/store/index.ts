@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
   ActivityLog,
+  AdminNotice,
   AuditEntry,
   Case,
   CasePhoto,
@@ -21,6 +22,7 @@ import type {
   StockCompany,
   StockPartName,
   StoreNotification,
+  StorePilotAuditLog,
   Technician,
   User,
   Vendor,
@@ -721,6 +723,149 @@ const SEED_STORE_NOTIFICATIONS: StoreNotification[] = [
   },
 ];
 
+// ── Seed Admin Notices ───────────────────────────────────────────────────────
+const SEED_ADMIN_NOTICES: AdminNotice[] = [
+  {
+    id: "notice1",
+    title: "System Maintenance",
+    message:
+      "Scheduled maintenance on Sunday 22 March from 2AM-4AM IST. System may be unavailable.",
+    expiryDate: "2026-03-22T23:59:00.000Z",
+    isActive: true,
+    createdAt: d(1),
+    createdBy: "Store Admin",
+    direction: "rtl",
+    color: "amber",
+    speed: "normal",
+  },
+];
+
+// ── Seed StorePilot Audit Logs ───────────────────────────────────────────────
+const SEED_STOREPILOT_AUDIT_LOGS: StorePilotAuditLog[] = [
+  {
+    id: "sal1",
+    action: "CREATE",
+    module: "Purchase",
+    recordId: "#9",
+    details: "Invoice 88888 from Midea Pvt.ltd. Parts: 888888 (Main Motor)",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T13:03:23.000Z",
+    partCodes: ["888888"],
+  },
+  {
+    id: "sal2",
+    action: "UPDATE",
+    module: "PartInstance",
+    recordId: "#33",
+    details: "Part C-82733 (Main Motor) relocated to A › A-1 › Bin-2",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T10:10:01.000Z",
+    partCodes: ["C-82733"],
+  },
+  {
+    id: "sal3",
+    action: "RETURN",
+    module: "PartIssue",
+    recordId: "#7",
+    details:
+      "Part A-01928 (Main Motor) returned to store. Case: 6532543. Reason: Not required",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T09:59:52.000Z",
+    partCodes: ["A-01928"],
+  },
+  {
+    id: "sal4",
+    action: "ISSUE",
+    module: "PartIssue",
+    recordId: "#7",
+    details: "Part A-01928 (Main Motor) issued to Sonu. Case: 6532543",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T09:59:11.000Z",
+    partCodes: ["A-01928"],
+  },
+  {
+    id: "sal5",
+    action: "CREATE",
+    module: "Purchase",
+    recordId: "#8",
+    details:
+      "Invoice in-01 from Midea Pvt.ltd. Parts: A-01928 (Main Motor), B-37276 (Main Motor), C-82733 (Main Motor)",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T09:57:03.000Z",
+    partCodes: ["A-01928", "B-37276", "C-82733"],
+  },
+  {
+    id: "sal6",
+    action: "ISSUE",
+    module: "PartIssue",
+    recordId: "#6",
+    details: "Part F-753 (Compressor) issued to Sonu. Case: 154343",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T09:52:42.000Z",
+    partCodes: ["F-753"],
+  },
+  {
+    id: "sal7",
+    action: "CREATE",
+    module: "Purchase",
+    recordId: "#7",
+    details: "Invoice in-1245 from Midea Pvt.ltd. Parts: F-753 (Compressor)",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T09:51:36.000Z",
+    partCodes: ["F-753"],
+  },
+  {
+    id: "sal8",
+    action: "LOGIN",
+    module: "Auth",
+    recordId: "#1",
+    details: "User Store Admin logged in",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-16T09:00:00.000Z",
+  },
+  {
+    id: "sal9",
+    action: "UPDATE",
+    module: "PartInstance",
+    recordId: "#21",
+    details: "Part B-37276 (Main Motor) location assigned to A › A-1 › Bin-1",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-18T08:14:28.000Z",
+    partCodes: ["B-37276"],
+  },
+  {
+    id: "sal10",
+    action: "RETURN",
+    module: "PartInstance",
+    recordId: "#12",
+    details:
+      "Part A-01928 (Main Motor) returned to company Midea Pvt.ltd. Ref: 1246",
+    userId: "admin1",
+    userName: "Store Admin",
+    userRole: "admin",
+    timestamp: "2026-03-21T09:05:02.000Z",
+    partCodes: ["A-01928"],
+  },
+];
+
 // ── StoreState interface ─────────────────────────────────────────────────────
 
 interface StoreState {
@@ -730,6 +875,9 @@ interface StoreState {
   selectedCaseId: string | null;
   selectedPartId: string | null;
   navVendorId: string | null;
+  previousPage: PageType | null;
+  adminNotices: AdminNotice[];
+  storePilotAuditLogs: StorePilotAuditLog[];
   notificationsGeneratedDate: string;
   lastMidnightResetDate: string;
 
@@ -768,6 +916,9 @@ interface StoreState {
     vendorId?: string,
   ) => void;
   clearNavVendorId: () => void;
+  addAdminNotice: (notice: Omit<AdminNotice, "id" | "createdAt">) => void;
+  deleteAdminNotice: (id: string) => void;
+  updateAdminNotice: (id: string, updates: Partial<AdminNotice>) => void;
   registerUser: (
     user: Omit<
       User,
@@ -810,6 +961,8 @@ interface StoreState {
   addReminder: (r: Omit<Reminder, "id" | "createdAt">) => void;
   completeReminder: (id: string) => void;
   markNotificationRead: (id: string) => void;
+  deleteNotification: (id: string) => void;
+  updateReminder: (id: string, updates: Partial<Reminder>) => void;
   markAllNotificationsRead: () => void;
   addNotification: (n: Omit<Notification, "id" | "createdAt">) => void;
   updateSettings: (s: Partial<Settings>) => void;
@@ -956,6 +1109,9 @@ export const useStore = create<StoreState>()(
         selectedCaseId: null,
         selectedPartId: null,
         navVendorId: null,
+        previousPage: null,
+        adminNotices: SEED_ADMIN_NOTICES,
+        storePilotAuditLogs: SEED_STOREPILOT_AUDIT_LOGS,
         notificationsGeneratedDate: "",
         lastMidnightResetDate: "",
         users: SEED_USERS,
@@ -1036,12 +1192,33 @@ export const useStore = create<StoreState>()(
         },
 
         navigate: (page, caseId, partId, vendorId) =>
-          set({
+          set((s) => ({
+            previousPage: s.currentPage,
             currentPage: page,
-            selectedCaseId: caseId ?? get().selectedCaseId,
-            selectedPartId: partId ?? get().selectedPartId,
+            selectedCaseId: caseId ?? s.selectedCaseId,
+            selectedPartId: partId ?? s.selectedPartId,
             navVendorId: vendorId !== undefined ? vendorId : null,
-          }),
+          })),
+
+        addAdminNotice: (notice: Omit<AdminNotice, "id" | "createdAt">) =>
+          set((s) => ({
+            adminNotices: [
+              { ...notice, id: uid(), createdAt: now() },
+              ...s.adminNotices,
+            ],
+          })),
+
+        deleteAdminNotice: (id: string) =>
+          set((s) => ({
+            adminNotices: s.adminNotices.filter((n) => n.id !== id),
+          })),
+
+        updateAdminNotice: (id: string, updates: Partial<AdminNotice>) =>
+          set((s) => ({
+            adminNotices: s.adminNotices.map((n) =>
+              n.id === id ? { ...n, ...updates } : n,
+            ),
+          })),
 
         clearNavVendorId: () => set({ navVendorId: null }),
 
@@ -1433,6 +1610,18 @@ export const useStore = create<StoreState>()(
             ),
           }));
         },
+
+        deleteNotification: (id) =>
+          set((s) => ({
+            notifications: s.notifications.filter((n) => n.id !== id),
+          })),
+
+        updateReminder: (id, updates) =>
+          set((s) => ({
+            reminders: s.reminders.map((r) =>
+              r.id === id ? { ...r, ...updates } : r,
+            ),
+          })),
 
         markNotificationRead: (id) => {
           set((s) => ({
@@ -2207,6 +2396,8 @@ export const useStore = create<StoreState>()(
         partLifecycle: state.partLifecycle,
         partRequests: state.partRequests,
         storeNotifications: state.storeNotifications,
+        adminNotices: state.adminNotices,
+        storePilotAuditLogs: state.storePilotAuditLogs,
         technicians: state.technicians,
         notificationsGeneratedDate: state.notificationsGeneratedDate,
         lastMidnightResetDate: state.lastMidnightResetDate,

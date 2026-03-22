@@ -69,34 +69,32 @@ const STATUS_LABELS: Record<string, string> = {
   returned_to_store: "Returned to Store",
 };
 
-// Lifecycle dot colors per event type
 function getLifecycleDotColor(action: string): string {
   const lower = action.toLowerCase();
-  if (lower.includes("purchas")) return "#3b82f6"; // blue
-  if (lower.includes("stored") || lower.includes("stock")) return "#14b8a6"; // teal
-  if (lower.includes("issued") || lower.includes("issue")) return "#f97316"; // orange
+  if (lower.includes("purchas")) return "#3b82f6";
+  if (lower.includes("stored") || lower.includes("stock")) return "#14b8a6";
+  if (lower.includes("issued") || lower.includes("issue")) return "#f97316";
   if (
     lower.includes("returned unused") ||
     lower.includes("return to store") ||
     lower.includes("returned to store")
   )
-    return "#22c55e"; // green
-  if (lower.includes("defective")) return "#ef4444"; // red
-  if (lower.includes("installed")) return "#10b981"; // emerald
+    return "#22c55e";
+  if (lower.includes("defective")) return "#ef4444";
+  if (lower.includes("installed")) return "#10b981";
   if (
     lower.includes("returned to company") ||
     lower.includes("return to company")
   )
-    return "#a855f7"; // purple
-  if (lower.includes("returned defective")) return "#ef4444"; // red
-  if (lower.includes("returned installed")) return "#10b981"; // emerald
+    return "#a855f7";
+  if (lower.includes("returned defective")) return "#ef4444";
+  if (lower.includes("returned installed")) return "#10b981";
   if (lower.includes("relocated") || lower.includes("location"))
-    return "#f59e0b"; // amber
-  if (lower.includes("return")) return "#22c55e"; // green for other returns
-  return "#64748b"; // slate default
+    return "#f59e0b";
+  if (lower.includes("return")) return "#22c55e";
+  return "#64748b";
 }
 
-// Convert base64/url to a download
 function downloadImage(url: string, filename: string) {
   const a = document.createElement("a");
   a.href = url;
@@ -104,7 +102,6 @@ function downloadImage(url: string, filename: string) {
   a.click();
 }
 
-// File to base64
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -117,6 +114,8 @@ function fileToBase64(file: File): Promise<string> {
 export default function PartDetailPage() {
   const {
     selectedPartId,
+    previousPage,
+    navigate,
     partItems,
     partLifecycle,
     purchaseEntries,
@@ -128,7 +127,6 @@ export default function PartDetailPage() {
     bins,
     technicians,
     vendors,
-    navigate,
     issuePartToTechnician,
     markPartInstalled,
     returnPartToStore,
@@ -142,7 +140,6 @@ export default function PartDetailPage() {
 
   const part = partItems.find((p) => p.id === selectedPartId);
 
-  // Lifecycle sorted oldest first (chronological)
   const lifecycle = partLifecycle
     .filter((l) => l.partId === selectedPartId)
     .sort(
@@ -150,33 +147,30 @@ export default function PartDetailPage() {
         new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
     );
 
-  // Issue dialog
   const [issueDialog, setIssueDialog] = useState(false);
   const [issueTechId, setIssueTechId] = useState("");
   const [issueCaseId, setIssueCaseId] = useState("");
   const [issueNotes, setIssueNotes] = useState("");
 
-  // Return to store dialog
   const [returnDialog, setReturnDialog] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState("");
+  const [issueActionPending, setIssueActionPending] = useState<
+    "install" | "return" | null
+  >(null);
 
-  // Return to company form state (inline in left col)
   const [rtcVendorId, setRtcVendorId] = useState("");
   const [rtcRef, setRtcRef] = useState("");
   const [rtcDate, setRtcDate] = useState(new Date().toISOString().slice(0, 10));
   const [rtcReason, setRtcReason] = useState("");
   const [rtcNotes, setRtcNotes] = useState("");
 
-  // Relocate inline form
   const [showRtcConfirm, setShowRtcConfirm] = useState(false);
 
-  // Relocate inline form
   const [showRelocate, setShowRelocate] = useState(false);
   const [relRack, setRelRack] = useState("");
   const [relShelf, setRelShelf] = useState("");
   const [relBin, setRelBin] = useState("");
 
-  // Image upload state
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -189,7 +183,6 @@ export default function PartDetailPage() {
   const partImageInputRef = useRef<HTMLInputElement>(null);
   const invoiceImageInputRef = useRef<HTMLInputElement>(null);
 
-  // Derive values (must be before early return to satisfy hooks rules)
   const purchase = purchaseEntries.find((pe) => pe.id === part?.purchaseId);
   const company =
     stockCompanies.find((c) => c.id === part?.companyId)?.name ?? "";
@@ -233,10 +226,10 @@ export default function PartDetailPage() {
         <Button
           variant="outline"
           className="mt-4"
-          onClick={() => navigate("inventory")}
+          onClick={() => navigate(previousPage ?? "inventory")}
           data-ocid="part.button"
         >
-          Back to Inventory
+          Go Back
         </Button>
       </div>
     );
@@ -249,7 +242,6 @@ export default function PartDetailPage() {
           : uniqueVendors[0].vendorName) ?? "—")
       : null;
 
-  // Relocate selects
   const filteredShelves = shelves.filter((s) => s.rackId === relRack);
   const filteredBins = bins.filter((b) => b.shelfId === relShelf);
 
@@ -302,7 +294,6 @@ export default function PartDetailPage() {
     year: "numeric",
   });
 
-  // All part images (combine partImageUrls and legacy imageUrl)
   const allPartImages: string[] = [
     ...(part.partImageUrls ?? []),
     ...(part.imageUrl && !(part.partImageUrls ?? []).includes(part.imageUrl)
@@ -311,6 +302,14 @@ export default function PartDetailPage() {
   ];
 
   const isReturnedToCompany = part.status === "returned_to_company";
+  const isInstalled = part.status === "installed";
+  const isIssued = part.status === "issued";
+
+  // Location heading is dynamic
+  const locationHeading =
+    isIssued || isReturnedToCompany || isInstalled
+      ? "Last Location"
+      : "Location";
 
   return (
     <div className="space-y-4 pb-8">
@@ -319,7 +318,7 @@ export default function PartDetailPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate("inventory")}
+          onClick={() => navigate(previousPage ?? "inventory")}
           data-ocid="part.button"
           className="shrink-0"
         >
@@ -359,7 +358,6 @@ export default function PartDetailPage() {
               </span>
             )}
           </div>
-          {/* Breadcrumb */}
           <div className="flex items-center gap-1 mt-1 text-xs text-slate-500 flex-wrap">
             <Building2 className="h-3 w-3" />
             <span>{company}</span>
@@ -445,163 +443,161 @@ export default function PartDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Location - hidden if returned to company */}
-          {!isReturnedToCompany && (
-            <Card className="shadow-sm">
-              <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-blue-500" />
-                  Location
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-3">
-                {rack ? (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg text-sm font-medium text-slate-700">
-                      {rack.name}
-                    </span>
-                    {shelf && (
-                      <>
-                        <span className="text-slate-400 text-xs">›</span>
-                        <span className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg text-sm font-medium text-slate-700">
-                          {shelf.name}
-                        </span>
-                      </>
-                    )}
-                    {bin && (
-                      <>
-                        <span className="text-slate-400 text-xs">›</span>
-                        <span className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg text-sm font-medium text-slate-700">
-                          {bin.name}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    <span className="font-medium">Location Pending</span>
-                  </div>
-                )}
+          {/* Location */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-2 pt-4">
+              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-blue-500" />
+                {locationHeading}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              {rack ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg text-sm font-medium text-slate-700">
+                    {rack.name}
+                  </span>
+                  {shelf && (
+                    <>
+                      <span className="text-slate-400 text-xs">›</span>
+                      <span className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg text-sm font-medium text-slate-700">
+                        {shelf.name}
+                      </span>
+                    </>
+                  )}
+                  {bin && (
+                    <>
+                      <span className="text-slate-400 text-xs">›</span>
+                      <span className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg text-sm font-medium text-slate-700">
+                        {bin.name}
+                      </span>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
+                  <MapPin className="h-4 w-4 shrink-0" />
+                  <span className="font-medium">Location Pending</span>
+                </div>
+              )}
 
-                {part.status === "in_stock" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                    onClick={() => {
-                      setShowRelocate(!showRelocate);
-                      setRelRack(part.rackId ?? "");
-                      setRelShelf(part.shelfId ?? "");
-                      setRelBin(part.binId ?? "");
-                    }}
-                    data-ocid="part.secondary_button"
-                  >
-                    <MapPin className="h-3.5 w-3.5 mr-1" />
-                    {rack ? "Relocate" : "Assign Location"}
-                  </Button>
-                )}
+              {part.status === "in_stock" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                  onClick={() => {
+                    setShowRelocate(!showRelocate);
+                    setRelRack(part.rackId ?? "");
+                    setRelShelf(part.shelfId ?? "");
+                    setRelBin(part.binId ?? "");
+                  }}
+                  data-ocid="part.secondary_button"
+                >
+                  <MapPin className="h-3.5 w-3.5 mr-1" />
+                  {rack ? "Relocate" : "Assign Location"}
+                </Button>
+              )}
 
-                {showRelocate && (
-                  <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-3">
-                    <div>
-                      <label
-                        htmlFor="rel-rack"
-                        className="block text-xs font-medium text-slate-600 mb-1"
-                      >
-                        Rack
-                      </label>
-                      <select
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        id="rel-rack"
-                        value={relRack}
-                        onChange={(e) => {
-                          setRelRack(e.target.value);
-                          setRelShelf("");
-                          setRelBin("");
-                        }}
-                        data-ocid="part.select"
-                      >
-                        <option value="">— Select Rack —</option>
-                        {racks.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="rel-shelf"
-                        className="block text-xs font-medium text-slate-600 mb-1"
-                      >
-                        Shelf
-                      </label>
-                      <select
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                        id="rel-shelf"
-                        value={relShelf}
-                        onChange={(e) => {
-                          setRelShelf(e.target.value);
-                          setRelBin("");
-                        }}
-                        disabled={!relRack}
-                        data-ocid="part.select"
-                      >
-                        <option value="">— Select Shelf —</option>
-                        {filteredShelves.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="rel-bin"
-                        className="block text-xs font-medium text-slate-600 mb-1"
-                      >
-                        Bin
-                      </label>
-                      <select
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                        id="rel-bin"
-                        value={relBin}
-                        onChange={(e) => setRelBin(e.target.value)}
-                        disabled={!relShelf}
-                        data-ocid="part.select"
-                      >
-                        <option value="">— Select Bin —</option>
-                        {filteredBins.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowRelocate(false)}
-                        data-ocid="part.cancel_button"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleRelocateConfirm}
-                        disabled={!relRack}
-                        data-ocid="part.confirm_button"
-                      >
-                        Confirm Relocation
-                      </Button>
-                    </div>
+              {showRelocate && (
+                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-3">
+                  <div>
+                    <label
+                      htmlFor="rel-rack"
+                      className="block text-xs font-medium text-slate-600 mb-1"
+                    >
+                      Rack
+                    </label>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      id="rel-rack"
+                      value={relRack}
+                      onChange={(e) => {
+                        setRelRack(e.target.value);
+                        setRelShelf("");
+                        setRelBin("");
+                      }}
+                      data-ocid="part.select"
+                    >
+                      <option value="">— Select Rack —</option>
+                      {racks.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  <div>
+                    <label
+                      htmlFor="rel-shelf"
+                      className="block text-xs font-medium text-slate-600 mb-1"
+                    >
+                      Shelf
+                    </label>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      id="rel-shelf"
+                      value={relShelf}
+                      onChange={(e) => {
+                        setRelShelf(e.target.value);
+                        setRelBin("");
+                      }}
+                      disabled={!relRack}
+                      data-ocid="part.select"
+                    >
+                      <option value="">— Select Shelf —</option>
+                      {filteredShelves.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="rel-bin"
+                      className="block text-xs font-medium text-slate-600 mb-1"
+                    >
+                      Bin
+                    </label>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      id="rel-bin"
+                      value={relBin}
+                      onChange={(e) => setRelBin(e.target.value)}
+                      disabled={!relShelf}
+                      data-ocid="part.select"
+                    >
+                      <option value="">— Select Bin —</option>
+                      {filteredBins.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowRelocate(false)}
+                      data-ocid="part.cancel_button"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleRelocateConfirm}
+                      disabled={!relRack}
+                      data-ocid="part.confirm_button"
+                    >
+                      Confirm Relocation
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Part Images */}
           <Card className="shadow-sm">
@@ -612,7 +608,6 @@ export default function PartDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              {/* Hidden file input */}
               <input
                 ref={partImageInputRef}
                 type="file"
@@ -636,7 +631,6 @@ export default function PartDetailPage() {
                           alt={`Part ${i + 1}`}
                           className="w-full h-full object-cover"
                         />
-                        {/* Overlay actions */}
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
                           <button
                             type="button"
@@ -749,12 +743,10 @@ export default function PartDetailPage() {
                 ))}
               </div>
 
-              {/* Invoice image section */}
               <div className="mt-4 pt-3 border-t border-slate-100">
                 <p className="text-xs font-medium text-slate-600 mb-2">
                   Invoice Image
                 </p>
-                {/* Hidden file input */}
                 <input
                   ref={invoiceImageInputRef}
                   type="file"
@@ -855,198 +847,33 @@ export default function PartDetailPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Return to Company (only in_stock, not returned_to_company) */}
-          {part.status === "in_stock" && (
-            <Card className="shadow-sm border-red-100">
-              <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-semibold text-red-700 flex items-center gap-2">
-                  <RotateCcw className="h-4 w-4" />
-                  Return to Company
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-3">
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700">
-                    This action is permanent and cannot be undone. Once a part
-                    is returned to company, it cannot be reissued or relocated.
-                  </p>
-                </div>
-                {/* Vendor */}
-                {singleVendorName ? (
-                  <div>
-                    <Label className="text-xs text-slate-500">Vendor</Label>
-                    <p className="text-sm font-medium text-slate-800 mt-1">
-                      {singleVendorName}
-                    </p>
-                  </div>
-                ) : uniqueVendors.length > 1 ? (
-                  <div>
-                    <Label
-                      className="text-xs text-slate-500"
-                      htmlFor="rtc-vendor"
-                    >
-                      Vendor
-                    </Label>
-                    <select
-                      id="rtc-vendor"
-                      className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                      value={rtcVendorId}
-                      onChange={(e) => setRtcVendorId(e.target.value)}
-                      data-ocid="part.select"
-                    >
-                      <option value="">— Select Vendor —</option>
-                      {uniqueVendors.map((pe) => {
-                        const vName = pe.vendorId
-                          ? vendors.find((v) => v.id === pe.vendorId)?.name
-                          : pe.vendorName;
-                        return (
-                          <option
-                            key={pe.vendorId ?? pe.vendorName}
-                            value={pe.vendorId ?? pe.vendorName ?? ""}
-                          >
-                            {vName}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                ) : null}
-
-                <div>
-                  <Label className="text-xs text-slate-500" htmlFor="rtc-ref">
-                    Reference No.{" "}
-                    <span className="text-slate-400">(optional)</span>
-                  </Label>
-                  <Input
-                    id="rtc-ref"
-                    className="mt-1 text-sm"
-                    placeholder="e.g. RTN-001"
-                    value={rtcRef}
-                    onChange={(e) => setRtcRef(e.target.value)}
-                    data-ocid="part.input"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-500" htmlFor="rtc-date">
-                    Date
-                  </Label>
-                  <Input
-                    id="rtc-date"
-                    type="date"
-                    className="mt-1 text-sm"
-                    value={rtcDate}
-                    onChange={(e) => setRtcDate(e.target.value)}
-                    data-ocid="part.input"
-                  />
-                </div>
-
-                <div>
-                  <Label
-                    className="text-xs text-slate-500"
-                    htmlFor="rtc-reason"
-                  >
-                    Reason <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="rtc-reason"
-                    className="mt-1 text-sm"
-                    placeholder="e.g. Defective, Damaged"
-                    value={rtcReason}
-                    onChange={(e) => setRtcReason(e.target.value)}
-                    data-ocid="part.input"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs text-slate-500" htmlFor="rtc-notes">
-                    Notes <span className="text-slate-400">(optional)</span>
-                  </Label>
-                  <Textarea
-                    id="rtc-notes"
-                    className="mt-1 text-sm"
-                    rows={2}
-                    placeholder="Additional notes"
-                    value={rtcNotes}
-                    onChange={(e) => setRtcNotes(e.target.value)}
-                    data-ocid="part.textarea"
-                  />
-                </div>
-
-                <Button
-                  className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                  size="sm"
-                  onClick={() => setShowRtcConfirm(true)}
-                  disabled={!rtcReason.trim()}
-                  data-ocid="part.delete_button"
-                >
-                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Record Return
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         {/* ── RIGHT column (1/3) ── */}
         <div className="space-y-4">
-          {/* Action Buttons (only for actionable states) */}
-          {!isReturnedToCompany &&
-            (part.status === "in_stock" || part.status === "issued") && (
-              <Card className="shadow-sm">
-                <CardHeader className="pb-2 pt-4">
-                  <CardTitle className="text-sm font-semibold text-slate-700">
-                    Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 space-y-2">
-                  {part.status === "in_stock" && (
-                    <Button
-                      className="bg-blue-600 hover:bg-blue-700 w-full"
-                      size="sm"
-                      onClick={() => {
-                        setIssueTechId("");
-                        setIssueCaseId("");
-                        setIssueNotes("");
-                        setIssueDialog(true);
-                      }}
-                      data-ocid="part.primary_button"
-                    >
-                      Issue to Technician
-                    </Button>
-                  )}
-                  {part.status === "issued" && (
-                    <>
-                      <Button
-                        className="bg-green-600 hover:bg-green-700 w-full"
-                        size="sm"
-                        onClick={() => markPartInstalled(part.id)}
-                        data-ocid="part.primary_button"
-                      >
-                        Mark Installed
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                          setReturnRemarks("");
-                          setReturnDialog(true);
-                        }}
-                        data-ocid="part.secondary_button"
-                      >
-                        Return to Store
-                      </Button>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+          {/* Issue to Technician button (in_stock only) */}
+          {part.status === "in_stock" && !isReturnedToCompany && (
+            <Card className="shadow-sm">
+              <CardContent className="pt-4 pb-4">
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700 w-full"
+                  size="sm"
+                  onClick={() => {
+                    setIssueTechId("");
+                    setIssueCaseId("");
+                    setIssueNotes("");
+                    setIssueDialog(true);
+                  }}
+                  data-ocid="part.primary_button"
+                >
+                  Issue to Technician
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Issued details if applicable */}
-          {part.status === "issued" && (
+          {/* Issue Details - shown for both issued and installed parts */}
+          {(isIssued || isInstalled) && (
             <Card className="shadow-sm">
               <CardHeader className="pb-2 pt-4">
                 <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -1054,7 +881,7 @@ export default function PartDetailPage() {
                   Issue Details
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 space-y-3">
                 <div className="space-y-2 text-sm divide-y divide-slate-100">
                   {(
                     [
@@ -1080,6 +907,235 @@ export default function PartDetailPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Action buttons only for issued parts, not installed */}
+                {isIssued && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    {!issueActionPending ? (
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                          size="sm"
+                          onClick={() => setIssueActionPending("install")}
+                          data-ocid="part.primary_button"
+                        >
+                          Mark Installed
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setIssueActionPending("return")}
+                          data-ocid="part.secondary_button"
+                        >
+                          Return to Store
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-slate-500">
+                          {issueActionPending === "install"
+                            ? "Confirm mark as installed?"
+                            : "Confirm return to store?"}
+                        </p>
+                        {issueActionPending === "return" && (
+                          <Textarea
+                            value={returnRemarks}
+                            onChange={(e) => setReturnRemarks(e.target.value)}
+                            placeholder="Remarks (optional)"
+                            rows={2}
+                            className="text-sm"
+                            data-ocid="part.textarea"
+                          />
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => setIssueActionPending(null)}
+                            data-ocid="part.cancel_button"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            className={`flex-1 ${issueActionPending === "install" ? "bg-green-600 hover:bg-green-700" : "bg-purple-600 hover:bg-purple-700"}`}
+                            onClick={() => {
+                              if (issueActionPending === "install")
+                                markPartInstalled(part.id);
+                              else returnPartToStore(part.id, returnRemarks);
+                              setIssueActionPending(null);
+                            }}
+                            data-ocid="part.confirm_button"
+                          >
+                            Confirm
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Return to Company — right column */}
+          {!isReturnedToCompany && (
+            <Card className="shadow-sm border-red-100">
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-sm font-semibold text-red-700 flex items-center gap-2">
+                  <RotateCcw className="h-4 w-4" />
+                  Return to Company
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3">
+                {isIssued ? (
+                  <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                    <p>
+                      Part is currently issued. Return to store first before
+                      returning to company.
+                    </p>
+                  </div>
+                ) : isInstalled ? (
+                  <div className="flex items-start gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-3">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
+                    <p>Part is installed and cannot be returned to company.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-700">
+                        This action is permanent and cannot be undone. Once a
+                        part is returned to company, it cannot be reissued or
+                        relocated.
+                      </p>
+                    </div>
+                    {/* Vendor */}
+                    {singleVendorName ? (
+                      <div>
+                        <Label className="text-xs text-slate-500">Vendor</Label>
+                        <p className="text-sm font-medium text-slate-800 mt-1">
+                          {singleVendorName}
+                        </p>
+                      </div>
+                    ) : uniqueVendors.length > 1 ? (
+                      <div>
+                        <Label
+                          className="text-xs text-slate-500"
+                          htmlFor="rtc-vendor"
+                        >
+                          Vendor
+                        </Label>
+                        <select
+                          id="rtc-vendor"
+                          className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                          value={rtcVendorId}
+                          onChange={(e) => setRtcVendorId(e.target.value)}
+                          data-ocid="part.select"
+                        >
+                          <option value="">— Select Vendor —</option>
+                          {uniqueVendors.map((pe) => {
+                            const vName = pe.vendorId
+                              ? vendors.find((v) => v.id === pe.vendorId)?.name
+                              : pe.vendorName;
+                            return (
+                              <option
+                                key={pe.vendorId ?? pe.vendorName}
+                                value={pe.vendorId ?? pe.vendorName ?? ""}
+                              >
+                                {vName}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    ) : null}
+
+                    <div>
+                      <Label
+                        className="text-xs text-slate-500"
+                        htmlFor="rtc-ref"
+                      >
+                        Reference No.{" "}
+                        <span className="text-slate-400">(optional)</span>
+                      </Label>
+                      <Input
+                        id="rtc-ref"
+                        className="mt-1 text-sm"
+                        placeholder="e.g. RTN-001"
+                        value={rtcRef}
+                        onChange={(e) => setRtcRef(e.target.value)}
+                        data-ocid="part.input"
+                      />
+                    </div>
+
+                    <div>
+                      <Label
+                        className="text-xs text-slate-500"
+                        htmlFor="rtc-date"
+                      >
+                        Date
+                      </Label>
+                      <Input
+                        id="rtc-date"
+                        type="date"
+                        className="mt-1 text-sm"
+                        value={rtcDate}
+                        onChange={(e) => setRtcDate(e.target.value)}
+                        data-ocid="part.input"
+                      />
+                    </div>
+
+                    <div>
+                      <Label
+                        className="text-xs text-slate-500"
+                        htmlFor="rtc-reason"
+                      >
+                        Reason <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="rtc-reason"
+                        className="mt-1 text-sm"
+                        placeholder="e.g. Defective, Damaged"
+                        value={rtcReason}
+                        onChange={(e) => setRtcReason(e.target.value)}
+                        data-ocid="part.input"
+                      />
+                    </div>
+
+                    <div>
+                      <Label
+                        className="text-xs text-slate-500"
+                        htmlFor="rtc-notes"
+                      >
+                        Notes <span className="text-slate-400">(optional)</span>
+                      </Label>
+                      <Textarea
+                        id="rtc-notes"
+                        className="mt-1 text-sm"
+                        rows={2}
+                        placeholder="Additional notes"
+                        value={rtcNotes}
+                        onChange={(e) => setRtcNotes(e.target.value)}
+                        data-ocid="part.textarea"
+                      />
+                    </div>
+
+                    <Button
+                      className="bg-red-600 hover:bg-red-700 w-full"
+                      size="sm"
+                      onClick={() => setShowRtcConfirm(true)}
+                      disabled={!rtcReason.trim()}
+                      data-ocid="part.delete_button"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                      Record Return
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
@@ -1101,7 +1157,6 @@ export default function PartDetailPage() {
                     const dotColor = getLifecycleDotColor(entry.action);
                     return (
                       <div key={entry.id} className="flex gap-3">
-                        {/* Dot + line */}
                         <div className="flex flex-col items-center">
                           <div
                             className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
@@ -1111,7 +1166,6 @@ export default function PartDetailPage() {
                             <div className="w-0.5 flex-1 bg-slate-200 my-1" />
                           )}
                         </div>
-                        {/* Content */}
                         <div className="pb-4 min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <span className="text-sm font-semibold text-slate-800">
@@ -1251,14 +1305,14 @@ export default function PartDetailPage() {
       <AlertDialog open={showRtcConfirm} onOpenChange={setShowRtcConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-700">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Confirm Return to Company
-            </AlertDialogTitle>
+            <AlertDialogTitle>Confirm Return to Company?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to return this part to the company? This
-              action is permanent and cannot be undone. The part will be removed
-              from inventory permanently.
+              This action is{" "}
+              <strong className="text-red-600">
+                permanent and cannot be undone
+              </strong>
+              . The part will be marked as returned to company and removed from
+              active inventory.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,10 +1,13 @@
 import Layout from "./components/Layout";
 import AIEnginePage from "./pages/AIEnginePage";
+import AdminNoticesPage from "./pages/AdminNoticesPage";
 import AdminPage from "./pages/AdminPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
 import CaseDetailPage from "./pages/CaseDetailPage";
 import CasesPage from "./pages/CasesPage";
 import CustomerHistoryPage from "./pages/CustomerHistoryPage";
 import DashboardPage from "./pages/DashboardPage";
+import DataManagementPage from "./pages/DataManagementPage";
 import InventoryPage from "./pages/InventoryPage";
 import IssuedPartsPage from "./pages/IssuedPartsPage";
 import LifecyclePage from "./pages/LifecyclePage";
@@ -59,6 +62,9 @@ export default function App() {
       {currentPage === "lifecycle" && <LifecyclePage />}
       {currentPage === "ai-engine" && <AIEnginePage />}
       {currentPage === "notifications" && <NotificationsPage />}
+      {currentPage === "audit-logs" && <AuditLogsPage />}
+      {currentPage === "notices" && <AdminNoticesPage />}
+      {currentPage === "data-management" && <DataManagementPage />}
       {![
         "dashboard",
         "cases",
@@ -83,6 +89,9 @@ export default function App() {
         "lifecycle",
         "ai-engine",
         "notifications",
+        "audit-logs",
+        "notices",
+        "data-management",
       ].includes(currentPage) && <DashboardPage />}
     </Layout>
   );
