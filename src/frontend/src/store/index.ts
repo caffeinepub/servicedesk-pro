@@ -729,6 +729,7 @@ interface StoreState {
   currentPage: PageType;
   selectedCaseId: string | null;
   selectedPartId: string | null;
+  navVendorId: string | null;
   notificationsGeneratedDate: string;
   lastMidnightResetDate: string;
 
@@ -760,7 +761,13 @@ interface StoreState {
   // Actions
   login: (email: string, password: string) => boolean;
   logout: () => void;
-  navigate: (page: PageType, caseId?: string, partId?: string) => void;
+  navigate: (
+    page: PageType,
+    caseId?: string,
+    partId?: string,
+    vendorId?: string,
+  ) => void;
+  clearNavVendorId: () => void;
   registerUser: (
     user: Omit<
       User,
@@ -948,6 +955,7 @@ export const useStore = create<StoreState>()(
         currentPage: "login" as PageType,
         selectedCaseId: null,
         selectedPartId: null,
+        navVendorId: null,
         notificationsGeneratedDate: "",
         lastMidnightResetDate: "",
         users: SEED_USERS,
@@ -1027,12 +1035,15 @@ export const useStore = create<StoreState>()(
           set({ currentUser: null, currentPage: "login" as PageType });
         },
 
-        navigate: (page, caseId, partId) =>
+        navigate: (page, caseId, partId, vendorId) =>
           set({
             currentPage: page,
             selectedCaseId: caseId ?? get().selectedCaseId,
             selectedPartId: partId ?? get().selectedPartId,
+            navVendorId: vendorId !== undefined ? vendorId : null,
           }),
+
+        clearNavVendorId: () => set({ navVendorId: null }),
 
         generateAutoNotifications: () => {
           const today = todayStr();

@@ -59,6 +59,31 @@ export default function App() {
       {currentPage === "lifecycle" && <LifecyclePage />}
       {currentPage === "ai-engine" && <AIEnginePage />}
       {currentPage === "notifications" && <NotificationsPage />}
+      {![
+        "dashboard",
+        "cases",
+        "new-case",
+        "case-detail",
+        "customer-history",
+        "parts",
+        "technicians",
+        "reports",
+        "settings",
+        "admin",
+        "profile",
+        "inventory",
+        "purchase",
+        "part-detail",
+        "issued-parts",
+        "warehouse",
+        "masters",
+        "part-requests",
+        "vendors",
+        "return-to-company",
+        "lifecycle",
+        "ai-engine",
+        "notifications",
+      ].includes(currentPage) && <DashboardPage />}
     </Layout>
   );
 }

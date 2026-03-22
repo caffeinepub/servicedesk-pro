@@ -1,12 +1,16 @@
 import {
   Building2,
   Edit,
+  IndianRupee,
   Mail,
   MapPin,
+  Package,
   Phone,
   Plus,
   ShoppingBag,
+  ShoppingCart,
   Trash2,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
@@ -143,23 +147,49 @@ export default function VendorsPage() {
             label: "Total Vendors",
             value: vendors.length,
             color: "text-blue-600",
+            icon: Users,
+            bg: "bg-blue-100",
+            gradient: "from-blue-50 to-white",
           },
           {
             label: "Total Purchases",
             value: totalPurchases,
             color: "text-purple-600",
+            icon: ShoppingCart,
+            bg: "bg-purple-100",
+            gradient: "from-purple-50 to-white",
           },
-          { label: "Total Units", value: totalUnits, color: "text-green-600" },
+          {
+            label: "Total Units",
+            value: totalUnits,
+            color: "text-green-600",
+            icon: Package,
+            bg: "bg-green-100",
+            gradient: "from-green-50 to-white",
+          },
           {
             label: "Total Spend",
             value: `₹${totalSpend.toLocaleString()}`,
             color: "text-amber-600",
+            icon: IndianRupee,
+            bg: "bg-amber-100",
+            gradient: "from-amber-50 to-white",
           },
         ].map((s) => (
-          <Card key={s.label} className="shadow-sm">
-            <CardContent className="p-4">
-              <p className="text-xs text-slate-500 mb-1">{s.label}</p>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+          <Card
+            key={s.label}
+            className={`shadow-sm border-0 bg-gradient-to-br ${s.gradient}`}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center flex-shrink-0`}
+              >
+                <s.icon className={`h-5 w-5 ${s.color}`} />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">{s.label}</p>
+                <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -274,7 +304,9 @@ export default function VendorsPage() {
                 <Button
                   variant="outline"
                   className="w-full h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
-                  onClick={() => navigate("purchase")}
+                  onClick={() =>
+                    navigate("purchase", undefined, undefined, v.id)
+                  }
                   data-ocid={`vendors.link.${i + 1}`}
                 >
                   <ShoppingBag className="h-3.5 w-3.5 mr-1" /> View Purchases →
