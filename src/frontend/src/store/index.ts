@@ -1,5 +1,15 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  backendApproveUser,
+  backendCreateUser,
+  backendDeleteUser,
+  backendEditUser,
+  backendGetUsers,
+  backendInitSeedUsers,
+  backendRejectUser,
+  backendUpdateLastLogin,
+} from "../services/userBackend";
 import type {
   ActivityLog,
   AdminNotice,
@@ -871,6 +881,7 @@ const SEED_STOREPILOT_AUDIT_LOGS: StorePilotAuditLog[] = [
 interface StoreState {
   // Auth
   currentUser: User | null;
+  isInitializing: boolean;
   currentPage: PageType;
   selectedCaseId: string | null;
   selectedPartId: string | null;
@@ -907,6 +918,9 @@ interface StoreState {
   storeNotifications: StoreNotification[];
 
   // Actions
+  setInitializing: (val: boolean) => void;
+  setUsers: (users: User[]) => void;
+  initUsers: () => Promise<void>;
   login: (email: string, password: string) => boolean;
   logout: () => void;
   navigate: (
@@ -1105,6 +1119,7 @@ export const useStore = create<StoreState>()(
 
       return {
         currentUser: null,
+        isInitializing: true,
         currentPage: "login" as PageType,
         selectedCaseId: null,
         selectedPartId: null,
@@ -1147,6 +1162,21 @@ export const useStore = create<StoreState>()(
         partRequests: [],
         storeNotifications: SEED_STORE_NOTIFICATIONS,
 
+        setInitializing: (val) => set({ isInitializing: val }),
+        setUsers: (users) => set({ users }),
+        initUsers: async () => {
+          try {
+            await backendInitSeedUsers();
+            const backendUsers = await backendGetUsers();
+            if (backendUsers.length > 0) {
+              get().setUsers(backendUsers);
+            }
+          } catch (e) {
+            console.error("initUsers error:", e);
+          } finally {
+            get().setInitializing(false);
+          }
+        },
         login: (email, password) => {
           const user = get().users.find(
             (u) =>
@@ -1171,6 +1201,7 @@ export const useStore = create<StoreState>()(
             ),
           }));
           logActivity(user.id, user.name, "Login", "User logged in");
+          backendUpdateLastLogin(user.id, loginTime).catch(() => {});
           get().generateAutoNotifications();
           get().runMidnightResets();
           return true;
@@ -1340,20 +1371,26 @@ export const useStore = create<StoreState>()(
         },
 
         registerUser: (user) => {
-          set((s) => ({
-            users: [
-              ...s.users,
-              {
-                ...user,
-                id: uid(),
-                createdAt: now(),
-                status: "pending" as const,
-                lastLogin: "",
-                lastActive: "",
-                isOnline: false,
-              },
-            ],
-          }));
+          const newRegUser = {
+            ...user,
+            id: uid(),
+            createdAt: now(),
+            status: "pending" as const,
+            lastLogin: "",
+            lastActive: "",
+            isOnline: false,
+          };
+          set((s) => ({ users: [...s.users, newRegUser] }));
+          backendCreateUser(
+            newRegUser.id,
+            newRegUser.name,
+            newRegUser.email,
+            newRegUser.password,
+            newRegUser.phone,
+            newRegUser.role,
+            newRegUser.status,
+            newRegUser.createdAt,
+          ).catch(() => {});
         },
 
         approveUser: (userId) => {
@@ -1370,6 +1407,7 @@ export const useStore = create<StoreState>()(
               "User Approved",
               `Approved user ${userId}`,
             );
+          backendApproveUser(userId).catch(() => {});
         },
 
         rejectUser: (userId) => {
@@ -1386,6 +1424,7 @@ export const useStore = create<StoreState>()(
               "User Rejected",
               `Rejected user ${userId}`,
             );
+          backendRejectUser(userId).catch(() => {});
         },
 
         updateUserRole: (userId, role) => {
@@ -1421,6 +1460,16 @@ export const useStore = create<StoreState>()(
               "User Created",
               `Created user ${userData.name} (${userData.email})`,
             );
+          backendCreateUser(
+            newUser.id,
+            newUser.name,
+            newUser.email,
+            newUser.password,
+            newUser.phone,
+            newUser.role,
+            newUser.status,
+            newUser.createdAt,
+          ).catch(() => {});
         },
 
         editUser: (userId, updates) => {
@@ -1432,6 +1481,17 @@ export const useStore = create<StoreState>()(
           }));
           if (cu)
             logActivity(cu.id, cu.name, "User Edited", `Edited user ${userId}`);
+          const updatedUser = get().users.find((u) => u.id === userId);
+          if (updatedUser) {
+            backendEditUser(
+              userId,
+              updatedUser.name,
+              updatedUser.email,
+              updatedUser.phone,
+              updatedUser.role,
+              updatedUser.password,
+            ).catch(() => {});
+          }
         },
 
         deleteUser: (userId) => {
@@ -1444,6 +1504,7 @@ export const useStore = create<StoreState>()(
               "User Deleted",
               `Deleted user ${userId}`,
             );
+          backendDeleteUser(userId).catch(() => {});
         },
 
         updateCurrentUser: (updates) => {
@@ -1541,14 +1602,13 @@ export const useStore = create<StoreState>()(
             );
         },
 
-        addAuditEntry: (entry) => {
+        addAuditEntry: (entry) =>
           set((s) => ({
             auditLog: [
               { ...entry, id: uid(), timestamp: now() },
               ...s.auditLog,
             ],
-          }));
-        },
+          })),
 
         addTechnician: (t) => {
           const cu = get().currentUser;
@@ -1597,19 +1657,17 @@ export const useStore = create<StoreState>()(
             );
         },
 
-        addReminder: (r) => {
+        addReminder: (r) =>
           set((s) => ({
             reminders: [...s.reminders, { ...r, id: uid(), createdAt: now() }],
-          }));
-        },
+          })),
 
-        completeReminder: (id) => {
+        completeReminder: (id) =>
           set((s) => ({
             reminders: s.reminders.map((r) =>
               r.id === id ? { ...r, isDone: true } : r,
             ),
-          }));
-        },
+          })),
 
         deleteNotification: (id) =>
           set((s) => ({
@@ -1623,28 +1681,25 @@ export const useStore = create<StoreState>()(
             ),
           })),
 
-        markNotificationRead: (id) => {
+        markNotificationRead: (id) =>
           set((s) => ({
             notifications: s.notifications.map((n) =>
               n.id === id ? { ...n, isRead: true } : n,
             ),
-          }));
-        },
+          })),
 
-        markAllNotificationsRead: () => {
+        markAllNotificationsRead: () =>
           set((s) => ({
             notifications: s.notifications.map((n) => ({ ...n, isRead: true })),
-          }));
-        },
+          })),
 
-        addNotification: (n) => {
+        addNotification: (n) =>
           set((s) => ({
             notifications: [
               { ...n, id: uid(), createdAt: now() },
               ...s.notifications,
             ],
-          }));
-        },
+          })),
 
         updateSettings: (s) => {
           const cu = get().currentUser;
@@ -1778,46 +1833,40 @@ export const useStore = create<StoreState>()(
               `Added vendor: ${v.name}`,
             );
         },
-        updateVendor: (id, updates) => {
+        updateVendor: (id, updates) =>
           set((s) => ({
             vendors: s.vendors.map((v) =>
               v.id === id ? { ...v, ...updates } : v,
             ),
-          }));
-        },
-        deleteVendor: (id) => {
-          set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) }));
-        },
+          })),
+        deleteVendor: (id) =>
+          set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) })),
 
         // ── Store notification actions ────────────────────────────────────────────
-        addStoreNotification: (n) => {
+        addStoreNotification: (n) =>
           set((s) => ({
             storeNotifications: [
               { ...n, id: uid(), createdAt: now() },
               ...s.storeNotifications,
             ],
-          }));
-        },
-        markStoreNotificationRead: (id) => {
+          })),
+        markStoreNotificationRead: (id) =>
           set((s) => ({
             storeNotifications: s.storeNotifications.map((n) =>
               n.id === id ? { ...n, isRead: true } : n,
             ),
-          }));
-        },
-        markAllStoreNotificationsRead: () => {
+          })),
+        markAllStoreNotificationsRead: () =>
           set((s) => ({
             storeNotifications: s.storeNotifications.map((n) => ({
               ...n,
               isRead: true,
             })),
-          }));
-        },
-        deleteStoreNotification: (id) => {
+          })),
+        deleteStoreNotification: (id) =>
           set((s) => ({
             storeNotifications: s.storeNotifications.filter((n) => n.id !== id),
-          }));
-        },
+          })),
 
         // ── StorePilot actions ────────────────────────────────────────────────
 
@@ -1837,18 +1886,16 @@ export const useStore = create<StoreState>()(
               `Added company: ${name}`,
             );
         },
-        updateStockCompany: (id, name) => {
+        updateStockCompany: (id, name) =>
           set((s) => ({
             stockCompanies: s.stockCompanies.map((c) =>
               c.id === id ? { ...c, name } : c,
             ),
-          }));
-        },
-        deleteStockCompany: (id) => {
+          })),
+        deleteStockCompany: (id) =>
           set((s) => ({
             stockCompanies: s.stockCompanies.filter((c) => c.id !== id),
-          }));
-        },
+          })),
 
         addStockCategory: (name) => {
           const cu = get().currentUser;
@@ -1866,18 +1913,16 @@ export const useStore = create<StoreState>()(
               `Added category: ${name}`,
             );
         },
-        updateStockCategory: (id, name) => {
+        updateStockCategory: (id, name) =>
           set((s) => ({
             stockCategories: s.stockCategories.map((c) =>
               c.id === id ? { ...c, name } : c,
             ),
-          }));
-        },
-        deleteStockCategory: (id) => {
+          })),
+        deleteStockCategory: (id) =>
           set((s) => ({
             stockCategories: s.stockCategories.filter((c) => c.id !== id),
-          }));
-        },
+          })),
 
         addStockPartName: (name) => {
           const cu = get().currentUser;
@@ -1895,46 +1940,40 @@ export const useStore = create<StoreState>()(
               `Added part name: ${name}`,
             );
         },
-        updateStockPartName: (id, name) => {
+        updateStockPartName: (id, name) =>
           set((s) => ({
             stockPartNames: s.stockPartNames.map((p) =>
               p.id === id ? { ...p, name } : p,
             ),
-          }));
-        },
-        deleteStockPartName: (id) => {
+          })),
+        deleteStockPartName: (id) =>
           set((s) => ({
             stockPartNames: s.stockPartNames.filter((p) => p.id !== id),
-          }));
-        },
+          })),
 
-        addWarehouse: (name, address) => {
+        addWarehouse: (name, address) =>
           set((s) => ({
             warehouses: [
               ...s.warehouses,
               { id: uid(), name, address, createdAt: now() },
             ],
-          }));
-        },
-        updateWarehouse: (id, name, address) => {
+          })),
+        updateWarehouse: (id, name, address) =>
           set((s) => ({
             warehouses: s.warehouses.map((w) =>
               w.id === id ? { ...w, name, address } : w,
             ),
-          }));
-        },
-        deleteWarehouse: (id) => {
-          set((s) => ({ warehouses: s.warehouses.filter((w) => w.id !== id) }));
-        },
-        addRackToWarehouse: (name, warehouseId) => {
+          })),
+        deleteWarehouse: (id) =>
+          set((s) => ({ warehouses: s.warehouses.filter((w) => w.id !== id) })),
+        addRackToWarehouse: (name, warehouseId) =>
           set((s) => ({
             racks: [
               ...s.racks,
               { id: uid(), name, warehouseId, createdAt: now() },
             ],
-          }));
-        },
-        addRack: (name) => {
+          })),
+        addRack: (name) =>
           set((s) => ({
             racks: [
               ...s.racks,
@@ -1945,49 +1984,40 @@ export const useStore = create<StoreState>()(
                 createdAt: now(),
               },
             ],
-          }));
-        },
-        updateRack: (id, name) => {
+          })),
+        updateRack: (id, name) =>
           set((s) => ({
             racks: s.racks.map((r) => (r.id === id ? { ...r, name } : r)),
-          }));
-        },
-        deleteRack: (id) => {
-          set((s) => ({ racks: s.racks.filter((r) => r.id !== id) }));
-        },
+          })),
+        deleteRack: (id) =>
+          set((s) => ({ racks: s.racks.filter((r) => r.id !== id) })),
 
-        addShelf: (name, rackId) => {
+        addShelf: (name, rackId) =>
           set((s) => ({
             shelves: [
               ...s.shelves,
               { id: uid(), name, rackId, createdAt: now() },
             ],
-          }));
-        },
-        updateShelf: (id, updates) => {
+          })),
+        updateShelf: (id, updates) =>
           set((s) => ({
             shelves: s.shelves.map((sh) =>
               sh.id === id ? { ...sh, ...updates } : sh,
             ),
-          }));
-        },
-        deleteShelf: (id) => {
-          set((s) => ({ shelves: s.shelves.filter((sh) => sh.id !== id) }));
-        },
+          })),
+        deleteShelf: (id) =>
+          set((s) => ({ shelves: s.shelves.filter((sh) => sh.id !== id) })),
 
-        addBin: (name, shelfId) => {
+        addBin: (name, shelfId) =>
           set((s) => ({
             bins: [...s.bins, { id: uid(), name, shelfId, createdAt: now() }],
-          }));
-        },
-        updateBin: (id, updates) => {
+          })),
+        updateBin: (id, updates) =>
           set((s) => ({
             bins: s.bins.map((b) => (b.id === id ? { ...b, ...updates } : b)),
-          }));
-        },
-        deleteBin: (id) => {
-          set((s) => ({ bins: s.bins.filter((b) => b.id !== id) }));
-        },
+          })),
+        deleteBin: (id) =>
+          set((s) => ({ bins: s.bins.filter((b) => b.id !== id) })),
 
         addPurchaseEntry: (entry, partCodes) => {
           const cu = get().currentUser;
@@ -2238,7 +2268,7 @@ export const useStore = create<StoreState>()(
         },
 
         // ── Part Request actions ────────────────────────────────────────────
-        addPartRequest: (req) => {
+        addPartRequest: (req) =>
           set((s) => ({
             partRequests: [
               {
@@ -2257,8 +2287,7 @@ export const useStore = create<StoreState>()(
               },
               ...s.partRequests,
             ],
-          }));
-        },
+          })),
 
         issuePartRequest: (id, technicianId) => {
           const cu = get().currentUser;
@@ -2330,7 +2359,7 @@ export const useStore = create<StoreState>()(
               `Part request ${id} rejected`,
             );
         },
-        addPartImages: (partId, imageUrls) => {
+        addPartImages: (partId, imageUrls) =>
           set((s) => ({
             partItems: s.partItems.map((p) =>
               p.id === partId
@@ -2340,9 +2369,8 @@ export const useStore = create<StoreState>()(
                   }
                 : p,
             ),
-          }));
-        },
-        removePartImage: (partId, imageUrl) => {
+          })),
+        removePartImage: (partId, imageUrl) =>
           set((s) => ({
             partItems: s.partItems.map((p) =>
               p.id === partId
@@ -2354,22 +2382,19 @@ export const useStore = create<StoreState>()(
                   }
                 : p,
             ),
-          }));
-        },
-        updatePurchaseInvoiceImage: (purchaseId, imageUrl) => {
+          })),
+        updatePurchaseInvoiceImage: (purchaseId, imageUrl) =>
           set((s) => ({
             purchaseEntries: s.purchaseEntries.map((pe) =>
               pe.id === purchaseId ? { ...pe, invoiceImageUrl: imageUrl } : pe,
             ),
-          }));
-        },
-        removePurchaseInvoiceImage: (purchaseId) => {
+          })),
+        removePurchaseInvoiceImage: (purchaseId) =>
           set((s) => ({
             purchaseEntries: s.purchaseEntries.map((pe) =>
               pe.id === purchaseId ? { ...pe, invoiceImageUrl: undefined } : pe,
             ),
-          }));
-        },
+          })),
       };
     },
     {

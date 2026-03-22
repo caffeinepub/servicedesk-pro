@@ -1,12 +1,20 @@
 import {
+  Activity,
   AlertTriangle,
+  Archive,
+  BarChart2,
   Brain,
+  BrainCircuit,
   CheckCircle,
   Cpu,
+  LayoutDashboard,
+  Package,
   RefreshCw,
+  RotateCcw,
   TrendingDown,
   TrendingUp,
   Users,
+  Wrench,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
@@ -212,7 +220,7 @@ export default function AIEnginePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
-      <div className="bg-gradient-to-r from-violet-600 to-purple-700 text-white px-6 py-6">
+      <div className="bg-gradient-to-r from-violet-600 to-purple-700 text-white rounded-2xl px-6 py-6 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
@@ -255,17 +263,37 @@ export default function AIEnginePage() {
                   value={tab}
                   className="capitalize data-[state=active]:bg-violet-600 data-[state=active]:text-white rounded-xl px-4"
                 >
-                  {tab === "demand"
-                    ? "Demand Forecast"
-                    : tab === "health"
-                      ? "Stock Health"
-                      : tab === "technicians"
-                        ? "Technician Insights"
-                        : tab === "reorder"
-                          ? "Reorder"
-                          : tab === "deadstock"
-                            ? "Dead Stock"
-                            : "Overview"}
+                  {tab === "demand" ? (
+                    <>
+                      <TrendingUp className="h-3.5 w-3.5 mr-1" />
+                      Demand Forecast
+                    </>
+                  ) : tab === "health" ? (
+                    <>
+                      <Activity className="h-3.5 w-3.5 mr-1" />
+                      Stock Health
+                    </>
+                  ) : tab === "technicians" ? (
+                    <>
+                      <Users className="h-3.5 w-3.5 mr-1" />
+                      Technician Insights
+                    </>
+                  ) : tab === "reorder" ? (
+                    <>
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                      Reorder
+                    </>
+                  ) : tab === "deadstock" ? (
+                    <>
+                      <Archive className="h-3.5 w-3.5 mr-1" />
+                      Dead Stock
+                    </>
+                  ) : (
+                    <>
+                      <LayoutDashboard className="h-3.5 w-3.5 mr-1" />
+                      Overview
+                    </>
+                  )}
                 </TabsTrigger>
               ))}
             </TabsList>

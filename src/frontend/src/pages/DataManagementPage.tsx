@@ -265,9 +265,9 @@ export default function DataManagementPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 to-rose-700 text-white px-6 py-6">
+      <div className="bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-2xl px-6 py-6 shadow-lg">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-white/20 rounded-xl">
             <Database className="h-6 w-6" />

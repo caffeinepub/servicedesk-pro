@@ -1,4 +1,16 @@
-import { CheckCircle, Plus, X } from "lucide-react";
+import {
+  Building2,
+  CheckCircle,
+  MessageSquare,
+  Package,
+  Phone,
+  Plus,
+  Save,
+  Settings,
+  Settings2,
+  User,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import {
@@ -46,9 +58,16 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Settings</h2>
-        <p className="text-sm text-gray-500">Configure system settings</p>
+      <div className="bg-gradient-to-r from-gray-600 to-slate-700 text-white rounded-xl px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Settings className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Settings</h1>
+            <p className="text-gray-300 text-sm">Configure system settings</p>
+          </div>
+        </div>
       </div>
 
       {!isAdmin && (

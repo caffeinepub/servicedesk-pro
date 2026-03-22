@@ -1,14 +1,18 @@
 import {
+  ArrowLeftRight,
   Building2,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   Folder,
   FolderOpen,
   Layers,
   MapPin,
   Package,
+  PackageOpen,
   Search,
   Tag,
+  Wrench,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -1109,10 +1113,10 @@ function PartRelocationTab() {
 
 type TabId = "spare-parts" | "part-search" | "part-relocation";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "spare-parts", label: "Spare Parts" },
-  { id: "part-search", label: "Part Search" },
-  { id: "part-relocation", label: "Part Relocation" },
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "spare-parts", label: "Spare Parts", icon: PackageOpen },
+  { id: "part-search", label: "Part Search", icon: Search },
+  { id: "part-relocation", label: "Part Relocation", icon: ArrowLeftRight },
 ];
 
 export default function InventoryPage() {
@@ -1121,11 +1125,18 @@ export default function InventoryPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Inventory</h1>
-        <p className="text-sm text-slate-500">
-          Manage and search spare parts stock
-        </p>
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Package className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Inventory</h1>
+            <p className="text-emerald-200 text-sm">
+              Manage and search spare parts stock
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -1135,7 +1146,7 @@ export default function InventoryPage() {
             <button
               key={tab.id}
               type="button"
-              className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
                 activeTab === tab.id
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
@@ -1143,6 +1154,7 @@ export default function InventoryPage() {
               onClick={() => setActiveTab(tab.id)}
               data-ocid="inventory.tab"
             >
+              <tab.icon className="h-4 w-4" />
               {tab.label}
             </button>
           ))}

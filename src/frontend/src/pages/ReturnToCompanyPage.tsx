@@ -1,8 +1,10 @@
 import {
   AlertTriangle,
   Building,
+  Building2,
   Package,
   Plus,
+  RotateCcw,
   Search,
   X,
 } from "lucide-react";
@@ -187,18 +189,21 @@ export default function ReturnToCompanyPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">
-            Return to Company
-          </h1>
-          <p className="text-sm text-slate-500">
-            Track defective parts returned to vendors/companies
-          </p>
+      <div className="bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <RotateCcw className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Return to Company</h1>
+            <p className="text-red-200 text-sm">
+              Track defective parts returned to vendors/companies
+            </p>
+          </div>
         </div>
         <Button
           onClick={openModal}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-white text-red-700 hover:bg-red-50"
           data-ocid="rtc.open_modal_button"
         >
           <Plus className="h-4 w-4 mr-1" /> Record Return

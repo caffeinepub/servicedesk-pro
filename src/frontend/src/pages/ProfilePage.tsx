@@ -1,3 +1,14 @@
+import {
+  Calendar,
+  CheckCircle,
+  Key,
+  Lock,
+  Mail,
+  Phone,
+  Shield,
+  User,
+  UserCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
@@ -72,17 +83,26 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">My Profile</h2>
-        <p className="text-sm text-gray-500">
-          Manage your account details and password
-        </p>
+      <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <UserCircle className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">My Profile</h1>
+            <p className="text-indigo-200 text-sm">
+              Manage your account details and password
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Profile Info Card */}
       <Card className="shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Profile Information</CardTitle>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <User className="h-4 w-4 text-indigo-500" /> Profile Information
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4 mb-4">
@@ -165,7 +185,9 @@ export default function ProfilePage() {
       {/* Change Password Card */}
       <Card className="shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Change Password</CardTitle>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Lock className="h-4 w-4 text-slate-500" /> Change Password
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1">

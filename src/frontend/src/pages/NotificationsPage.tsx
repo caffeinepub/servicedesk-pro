@@ -1,6 +1,8 @@
 import {
+  AlertCircle,
   AlertTriangle,
   Bell,
+  BellDot,
   BellOff,
   Bot,
   CheckCheck,
@@ -9,6 +11,8 @@ import {
   Package,
   Plus,
   Repeat,
+  RotateCcw,
+  Send,
   Trash2,
   TrendingDown,
   X,
@@ -261,20 +265,40 @@ export default function NotificationsPage() {
     setDismissId(null);
   };
 
-  const FILTER_TABS: { key: Filter; label: string; color: string }[] = [
-    { key: "all", label: "All", color: "bg-amber-500" },
-    { key: "unread", label: "Unread", color: "bg-red-500" },
-    { key: "low_stock", label: "Low Stock", color: "bg-rose-500" },
-    { key: "issued", label: "Issued", color: "bg-amber-500" },
-    { key: "returned", label: "Returned", color: "bg-blue-500" },
-    { key: "reminders", label: "Reminders", color: "bg-purple-500" },
-    { key: "ai", label: "AI", color: "bg-violet-500" },
+  const FILTER_TABS: {
+    key: Filter;
+    label: string;
+    color: string;
+    icon: React.ElementType;
+  }[] = [
+    { key: "all", label: "All", color: "bg-amber-500", icon: Bell },
+    { key: "unread", label: "Unread", color: "bg-red-500", icon: BellDot },
+    {
+      key: "low_stock",
+      label: "Low Stock",
+      color: "bg-rose-500",
+      icon: AlertTriangle,
+    },
+    { key: "issued", label: "Issued", color: "bg-amber-500", icon: Send },
+    {
+      key: "returned",
+      label: "Returned",
+      color: "bg-blue-500",
+      icon: RotateCcw,
+    },
+    {
+      key: "reminders",
+      label: "Reminders",
+      color: "bg-purple-500",
+      icon: Clock,
+    },
+    { key: "ai", label: "AI", color: "bg-violet-500", icon: Bot },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-6">
+      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-6 rounded-2xl shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
@@ -313,54 +337,47 @@ export default function NotificationsPage() {
             </Button>
           </div>
         </div>
+      </div>
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-2 mt-4 flex-wrap">
-          {FILTER_TABS.map((f) => (
-            <button
-              type="button"
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                filter === f.key
-                  ? "bg-white text-amber-700 shadow-sm"
-                  : "bg-white/20 text-white hover:bg-white/30"
-              }`}
-              data-ocid="notifications.tab"
-            >
-              {f.label}
-              {f.key === "unread" && unread > 0 && (
-                <span className="ml-1.5 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                  {unread}
-                </span>
-              )}
-            </button>
-          ))}
-          {/* Priority filter */}
-          <div className="ml-auto">
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Priority)}
-              className="bg-white/20 text-white text-xs rounded-full px-3 py-1.5 border-0 outline-none font-semibold cursor-pointer"
-            >
-              <option value="all" className="text-slate-800">
-                All Priority
-              </option>
-              <option value="high" className="text-slate-800">
-                High
-              </option>
-              <option value="medium" className="text-slate-800">
-                Medium
-              </option>
-              <option value="low" className="text-slate-800">
-                Low
-              </option>
-            </select>
-          </div>
+      {/* Filter tabs - outside header */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {FILTER_TABS.map((f) => (
+          <button
+            type="button"
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+              filter === f.key
+                ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                : "bg-white text-slate-600 border-slate-200 hover:border-amber-300 hover:text-amber-600"
+            }`}
+            data-ocid="notifications.tab"
+          >
+            <f.icon className="h-3 w-3" />
+            {f.label}
+            {f.key === "unread" && unread > 0 && (
+              <span className="ml-1.5 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                {unread}
+              </span>
+            )}
+          </button>
+        ))}
+        {/* Priority filter */}
+        <div className="ml-auto">
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as Priority)}
+            className="bg-white text-slate-600 text-xs rounded-full px-3 py-1.5 border border-slate-200 outline-none font-semibold cursor-pointer hover:border-amber-300"
+          >
+            <option value="all">All Priority</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
         </div>
       </div>
 
-      <div className="px-6 py-6 max-w-4xl mx-auto space-y-6">
+      <div className="max-w-4xl space-y-6">
         {/* Reminders section */}
         {(filter === "all" || filter === "reminders") && (
           <div>

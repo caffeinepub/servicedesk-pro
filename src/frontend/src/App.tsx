@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Layout from "./components/Layout";
 import AIEnginePage from "./pages/AIEnginePage";
 import AdminNoticesPage from "./pages/AdminNoticesPage";
@@ -30,7 +31,25 @@ import WarehousePage from "./pages/WarehousePage";
 import { useStore } from "./store";
 
 export default function App() {
-  const { currentUser, currentPage } = useStore();
+  const { currentUser, currentPage, isInitializing, initUsers } = useStore();
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: initUsers is a stable zustand action, run once on mount
+  useEffect(() => {
+    initUsers();
+  }, []);
+
+  if (isInitializing) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-950 z-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white text-lg font-medium tracking-wide">
+            Loading...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     if (currentPage === "register") return <RegisterPage />;

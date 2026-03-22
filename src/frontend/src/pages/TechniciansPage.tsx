@@ -1,4 +1,4 @@
-import { Pencil, PlusCircle, Trash2 } from "lucide-react";
+import { Pencil, Phone, PlusCircle, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import {
@@ -84,15 +84,24 @@ export default function TechniciansPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Technicians</h2>
-          <p className="text-sm text-gray-500">
-            {technicians.length} technicians registered
-          </p>
+      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Wrench className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Technicians</h1>
+            <p className="text-teal-200 text-sm">
+              {technicians.length} technician
+              {technicians.length !== 1 ? "s" : ""} registered
+            </p>
+          </div>
         </div>
         {isAdmin && (
-          <Button onClick={() => open()}>
+          <Button
+            onClick={() => open()}
+            className="bg-white text-teal-700 hover:bg-teal-50"
+          >
             <PlusCircle className="h-4 w-4 mr-1" />
             Add Technician
           </Button>

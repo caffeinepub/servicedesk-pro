@@ -5,12 +5,16 @@ import {
   Building2,
   Folder,
   FolderOpen,
+  LayoutGrid,
   MapPin,
+  Package,
   Pencil,
   Plus,
+  Search,
   Server,
   Tag,
   Trash2,
+  Warehouse as WarehouseIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "../components/ui/badge";
@@ -906,20 +910,27 @@ export default function WarehousePage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Warehouse</h1>
-        <p className="text-sm text-slate-500">
-          Manage warehouse locations and stock placement
-        </p>
+      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white rounded-2xl px-6 py-6 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Building2 className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Warehouse</h1>
+            <p className="text-slate-300 text-sm">
+              Manage warehouse locations and stock placement
+            </p>
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="layout" className="w-full">
         <TabsList className="mb-4" data-ocid="warehouse.tab">
           <TabsTrigger value="layout" data-ocid="warehouse.tab">
-            Layout
+            <LayoutGrid className="h-4 w-4 mr-1.5" /> Layout
           </TabsTrigger>
           <TabsTrigger value="pending" data-ocid="warehouse.tab">
-            Location Pending
+            <MapPin className="h-4 w-4 mr-1.5" /> Location Pending
             {locationPending.length > 0 && (
               <span className="ml-1.5 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5">
                 {locationPending.length}
@@ -1005,32 +1016,41 @@ export default function WarehousePage() {
                     return (
                       <div
                         key={wh.id}
-                        className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                        className="overflow-hidden rounded-2xl shadow-md hover:shadow-xl transition-all group"
                         data-ocid={`warehouse.item.${i + 1}`}
                       >
                         <button
                           type="button"
-                          className="cursor-pointer text-left w-full"
+                          className="cursor-pointer text-left w-full bg-gradient-to-br from-blue-600 to-indigo-700 p-5 text-white"
                           onClick={() => setSelectedWarehouse(wh)}
                         >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Building2 className="h-5 w-5 text-blue-500" />
-                            <h3 className="font-bold text-slate-900 hover:text-blue-600 transition-colors">
-                              {wh.name}
-                            </h3>
+                          <div className="flex items-start gap-3 mb-3">
+                            <div className="p-2.5 bg-white/20 rounded-xl">
+                              <Building2 className="h-6 w-6" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold text-lg group-hover:text-blue-100 transition-colors truncate">
+                                {wh.name}
+                              </h3>
+                              <p className="text-blue-200 text-sm mt-0.5 truncate">
+                                {wh.address || "No address"}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-sm text-slate-500 mt-0.5">
-                            {wh.address}
-                          </p>
-                          <div className="mt-3 flex items-center gap-1.5">
-                            <Server className="h-3.5 w-3.5 text-slate-400" />
-                            <Badge variant="outline" className="text-xs">
-                              {whRacks.length} Rack(s)
-                            </Badge>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-2.5 py-1">
+                              <Server className="h-3.5 w-3.5 text-blue-200" />
+                              <span className="text-xs font-semibold text-white">
+                                {whRacks.length} Rack(s)
+                              </span>
+                            </div>
+                            <span className="text-blue-200 text-xs ml-auto">
+                              Click to explore →
+                            </span>
                           </div>
                         </button>
                         {isAdmin && (
-                          <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100">
+                          <div className="flex gap-2 p-3 bg-slate-50">
                             <Button
                               size="sm"
                               variant="outline"
@@ -1069,23 +1089,35 @@ export default function WarehousePage() {
         <TabsContent value="pending">
           <div className="space-y-4">
             {/* Section Title */}
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-amber-500" />
-                Location Pending Parts
-              </h2>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Parts that have not been assigned a warehouse location yet.
-              </p>
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl px-6 py-5 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/20 rounded-xl">
+                  <MapPin className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold">Location Pending Parts</h2>
+                  <p className="text-amber-100 text-sm mt-0.5">
+                    Parts that have not been assigned a warehouse location yet.
+                  </p>
+                </div>
+                {locationPending.length > 0 && (
+                  <span className="bg-white/20 text-white font-bold text-lg px-3 py-1 rounded-xl">
+                    {locationPending.length}
+                  </span>
+                )}
+              </div>
             </div>
 
-            <Input
-              placeholder="Search by part code or part name..."
-              value={pendingSearch}
-              onChange={(e) => setPendingSearch(e.target.value)}
-              className="max-w-sm"
-              data-ocid="warehouse.search_input"
-            />
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by part code or part name..."
+                value={pendingSearch}
+                onChange={(e) => setPendingSearch(e.target.value)}
+                className="pl-9"
+                data-ocid="warehouse.search_input"
+              />
+            </div>
 
             {filteredPending.length === 0 ? (
               <div
@@ -1138,7 +1170,7 @@ export default function WarehousePage() {
                       return (
                         <tr
                           key={p.id}
-                          className="border-b border-slate-100 hover:bg-slate-50"
+                          className={`border-b border-slate-100 hover:bg-amber-50 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
                           data-ocid={`warehouse.row.${i + 1}`}
                         >
                           <td className="px-4 py-3">
@@ -1174,7 +1206,7 @@ export default function WarehousePage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-blue-600 border-blue-300 text-xs"
+                              className="text-emerald-600 border-emerald-300 text-xs hover:bg-emerald-50"
                               onClick={() => {
                                 setAssignPartId(p.id);
                                 setAssignDialog(true);

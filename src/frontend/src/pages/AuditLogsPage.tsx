@@ -1,9 +1,18 @@
 import {
+  Calendar,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
   Filter,
+  LogIn,
+  LogOut,
+  Pencil,
+  Plus,
+  RotateCcw,
+  ScrollText,
   Search,
+  Send,
+  Trash2,
   X,
 } from "lucide-react";
 import type React from "react";
@@ -29,6 +38,16 @@ const ACTION_COLORS: Record<string, string> = {
   RETURN: "bg-slate-100 text-slate-600 border border-slate-200",
   LOGIN: "bg-violet-100 text-violet-700 border border-violet-200",
   LOGOUT: "bg-gray-100 text-gray-600 border border-gray-200",
+};
+
+const ACTION_ICONS: Record<string, React.ElementType> = {
+  CREATE: Plus,
+  UPDATE: Pencil,
+  DELETE: Trash2,
+  ISSUE: Send,
+  RETURN: RotateCcw,
+  LOGIN: LogIn,
+  LOGOUT: LogOut,
 };
 
 const ACTIONS: ActionType[] = [
@@ -204,9 +223,9 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="bg-gradient-to-r from-slate-700 to-gray-800 text-white px-6 py-6">
+      <div className="bg-gradient-to-r from-slate-700 to-gray-800 text-white px-6 py-6 rounded-2xl shadow-lg">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
@@ -225,7 +244,7 @@ export default function AuditLogsPage() {
         </div>
       </div>
 
-      <div className="px-6 py-6 max-w-6xl mx-auto">
+      <div className="max-w-6xl">
         {/* Filters */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-3">
@@ -411,13 +430,22 @@ export default function AuditLogsPage() {
                                                 >
                                                   <td className="py-2">
                                                     <span
-                                                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
                                                         ACTION_COLORS[
                                                           log.action
                                                         ] ??
                                                         "bg-slate-100 text-slate-600"
                                                       }`}
                                                     >
+                                                      {(() => {
+                                                        const I =
+                                                          ACTION_ICONS[
+                                                            log.action
+                                                          ];
+                                                        return I ? (
+                                                          <I className="h-2.5 w-2.5" />
+                                                        ) : null;
+                                                      })()}
                                                       {log.action}
                                                     </span>
                                                   </td>

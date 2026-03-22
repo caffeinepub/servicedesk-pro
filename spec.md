@@ -1,46 +1,26 @@
 # Servicedesk-Pro
 
 ## Current State
-Full-stack service centre management app with StorePilot inventory system. Version 39 is deployed. Major features implemented: sidebar with role-gating, Layout with NoticeBanner, InlineSearch, SectionPill, all pages for Cases/Inventory/Admin.
+All data including users is stored in Zustand + localStorage (frontend-only). This means user accounts created/approved by admin on one device are not visible when a different user opens the app on their own device. Admin can log in (hardcoded SEED_USERS), but newly created or approved users cannot sign in from a different browser/device.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Sidebar collapse toggle moved to TOP of sidebar (inside panel, above nav sections), using a modern ChevronLeft/ChevronRight pill button style
-- Most Active Technician card in AI Engine Overview tab (below Stock Health Score and Demand Accuracy)
-- Advanced features in AdminNoticesPage: scheduling (start/end date), font size control, bold/italic toggle, speed slider, direction selector, color/theme picker, preview before publishing, pause/resume toggle, active/inactive status per notice
-- Data Management page: organized per-data-type cards (Cases, Inventory Parts, Purchase Records, Issued Parts History, Lifecycle Events, Audit Logs, Notifications), each card shows record count + delete all + filter by date range + confirmation dialogs with count
+- Motoko backend: user management canister with functions to create, list, approve, reject, edit, delete users and verify login credentials
+- Backend initialization: seed admin user (kumardsemail@gmail.com / Admin@123) and default seed users on first deploy
+- Frontend: on app startup, fetch users from backend and populate Zustand store (replacing SEED_USERS as source of truth)
+- Frontend: login now calls backend to verify credentials
+- Frontend: createUser, approveUser, rejectUser, editUser, deleteUser all write to backend first, then update Zustand cache
 
 ### Modify
-- Layout.tsx: Remove X close button from NoticeBanner entirely (no user-dismissable notices)
-- Layout.tsx: Move sidebar collapse/expand toggle button from bottom to TOP of sidebar content (above the nav sections, below the logo area), with modern styling
-- Layout.tsx: Add proper padding to `<main>` element (p-6) so page content is not flush against edges
-- All pages: Add Lucide icons consistently to every section header, card title, table column header, button, tab, form label, stat card — everywhere. Use contextually appropriate icons from Lucide.
-- MastersPage: Part Status by Company table should be full-width, matching the same card/section size as the company list below it
-- AIEnginePage: Add Most Active Technician card in Overview tab, positioned below Stock Health Score and Demand Accuracy metrics
-- footer: Ensure no footer copyright text appears on any page
+- store/index.ts: login, createUser, approveUser, rejectUser, editUser, deleteUser, registerUser become async and call backend
+- App.tsx: add loading state while fetching users from backend on init
 
 ### Remove
-- X (close) button from NoticeBanner in Layout.tsx — notices cannot be dismissed by users
-- Sidebar collapse toggle from bottom of sidebar
-- Footer copyright text from all pages
+- SEED_USERS dependency as the sole source of user truth (backend becomes source of truth)
 
 ## Implementation Plan
-1. Update Layout.tsx:
-   - Remove X button from NoticeBanner
-   - Remove `dismissed` state since no dismissal
-   - Move collapse toggle to top of SidebarContent, right below the logo area
-   - Style it as a modern pill/rounded button with ChevronLeft/Right
-   - Add `p-6` to main content area
-2. Update all page files to add Lucide icons consistently throughout:
-   - Every section heading gets an icon
-   - Every card title gets an icon
-   - Every button gets an icon
-   - Every tab gets an icon
-   - Every stat card gets an icon
-   - Table column headers get icons where appropriate
-3. Update MastersPage: Make Part Status by Company table same width/styling as company list card
-4. Update AIEnginePage: Add Most Active Technician card in Overview tab
-5. Update AdminNoticesPage: Full advanced features — scheduling, font size, bold/italic, speed slider, direction, color picker, preview, pause/resume, active/inactive
-6. Update DataManagementPage: Organized cards per data type with counts, date range delete, confirmation dialogs
-7. Validate build
+1. Generate Motoko actor with user management: User type (id, name, email, password, phone, role, status, createdAt, lastLogin), functions: initSeedUsers, loginUser, createUser, getUsers, approveUser, rejectUser, editUser, deleteUser
+2. Update frontend store: add async initUsers() that fetches from backend, make auth mutations call backend
+3. App.tsx: show loading spinner until initUsers() completes
+4. Validate and deploy

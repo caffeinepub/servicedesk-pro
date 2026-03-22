@@ -1,3 +1,4 @@
+import { ClipboardList, FolderPlus, TrendingUp, Users } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import {
@@ -20,7 +21,7 @@ import { useStore } from "../store";
 import type { ComplaintType } from "../types";
 
 export default function NewCasePage() {
-  const { addCase, navigate, settings } = useStore();
+  const { addCase, navigate, settings, cases } = useStore();
   const [form, setForm] = useState({
     caseId: "",
     customerName: "",
@@ -55,13 +56,55 @@ export default function NewCasePage() {
     navigate("case-detail", newCase.id);
   };
 
+  const todayCases = cases.filter((c) => {
+    const today = new Date().toDateString();
+    return new Date(c.createdAt).toDateString() === today;
+  }).length;
+  const openCases = cases.filter(
+    (c) =>
+      ![
+        "closed",
+        "cancelled",
+        "transferred",
+        "adjustment_closed",
+        "replacement_done",
+        "gas_charge_done",
+      ].includes(c.status),
+  ).length;
+
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-0">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-900">New Complaint</h2>
-        <p className="text-sm text-gray-500">
-          Add a new service case from the company portal
-        </p>
+    <div className="max-w-2xl mx-auto px-4 sm:px-0 space-y-6">
+      {/* Gradient Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl px-6 py-6 shadow-lg">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+            <FolderPlus className="h-7 w-7" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">New Complaint</h1>
+            <p className="text-blue-200 text-sm mt-0.5">
+              Add a new service case from the company portal
+            </p>
+            <div className="flex items-center gap-4 mt-3 flex-wrap">
+              <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-3 py-1.5">
+                <ClipboardList className="h-3.5 w-3.5 text-blue-200" />
+                <span className="text-xs font-semibold">
+                  Today: {todayCases}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-3 py-1.5">
+                <TrendingUp className="h-3.5 w-3.5 text-blue-200" />
+                <span className="text-xs font-semibold">Open: {openCases}</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-3 py-1.5">
+                <Users className="h-3.5 w-3.5 text-blue-200" />
+                <span className="text-xs font-semibold">
+                  Total: {cases.length}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <Card className="shadow-sm">
         <CardHeader>

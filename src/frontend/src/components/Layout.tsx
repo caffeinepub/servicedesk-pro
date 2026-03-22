@@ -1,6 +1,9 @@
 import {
   Activity,
   AlertTriangle,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowRightCircle,
   BarChart3,
   Bell,
@@ -12,6 +15,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileText,
+  FolderOpen,
   GitBranch,
   Layers,
   LayoutDashboard,
@@ -19,12 +23,17 @@ import {
   Megaphone,
   Menu,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   RotateCcw,
+  ScrollText,
   Search,
   Settings,
   Settings2,
   Shield,
+  ShoppingBag,
   ShoppingCart,
+  Sparkles,
   Store,
   Tag,
   Trash2,
@@ -34,6 +43,7 @@ import {
   Warehouse,
   Wrench,
   X,
+  Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -49,8 +59,13 @@ type NavItem = {
   badge?: number;
 };
 
+const DASHBOARD_NAV: NavItem = {
+  icon: LayoutDashboard,
+  label: "Dashboard",
+  page: "dashboard",
+};
+
 const CASES_NAV: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", page: "dashboard" },
   { icon: FileText, label: "All Cases", page: "cases" },
   { icon: Briefcase, label: "New Case", page: "new-case" },
   { icon: Users, label: "Customer History", page: "customer-history" },
@@ -105,6 +120,14 @@ const SECTION_COLORS = {
     activeBorder: "border-l-2 border-violet-400",
     hoverBg: "hover:bg-violet-500/10",
     headerColor: "text-violet-400",
+  },
+  DASHBOARD: {
+    accent: "text-indigo-400",
+    activeBg: "bg-gradient-to-r from-indigo-600/30 to-indigo-500/20",
+    activeText: "text-indigo-300",
+    activeBorder: "border-l-2 border-indigo-400",
+    hoverBg: "hover:bg-indigo-500/10",
+    headerColor: "text-indigo-400",
   },
 };
 
@@ -362,7 +385,10 @@ function InlineSearch() {
                         </div>
                         {r.status && (
                           <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[r.status] ?? "bg-slate-100 text-slate-600"}`}
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              statusColor[r.status] ??
+                              "bg-slate-100 text-slate-600"
+                            }`}
                           >
                             {r.status}
                           </span>
@@ -421,32 +447,178 @@ const NOTICE_COLORS: Record<
     text: "text-white",
     border: "",
   },
+  teal: {
+    bg: "bg-gradient-to-r from-teal-500 to-cyan-600",
+    text: "text-white",
+    border: "",
+  },
+  dark: {
+    bg: "bg-gradient-to-r from-slate-800 to-slate-900",
+    text: "text-white",
+    border: "",
+  },
+  rainbow: {
+    bg: "notice-rainbow-animated",
+    text: "text-white",
+    border: "",
+  },
 };
 
 function NoticeBanner() {
-  const { adminNotices } = useStore();
+  const { adminNotices, currentUser } = useStore();
   const [currentIdx, setCurrentIdx] = useState(0);
 
   const now = new Date();
-  const active = adminNotices.filter(
-    (n) => n.isActive && (!n.expiryDate || new Date(n.expiryDate) > now),
-  );
+  const active = adminNotices.filter((n) => {
+    if (!n.isActive) return false;
+    if (n.expiryDate && new Date(n.expiryDate) < now) return false;
+    if ((n as any).startDate && new Date((n as any).startDate) > now)
+      return false;
+    const visibleTo = (n as any).visibleTo;
+    if (!visibleTo || visibleTo === "all") return true;
+    if (visibleTo === "supervisor" && currentUser?.role === "supervisor") {
+      const names: string[] = (n as any).visibleToNames ?? [];
+      if (names.length === 0) return true;
+      return names.includes(currentUser.name);
+    }
+    if (visibleTo === "backend_user" && currentUser?.role === "backend_user") {
+      const names: string[] = (n as any).visibleToNames ?? [];
+      if (names.length === 0) return true;
+      return names.includes(currentUser.name);
+    }
+    return false;
+  });
 
   if (active.length === 0) return null;
   const notice = active[Math.min(currentIdx, active.length - 1)];
 
   const colorKey = notice.color ?? "amber";
   const colors = NOTICE_COLORS[colorKey] ?? NOTICE_COLORS.amber;
-  const direction = notice.direction ?? "rtl";
-  const speedMap = { slow: "30s", normal: "18s", fast: "10s" };
-  const duration = speedMap[notice.speed ?? "normal"];
-
-  const marqueeStyle: React.CSSProperties = {
-    display: "inline-block",
-    animation: `marquee-${direction} ${duration} linear infinite`,
-    whiteSpace: "nowrap",
-    paddingLeft: direction === "rtl" ? "100%" : "0",
+  const direction = (notice as any).direction ?? "rtl";
+  const speedMap: Record<string, string> = {
+    slow: "30s",
+    normal: "18s",
+    fast: "10s",
   };
+  const duration = speedMap[notice.speed ?? "normal"] ?? "18s";
+  const isPaused = (notice as any).paused ?? false;
+  const fontSize = (notice as any).fontSize ?? "base";
+  const isBold = (notice as any).bold ?? false;
+  const isItalic = (notice as any).italic ?? false;
+  const animation = (notice as any).animation ?? "none";
+
+  const isScrolling = direction === "rtl" || direction === "ltr";
+
+  const getAnimationClass = () => {
+    switch (animation) {
+      case "pulse":
+        return "animate-pulse";
+      case "bounce":
+        return "animate-bounce";
+      default:
+        return "";
+    }
+  };
+
+  const textAnimation = (notice as any).textAnimation ?? "none";
+
+  const getAnimationStyle = (): React.CSSProperties => {
+    const base: React.CSSProperties =
+      colorKey === "rainbow"
+        ? {
+            animation: "rainbowBg 3s linear infinite",
+            backgroundSize: "400% 100%",
+          }
+        : {};
+    switch (animation) {
+      case "shimmer":
+        return {
+          ...base,
+          backgroundSize: "200% 100%",
+          animation:
+            colorKey === "rainbow"
+              ? base.animation
+              : "shimmer 2s linear infinite",
+        };
+      case "blink":
+        return {
+          ...base,
+          animation:
+            colorKey === "rainbow"
+              ? base.animation
+              : "blink 1s step-start infinite",
+        };
+      case "fadein":
+        return {
+          ...base,
+          animation:
+            colorKey === "rainbow"
+              ? base.animation
+              : "fadeInBanner 0.6s ease forwards",
+        };
+      case "slidein":
+        return {
+          ...base,
+          animation:
+            colorKey === "rainbow"
+              ? base.animation
+              : "slideInBanner 0.5s ease forwards",
+        };
+      default:
+        return base;
+    }
+  };
+
+  const getTextAnimStyle = (): React.CSSProperties => {
+    switch (textAnimation) {
+      case "typewriter":
+        return { animation: "typewriter 4s steps(40) infinite" };
+      case "glow_pulse":
+        return {
+          animation: "textGlow 2s ease-in-out infinite",
+          textShadow: "0 0 8px rgba(255,255,255,0.8)",
+        };
+      case "text_bounce":
+        return {
+          display: "inline-block",
+          animation: "textBounce 0.8s ease infinite",
+        };
+      case "text_fadein":
+        return { animation: "textFadein 1.5s ease infinite" };
+      case "text_shimmer":
+        return {
+          animation: "textShimmer 2s linear infinite",
+          backgroundClip: "text",
+          WebkitBackgroundClip: "text",
+        };
+      case "text_rainbow":
+        return {
+          animation: "textRainbow 3s linear infinite",
+          backgroundSize: "400%",
+          backgroundClip: "text",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+        };
+      default:
+        return {};
+    }
+  };
+
+  const marqueeStyle: React.CSSProperties = isScrolling
+    ? {
+        display: "inline-block",
+        animation: `marquee-${direction} ${duration} linear infinite`,
+        animationPlayState: isPaused ? "paused" : "running",
+        whiteSpace: "nowrap",
+        paddingLeft: direction === "rtl" ? "100%" : "0",
+      }
+    : {
+        display: "block",
+        textAlign: direction as "center" | "left" | "right",
+        whiteSpace: "normal",
+      };
+
+  const textClass = `text-${fontSize} ${isBold ? "font-bold" : "font-normal"} ${isItalic ? "italic" : ""} ${getAnimationClass()}`;
 
   return (
     <>
@@ -459,17 +631,103 @@ function NoticeBanner() {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(100%); }
         }
+        @keyframes shimmer {
+          0% { background-position: 200% center; }
+          100% { background-position: -200% center; }
+        }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        @keyframes fadeInBanner {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideInBanner {
+          from { transform: translateY(-100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes rainbowBg {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 400% 50%; }
+        }
+        @keyframes typewriter {
+          0%, 100% { clip-path: inset(0 100% 0 0); }
+          50% { clip-path: inset(0 0% 0 0); }
+        }
+        @keyframes textGlow {
+          0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.4); }
+          50% { text-shadow: 0 0 16px rgba(255,255,255,1), 0 0 30px rgba(255,255,255,0.6); }
+        }
+        @keyframes textBounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        @keyframes textFadein {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 1; }
+        }
+        @keyframes textShimmer {
+          0% { background-position: 200% center; }
+          100% { background-position: -200% center; }
+        }
+        @keyframes textRainbow {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 400% 50%; }
+        }
+        .notice-text-rainbow {
+          background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000);
+          background-size: 400% 100%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: textRainbow 3s linear infinite !important;
+        }
+        .notice-rainbow-swatch {
+          background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff);
+        }
+        .sidebar-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .sidebar-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(99, 102, 241, 0.35);
+          border-radius: 9999px;
+        }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.6);
+        }
+        .sidebar-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(99,102,241,0.35) transparent;
+        }
       `}</style>
       <div
-        className={`${colors.bg} ${colors.text} px-4 py-2 flex items-center gap-3 relative z-40 overflow-hidden`}
+        className={`${colorKey === "rainbow" ? "" : colors.bg} ${colors.text} px-4 py-2 flex items-center gap-3 relative z-40 overflow-hidden`}
+        style={{
+          ...getAnimationStyle(),
+          ...(colorKey === "rainbow"
+            ? {
+                background:
+                  "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000)",
+                backgroundSize: "400% 100%",
+                animation: "rainbowBg 3s linear infinite",
+              }
+            : {}),
+        }}
       >
         <Megaphone className="h-4 w-4 flex-shrink-0" />
         <span className="font-semibold text-sm flex-shrink-0">
           {notice.title}:
         </span>
-        <div className="flex-1 overflow-hidden">
-          <span style={marqueeStyle} className="text-sm">
-            {notice.message}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{notice.message}
+        <div className={`flex-1 ${isScrolling ? "overflow-hidden" : ""}`}>
+          <span
+            style={{ ...marqueeStyle, ...getTextAnimStyle() }}
+            className={`${textClass} ${textAnimation === "text_rainbow" ? "notice-text-rainbow" : ""}`}
+          >
+            {notice.message}
           </span>
         </div>
         {active.length > 1 && (
@@ -513,7 +771,7 @@ function NavButton({
   collapsed?: boolean;
   currentPage: PageType;
   badge?: number;
-  section: "CASES" | "INVENTORY" | "ADMIN";
+  section: "CASES" | "INVENTORY" | "ADMIN" | "DASHBOARD";
   onNavigate?: () => void;
 }) {
   const { navigate } = useStore();
@@ -622,20 +880,30 @@ function SidebarContent({
   };
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-b from-slate-900 to-slate-950 text-white">
+    <div className="h-full flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white">
       {/* Logo area */}
       <div
-        className={`flex items-center gap-3 border-b border-slate-800 ${collapsed ? "px-3 py-4 justify-center" : "px-4 py-4"}`}
+        className={`flex items-center gap-3 border-b border-slate-800/80 ${
+          collapsed ? "px-3 py-4 justify-center" : "px-4 py-4"
+        }`}
       >
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
-          <Tag className="h-4 w-4 text-white" />
+        <div className="relative flex-shrink-0">
+          <img
+            src="/assets/generated/servicedesk-logo-transparent.dim_64x64.png"
+            alt="ServiceDesk Pro"
+            className="w-9 h-9 rounded-xl shadow-lg object-cover"
+          />
+          <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900" />
         </div>
         {!collapsed && (
-          <div>
-            <div className="font-bold text-sm text-white leading-tight">
-              Servicedesk Pro
+          <div className="flex-1 min-w-0">
+            <div className="font-extrabold text-sm leading-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-violet-400 bg-clip-text text-transparent tracking-tight">
+              ServiceDesk Pro
             </div>
-            <div className="text-[10px] text-slate-400">v37.0</div>
+            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+              <Zap className="h-2.5 w-2.5 text-amber-400" />
+              Powering Service Excellence
+            </div>
           </div>
         )}
       </div>
@@ -643,35 +911,49 @@ function SidebarContent({
       {/* Collapse toggle - TOP */}
       {setCollapsed && (
         <div
-          className={`flex ${collapsed ? "justify-center px-3" : "justify-end px-3"} py-2 border-b border-slate-800/50`}
+          className={`flex ${
+            collapsed ? "justify-center px-3" : "justify-end px-3"
+          } py-2 border-b border-slate-800/50`}
         >
           <button
             type="button"
             onClick={() => setCollapsed((c: boolean) => !c)}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-2.5 py-1.5 rounded-full transition-all duration-200 text-xs font-medium"
+            className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-indigo-600/40 text-slate-400 hover:text-indigo-300 border border-slate-700 hover:border-indigo-500/50 transition-all duration-200"
           >
             {collapsed ? (
-              <ChevronRight className="h-3.5 w-3.5" />
+              <PanelLeftOpen className="h-3.5 w-3.5" />
             ) : (
-              <>
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span>Collapse</span>
-              </>
+              <PanelLeftClose className="h-3.5 w-3.5" />
             )}
           </button>
         </div>
       )}
 
       {/* Nav sections */}
-      <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 sidebar-scrollbar">
+        {/* Dashboard - always on top, standalone */}
+        {(role === "admin" ||
+          role === "backend_user" ||
+          role === "supervisor") && (
+          <div className={`pt-2 pb-1 ${collapsed ? "px-2" : "px-1"}`}>
+            <NavButton
+              item={DASHBOARD_NAV}
+              collapsed={collapsed}
+              currentPage={currentPage}
+              section="DASHBOARD"
+              onNavigate={onNavigate}
+            />
+          </div>
+        )}
+
         {/* CASES section */}
         {(role === "admin" || role === "backend_user") && (
           <>
             <SectionHeader
               label="Cases"
               collapsed={collapsed}
-              Icon={Briefcase}
+              Icon={FolderOpen}
               section="CASES"
             />
             {CASES_NAV.map((item) => (
@@ -746,7 +1028,7 @@ function SidebarContent({
 
         {/* Notifications & Profile */}
         <div className={`pt-3 pb-1 ${collapsed ? "px-2" : "px-3"}`}>
-          <div className="border-t border-slate-800" />
+          <div className="border-t border-slate-800/60" />
         </div>
         <NavButton
           item={{ icon: Bell, label: "Notifications", page: "notifications" }}
@@ -766,10 +1048,12 @@ function SidebarContent({
       </div>
 
       {/* User profile area */}
-      <div className={`border-t border-slate-800 ${collapsed ? "p-2" : "p-3"}`}>
+      <div
+        className={`border-t border-slate-800/60 ${collapsed ? "p-2" : "p-3"}`}
+      >
         {collapsed ? (
           <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-xs font-bold text-white">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white shadow">
               {initials}
             </div>
             <button
@@ -783,7 +1067,7 @@ function SidebarContent({
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 shadow">
               {initials}
             </div>
             <div className="flex-1 min-w-0">
@@ -819,7 +1103,7 @@ const PAGE_SECTION: Record<
   dashboard: {
     label: "Dashboard",
     icon: LayoutDashboard,
-    gradient: "bg-gradient-to-r from-blue-600 to-indigo-600",
+    gradient: "bg-gradient-to-r from-indigo-600 to-violet-600",
     text: "text-white",
   },
   cases: {
@@ -866,7 +1150,7 @@ const PAGE_SECTION: Record<
   },
   purchase: {
     label: "Purchase Entry",
-    icon: ShoppingCart,
+    icon: ShoppingBag,
     gradient: "bg-gradient-to-r from-emerald-600 to-teal-600",
     text: "text-white",
   },
@@ -896,7 +1180,7 @@ const PAGE_SECTION: Record<
   },
   "ai-engine": {
     label: "AI Engine",
-    icon: Brain,
+    icon: Sparkles,
     gradient: "bg-gradient-to-r from-violet-600 to-purple-700",
     text: "text-white",
   },
@@ -956,7 +1240,7 @@ const PAGE_SECTION: Record<
   },
   "audit-logs": {
     label: "Audit Logs",
-    icon: ClipboardCheck,
+    icon: ScrollText,
     gradient: "bg-gradient-to-r from-violet-600 to-purple-600",
     text: "text-white",
   },
@@ -1077,7 +1361,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={() => navigate("profile")}
               className="flex items-center gap-2 hover:bg-slate-100 rounded-lg px-2 py-1.5 transition-colors"
             >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-xs font-bold text-white">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
                 {(currentUser?.name ?? "U")
                   .split(" ")
                   .map((w) => w[0])

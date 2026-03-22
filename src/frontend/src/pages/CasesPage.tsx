@@ -1,12 +1,19 @@
 import {
   AlertTriangle,
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Clock,
   Download,
+  FileText,
   Filter,
   History,
+  Package,
   PlusCircle,
+  Search,
   Trash2,
+  Truck,
   Upload,
   X,
 } from "lucide-react";
@@ -726,24 +733,32 @@ export default function CasesPage() {
   const isAdmin = currentUser?.role === "admin";
 
   const quickFilters = [
-    { label: "All", value: "all" },
+    { label: "All", value: "all", icon: ClipboardList },
     {
       label: `No Update${staleCount > 0 ? ` (${staleCount})` : ""}`,
       value: "stale",
+      icon: AlertTriangle,
     },
-    { label: "New", value: "new" },
-    { label: "Pending", value: "pending" },
-    { label: "On Route", value: "on_route" },
-    { label: "Part Required", value: "part_required" },
-    { label: "Closed", value: "closed" },
+    { label: "New", value: "new", icon: FileText },
+    { label: "Pending", value: "pending", icon: Clock },
+    { label: "On Route", value: "on_route", icon: Truck },
+    { label: "Part Required", value: "part_required", icon: Package },
+    { label: "Closed", value: "closed", icon: CheckCircle },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">All Cases</h2>
-          <p className="text-sm text-gray-500">{filtered.length} cases found</p>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <ClipboardList className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">All Cases</h1>
+            <p className="text-blue-200 text-sm">
+              {filtered.length} cases found
+            </p>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           {importSuccess !== null && (
@@ -795,9 +810,7 @@ export default function CasesPage() {
             }`}
             data-ocid="cases.tab"
           >
-            {f.value === "stale" && staleCount > 0 && (
-              <AlertTriangle className="h-3 w-3 inline mr-1" />
-            )}
+            <f.icon className="h-3 w-3 inline mr-1" />
             {f.label}
           </button>
         ))}

@@ -2,9 +2,12 @@ import {
   CheckCircle2,
   Download,
   Eye,
+  IndianRupee,
   Package,
   Plus,
+  Receipt,
   Search,
+  ShoppingBag,
   Trash2,
   Upload,
   X,
@@ -1273,18 +1276,21 @@ export default function PurchasePage() {
   return (
     <div className="space-y-5">
       {/* Page Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-            Purchase Entry
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Record vendor purchases and manage inventory stock
-          </p>
+      <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <ShoppingBag className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Purchase Entry</h1>
+            <p className="text-indigo-200 text-sm">
+              Record vendor purchases and manage inventory stock
+            </p>
+          </div>
         </div>
         <Button
           onClick={() => setAddModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 shrink-0 gap-2"
+          className="bg-white text-indigo-700 hover:bg-indigo-50 shrink-0 gap-2"
           data-ocid="purchase.open_modal_button"
         >
           <Plus className="h-4 w-4" />

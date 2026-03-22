@@ -1,3 +1,11 @@
+import {
+  AlertTriangle,
+  CheckCircle,
+  Package,
+  ShoppingCart,
+  Tag,
+  Wrench,
+} from "lucide-react";
 import { useState } from "react";
 import StatusBadge from "../components/StatusBadge";
 import { Button } from "../components/ui/button";
@@ -79,38 +87,53 @@ export default function PartsPage() {
     setOrderDate("");
   };
 
-  const tabs: { key: PartTab; label: string; color: string; count: number }[] =
-    [
-      {
-        key: "part_required",
-        label: "Part Required",
-        color: "bg-red-600",
-        count: cases.filter((c) => c.status === "part_required").length,
-      },
-      {
-        key: "part_ordered",
-        label: "Part Ordered",
-        color: "bg-blue-600",
-        count: cases.filter((c) => c.status === "part_ordered").length,
-      },
-      {
-        key: "part_received",
-        label: "Part Received",
-        color: "bg-green-600",
-        count: cases.filter(
-          (c) =>
-            c.status === "part_received" && !CLOSED_STATUSES.includes(c.status),
-        ).length,
-      },
-    ];
+  const tabs: {
+    key: PartTab;
+    label: string;
+    color: string;
+    count: number;
+    icon: React.ElementType;
+  }[] = [
+    {
+      key: "part_required",
+      label: "Part Required",
+      color: "bg-red-600",
+      count: cases.filter((c) => c.status === "part_required").length,
+      icon: AlertTriangle,
+    },
+    {
+      key: "part_ordered",
+      label: "Part Ordered",
+      color: "bg-blue-600",
+      count: cases.filter((c) => c.status === "part_ordered").length,
+      icon: ShoppingCart,
+    },
+    {
+      key: "part_received",
+      label: "Part Received",
+      color: "bg-green-600",
+      count: cases.filter(
+        (c) =>
+          c.status === "part_received" && !CLOSED_STATUSES.includes(c.status),
+      ).length,
+      icon: CheckCircle,
+    },
+  ];
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Parts Tracking</h2>
-        <p className="text-sm text-gray-500">
-          Track part requirements and delivery status
-        </p>
+      <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-xl px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Package className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Parts Tracking</h1>
+            <p className="text-orange-200 text-sm">
+              Track part requirements and delivery status
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -163,6 +186,7 @@ export default function PartsPage() {
             }`}
             data-ocid="parts.tab"
           >
+            <t.icon className="h-3.5 w-3.5" />
             {t.label}
             <span
               className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${

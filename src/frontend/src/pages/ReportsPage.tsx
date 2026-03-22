@@ -1,4 +1,13 @@
-import { BarChart3, Download, RefreshCw } from "lucide-react";
+import {
+  BarChart2,
+  BarChart3,
+  Download,
+  FileText,
+  Filter,
+  Package,
+  RefreshCw,
+  TrendingUp,
+} from "lucide-react";
 import { useState } from "react";
 import {
   Bar,
@@ -237,7 +246,7 @@ export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-6 py-6">
+      <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-2xl px-6 py-6 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
@@ -283,7 +292,7 @@ export default function ReportsPage() {
                   className="data-[state=active]:bg-blue-600 data-[state=active]:text-white rounded-xl px-5"
                   data-ocid="reports.tab"
                 >
-                  Cases Reports
+                  <FileText className="h-4 w-4 mr-1.5" /> Cases Reports
                 </TabsTrigger>
               )}
               {role !== "backend_user" && (
@@ -292,7 +301,7 @@ export default function ReportsPage() {
                   className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white rounded-xl px-5"
                   data-ocid="reports.tab"
                 >
-                  Inventory Reports
+                  <Package className="h-4 w-4 mr-1.5" /> Inventory Reports
                 </TabsTrigger>
               )}
             </TabsList>

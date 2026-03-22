@@ -471,9 +471,9 @@ export default function LifecyclePage() {
   const totalEvents = allLifecycle.length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-6">
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-6 rounded-2xl shadow-lg">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
             <GitBranch className="h-6 w-6" />
@@ -490,31 +490,31 @@ export default function LifecyclePage() {
             </span>
           </div>
         </div>
-
-        {/* Filter Tabs */}
-        <div className="flex flex-wrap gap-2 mt-4">
-          {FILTER_TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                type="button"
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  activeTab === tab.key
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "bg-white/20 text-white hover:bg-white/30"
-                }`}
-              >
-                <Icon className="h-3 w-3" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
-      <div className="px-6 py-6 max-w-5xl mx-auto">
+      {/* Filter Tabs - outside header */}
+      <div className="flex flex-wrap gap-2">
+        {FILTER_TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              type="button"
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                activeTab === tab.key
+                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600"
+              }`}
+            >
+              <Icon className="h-3 w-3" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="max-w-5xl">
         {/* Search + Date Filter */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <div className="relative flex-1">

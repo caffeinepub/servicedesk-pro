@@ -1,4 +1,16 @@
-import { CheckCircle, Clock, Hash, Package, User, XCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  FileText,
+  Hash,
+  Inbox,
+  Package,
+  Send,
+  ShoppingCart,
+  User,
+  XCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
@@ -102,32 +114,36 @@ export default function PartRequestsPage() {
     }
   };
 
-  const tabs: { key: FilterTab; label: string }[] = [
+  const tabs: { key: FilterTab; label: string; icon: React.ElementType }[] = [
     {
       key: "pending",
       label: `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}`,
+      icon: Clock,
     },
-    { key: "issued", label: "Issued" },
-    { key: "rejected", label: "Rejected" },
-    { key: "all", label: "All" },
+    { key: "issued", label: "Issued", icon: CheckCircle },
+    { key: "rejected", label: "Rejected", icon: XCircle },
+    { key: "all", label: "All", icon: Inbox },
   ];
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">
-            Part Requests
-          </h1>
-          <p className="text-sm text-[var(--text-muted)] mt-0.5">
-            {isPrivileged
-              ? "Review and action part requests from backend users"
-              : "Your part requests to supervisor"}
-          </p>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Inbox className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Part Requests</h1>
+            <p className="text-blue-200 text-sm">
+              {isPrivileged
+                ? "Review and action part requests from backend users"
+                : "Your part requests to supervisor"}
+            </p>
+          </div>
         </div>
         {pendingCount > 0 && (
-          <Badge className="bg-amber-500 text-white px-3 py-1 text-sm">
+          <Badge className="bg-white text-blue-700 px-3 py-1 text-sm font-bold">
             {pendingCount} Pending
           </Badge>
         )}
@@ -146,6 +162,7 @@ export default function PartRequestsPage() {
                 : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
             }`}
           >
+            <t.icon className="h-3.5 w-3.5" />
             {t.label}
           </button>
         ))}

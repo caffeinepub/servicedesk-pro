@@ -1,6 +1,7 @@
 import {
   AlignCenter,
   AlignLeft,
+  AlignRight,
   Bold,
   Calendar,
   CheckCircle,
@@ -14,8 +15,10 @@ import {
   Play,
   Plus,
   Settings,
+  Sparkles,
   Trash2,
   Type,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -93,6 +96,22 @@ const COLOR_OPTIONS = [
     cls: "bg-slate-800",
     preview: "bg-gradient-to-r from-slate-800 to-slate-900",
   },
+  {
+    value: "rainbow",
+    label: "Rainbow",
+    cls: "notice-rainbow-swatch",
+    preview: "notice-rainbow-bg",
+  },
+];
+
+const TEXT_ANIMATION_OPTIONS = [
+  { value: "none", label: "None", icon: "—" },
+  { value: "typewriter", label: "Typewriter", icon: "⌨" },
+  { value: "glow_pulse", label: "Glow Pulse", icon: "✨" },
+  { value: "text_bounce", label: "Bounce", icon: "⬆" },
+  { value: "text_fadein", label: "Fade In", icon: "💨" },
+  { value: "text_shimmer", label: "Shimmer", icon: "🌟" },
+  { value: "text_rainbow", label: "Rainbow Text", icon: "🌈" },
 ];
 
 const SPEED_OPTIONS = [
@@ -105,6 +124,16 @@ const FONT_SIZE_OPTIONS = [
   { value: "sm", label: "Small" },
   { value: "base", label: "Medium" },
   { value: "lg", label: "Large" },
+];
+
+const ANIMATION_OPTIONS = [
+  { value: "none", label: "None", icon: "—" },
+  { value: "fadein", label: "Fade In", icon: "✨" },
+  { value: "slidein", label: "Slide In", icon: "↓" },
+  { value: "bounce", label: "Bounce", icon: "⬆" },
+  { value: "pulse", label: "Pulse/Glow", icon: "💫" },
+  { value: "shimmer", label: "Shimmer", icon: "🌟" },
+  { value: "blink", label: "Blink", icon: "⚡" },
 ];
 
 function getStatus(notice: AdminNotice) {
@@ -135,13 +164,17 @@ type FormState = {
   startDate: string;
   expiryDate: string;
   isActive: boolean;
-  direction: "ltr" | "rtl";
+  direction: "ltr" | "rtl" | "center" | "left" | "right";
   color: string;
   speed: "slow" | "normal" | "fast";
   fontSize: "sm" | "base" | "lg";
   bold: boolean;
   italic: boolean;
   paused: boolean;
+  animation: string;
+  textAnimation: string;
+  visibleTo: "all" | "supervisor" | "backend_user";
+  visibleToNames: string[];
 };
 
 const defaultForm: FormState = {
@@ -157,6 +190,10 @@ const defaultForm: FormState = {
   bold: false,
   italic: false,
   paused: false,
+  animation: "none",
+  textAnimation: "none",
+  visibleTo: "all",
+  visibleToNames: [],
 };
 
 export default function AdminNoticesPage() {
@@ -166,6 +203,7 @@ export default function AdminNoticesPage() {
     addAdminNotice,
     deleteAdminNotice,
     updateAdminNotice,
+    users,
   } = useStore();
 
   const [open, setOpen] = useState(false);
@@ -212,6 +250,10 @@ export default function AdminNoticesPage() {
       bold: (n as any).bold ?? false,
       italic: (n as any).italic ?? false,
       paused: (n as any).paused ?? false,
+      animation: (n as any).animation ?? "none",
+      textAnimation: (n as any).textAnimation ?? "none",
+      visibleTo: (n as any).visibleTo ?? "all",
+      visibleToNames: (n as any).visibleToNames ?? [],
     });
     setEditNotice(n);
     setOpen(true);
@@ -237,6 +279,10 @@ export default function AdminNoticesPage() {
       bold: form.bold,
       italic: form.italic,
       paused: form.paused,
+      animation: form.animation,
+      textAnimation: form.textAnimation,
+      visibleTo: form.visibleTo,
+      visibleToNames: form.visibleToNames,
     };
     if (editNotice) {
       updateAdminNotice(editNotice.id, payload);
@@ -253,9 +299,9 @@ export default function AdminNoticesPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-rose-600 to-pink-600 text-white px-6 py-6">
+      <div className="bg-gradient-to-r from-rose-600 to-pink-600 text-white rounded-2xl px-6 py-6 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
@@ -286,142 +332,166 @@ export default function AdminNoticesPage() {
         </div>
       </div>
 
-      <div className="px-6 py-6 max-w-5xl mx-auto">
-        {adminNotices.length === 0 && (
-          <div className="text-center py-16 text-slate-400">
-            <Megaphone className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p className="text-lg font-medium">No notices yet</p>
-            <p className="text-sm mt-1">
-              Click "New Notice" to publish your first announcement.
-            </p>
-          </div>
-        )}
+      {adminNotices.length === 0 && (
+        <div className="text-center py-16 text-slate-400">
+          <Megaphone className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="text-lg font-medium">No notices yet</p>
+          <p className="text-sm mt-1">
+            Click "New Notice" to publish your first announcement.
+          </p>
+        </div>
+      )}
 
-        <div className="space-y-4">
-          {adminNotices.map((notice) => {
-            const status = getStatus(notice);
-            const colorOpt =
-              COLOR_OPTIONS.find(
-                (c) => c.value === (notice.color ?? "amber"),
-              ) ?? COLOR_OPTIONS[0];
-            const isPaused = (notice as any).paused ?? false;
-            return (
-              <Card
-                key={notice.id}
-                className="shadow-sm border-slate-200 overflow-hidden"
-              >
-                <div className={`h-1 ${colorOpt.preview}`} />
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div
-                        className={`w-10 h-10 rounded-xl ${colorOpt.preview} flex items-center justify-center flex-shrink-0`}
-                      >
-                        <Megaphone className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-slate-800">
-                            {notice.title}
-                          </h3>
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.cls}`}
-                          >
-                            {status.label}
+      <div className="space-y-4">
+        {adminNotices.map((notice) => {
+          const status = getStatus(notice);
+          const colorOpt =
+            COLOR_OPTIONS.find((c) => c.value === (notice.color ?? "amber")) ??
+            COLOR_OPTIONS[0];
+          const isPaused = (notice as any).paused ?? false;
+          return (
+            <Card
+              key={notice.id}
+              className="shadow-sm border-slate-200 overflow-hidden hover:shadow-md transition-shadow"
+            >
+              <div className={`h-1 ${colorOpt.preview}`} />
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div
+                      className={`w-10 h-10 rounded-xl ${colorOpt.preview} flex items-center justify-center flex-shrink-0`}
+                    >
+                      <Megaphone className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-slate-800">
+                          {notice.title}
+                        </h3>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.cls}`}
+                        >
+                          {status.label}
+                        </span>
+                        {isPaused && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600 flex items-center gap-1">
+                            <Pause className="h-2.5 w-2.5" /> Paused
                           </span>
-                          {isPaused && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600 flex items-center gap-1">
-                              <Pause className="h-2.5 w-2.5" /> Paused
+                        )}
+                        <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                          {notice.direction === "ltr" ||
+                          notice.direction === "rtl"
+                            ? notice.direction === "ltr"
+                              ? "L→R"
+                              : "R←L"
+                            : notice.direction === "center"
+                              ? "• Center"
+                              : notice.direction === "left"
+                                ? "≡ Left"
+                                : "≡ Right"}{" "}
+                          · {notice.speed ?? "normal"}
+                        </span>
+                        {(notice as any).animation &&
+                          (notice as any).animation !== "none" && (
+                            <span className="text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Zap className="h-2.5 w-2.5" />
+                              {(notice as any).animation}
                             </span>
                           )}
-                          <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                            {notice.direction === "ltr" ? "L→R" : "R←L"} ·{" "}
-                            {notice.speed ?? "normal"}
-                          </span>
-                        </div>
-                        <p className="text-slate-600 text-sm mt-1 leading-relaxed">
-                          {notice.message}
-                        </p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 flex-wrap">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            Expires: {formatDate(notice.expiryDate)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            By {notice.createdBy}
-                          </span>
-                        </div>
+                        {(notice as any).visibleTo &&
+                          (notice as any).visibleTo !== "all" && (
+                            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
+                              {(notice as any).visibleTo === "supervisor"
+                                ? "Supervisors"
+                                : "Backend Users"}
+                              {(notice as any).visibleToNames?.length > 0
+                                ? `: ${(notice as any).visibleToNames.join(", ")}`
+                                : " only"}
+                            </span>
+                          )}
+                      </div>
+                      <p className="text-slate-600 text-sm mt-1 leading-relaxed line-clamp-2">
+                        {notice.message}
+                      </p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Expires: {formatDate(notice.expiryDate)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          By {notice.createdBy}
+                        </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {/* Pause/Resume */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        title={isPaused ? "Resume" : "Pause"}
-                        className={
-                          isPaused
-                            ? "text-emerald-600 hover:bg-emerald-50"
-                            : "text-slate-500 hover:bg-slate-50"
-                        }
-                        onClick={() =>
-                          updateAdminNotice(notice.id, {
-                            paused: !isPaused,
-                          } as any)
-                        }
-                        data-ocid="notices.toggle"
-                      >
-                        {isPaused ? (
-                          <Play className="h-4 w-4" />
-                        ) : (
-                          <Pause className="h-4 w-4" />
-                        )}
-                      </Button>
-                      {/* Active toggle */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        title={notice.isActive ? "Deactivate" : "Activate"}
-                        className={
-                          notice.isActive
-                            ? "text-emerald-600 hover:bg-emerald-50"
-                            : "text-slate-400 hover:bg-slate-50"
-                        }
-                        onClick={() =>
-                          updateAdminNotice(notice.id, {
-                            isActive: !notice.isActive,
-                          })
-                        }
-                        data-ocid="notices.toggle"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                        onClick={() => openEdit(notice)}
-                        data-ocid="notices.edit_button"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => setDeleteId(notice.id)}
-                        data-ocid="notices.delete_button"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {/* Pause/Resume */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title={isPaused ? "Resume" : "Pause"}
+                      className={
+                        isPaused
+                          ? "text-emerald-600 hover:bg-emerald-50"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }
+                      onClick={() =>
+                        updateAdminNotice(notice.id, {
+                          paused: !isPaused,
+                        } as any)
+                      }
+                      data-ocid="notices.toggle"
+                    >
+                      {isPaused ? (
+                        <Play className="h-4 w-4" />
+                      ) : (
+                        <Pause className="h-4 w-4" />
+                      )}
+                    </Button>
+                    {/* Active toggle */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title={notice.isActive ? "Deactivate" : "Activate"}
+                      className={
+                        notice.isActive
+                          ? "text-emerald-600 hover:bg-emerald-50"
+                          : "text-slate-400 hover:bg-slate-50"
+                      }
+                      onClick={() =>
+                        updateAdminNotice(notice.id, {
+                          isActive: !notice.isActive,
+                        })
+                      }
+                      data-ocid="notices.toggle"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                      onClick={() => openEdit(notice)}
+                      data-ocid="notices.edit_button"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => setDeleteId(notice.id)}
+                      data-ocid="notices.delete_button"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Add/Edit Dialog */}
@@ -451,7 +521,7 @@ export default function AdminNoticesPage() {
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder="Notice title"
-                  className="mt-1"
+                  className="mt-1 h-9"
                   data-ocid="notices.input"
                 />
               </div>
@@ -465,7 +535,9 @@ export default function AdminNoticesPage() {
                     setForm({ ...form, message: e.target.value })
                   }
                   placeholder="Notice message..."
-                  className="mt-1 min-h-[80px]"
+                  className="mt-1 resize-none overflow-y-auto"
+                  rows={3}
+                  style={{ height: "76px" }}
                   data-ocid="notices.textarea"
                 />
               </div>
@@ -562,23 +634,74 @@ export default function AdminNoticesPage() {
               {/* Direction */}
               <div>
                 <Label className="text-xs font-medium text-slate-600">
-                  Scroll Direction
+                  Display Mode
                 </Label>
-                <div className="flex gap-2 mt-1.5">
-                  {(["rtl", "ltr"] as const).map((d) => (
-                    <button
-                      type="button"
-                      key={d}
-                      onClick={() => setForm({ ...form, direction: d })}
-                      className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                        form.direction === d
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 text-slate-500 hover:border-slate-300"
-                      }`}
-                    >
-                      {d === "rtl" ? "← Right to Left" : "Left to Right →"}
-                    </button>
-                  ))}
+                <div className="space-y-2 mt-1.5">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1.5 font-medium uppercase tracking-wide">
+                      Scrolling
+                    </p>
+                    <div className="flex gap-2">
+                      {(
+                        [
+                          { value: "rtl", label: "← Right to Left" },
+                          { value: "ltr", label: "Left to Right →" },
+                        ] as const
+                      ).map((d) => (
+                        <button
+                          type="button"
+                          key={d.value}
+                          onClick={() =>
+                            setForm({ ...form, direction: d.value })
+                          }
+                          className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                            form.direction === d.value
+                              ? "border-blue-500 bg-blue-50 text-blue-700"
+                              : "border-slate-200 text-slate-500 hover:border-slate-300"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1.5 font-medium uppercase tracking-wide">
+                      Static
+                    </p>
+                    <div className="flex gap-2">
+                      {(
+                        [
+                          {
+                            value: "center",
+                            label: "• Centered",
+                            Icon: AlignCenter,
+                          },
+                          { value: "left", label: "≡ Left", Icon: AlignLeft },
+                          {
+                            value: "right",
+                            label: "≡ Right",
+                            Icon: AlignRight,
+                          },
+                        ] as const
+                      ).map((d) => (
+                        <button
+                          type="button"
+                          key={d.value}
+                          onClick={() =>
+                            setForm({ ...form, direction: d.value })
+                          }
+                          className={`flex-1 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                            form.direction === d.value
+                              ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                              : "border-slate-200 text-slate-500 hover:border-slate-300"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -610,6 +733,58 @@ export default function AdminNoticesPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Animation */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                  Banner Animation
+                </Label>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {ANIMATION_OPTIONS.map((a) => (
+                    <button
+                      type="button"
+                      key={a.value}
+                      onClick={() => setForm({ ...form, animation: a.value })}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                        form.animation === a.value
+                          ? "border-violet-500 bg-violet-50 text-violet-700"
+                          : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      <span>{a.icon}</span>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Text Animation */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <Type className="h-3.5 w-3.5 text-blue-500" />
+                  Text Animation
+                </Label>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {TEXT_ANIMATION_OPTIONS.map((a) => (
+                    <button
+                      type="button"
+                      key={a.value}
+                      onClick={() =>
+                        setForm({ ...form, textAnimation: a.value })
+                      }
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                        form.textAnimation === a.value
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      <span>{a.icon}</span>
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Scheduling */}
@@ -628,7 +803,7 @@ export default function AdminNoticesPage() {
                     onChange={(e) =>
                       setForm({ ...form, startDate: e.target.value })
                     }
-                    className="mt-1"
+                    className="mt-1 h-9"
                   />
                 </div>
                 <div>
@@ -641,7 +816,7 @@ export default function AdminNoticesPage() {
                     onChange={(e) =>
                       setForm({ ...form, expiryDate: e.target.value })
                     }
-                    className="mt-1"
+                    className="mt-1 h-9"
                   />
                 </div>
               </div>
@@ -671,6 +846,110 @@ export default function AdminNoticesPage() {
               </div>
             </div>
 
+            {/* Visibility */}
+            <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                <Eye className="h-4 w-4 text-slate-500" /> Visibility
+              </h3>
+              <div>
+                <Label className="text-xs font-medium text-slate-600">
+                  Who can see this notice?
+                </Label>
+                <div className="flex gap-2 mt-1.5">
+                  {(
+                    [
+                      { value: "all", label: "All Users" },
+                      { value: "supervisor", label: "Supervisors Only" },
+                      { value: "backend_user", label: "Backend Users Only" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      type="button"
+                      key={opt.value}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          visibleTo: opt.value,
+                          visibleToNames: [],
+                        })
+                      }
+                      className={`flex-1 py-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                        form.visibleTo === opt.value
+                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {form.visibleTo !== "all" && (
+                <div>
+                  <Label className="text-xs font-medium text-slate-600">
+                    {form.visibleTo === "supervisor"
+                      ? "Select specific supervisors (leave empty for all)"
+                      : "Select specific backend users (leave empty for all)"}
+                  </Label>
+                  <div className="mt-1.5 space-y-1.5 max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white">
+                    {users
+                      .filter(
+                        (u) =>
+                          u.role === form.visibleTo && u.status === "approved",
+                      )
+                      .map((u) => (
+                        <label
+                          key={u.id}
+                          className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded p-1"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.visibleToNames.includes(u.name)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setForm({
+                                  ...form,
+                                  visibleToNames: [
+                                    ...form.visibleToNames,
+                                    u.name,
+                                  ],
+                                });
+                              } else {
+                                setForm({
+                                  ...form,
+                                  visibleToNames: form.visibleToNames.filter(
+                                    (n) => n !== u.name,
+                                  ),
+                                });
+                              }
+                            }}
+                            className="rounded border-slate-300"
+                          />
+                          <span className="text-sm text-slate-700">
+                            {u.name}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {u.email}
+                          </span>
+                        </label>
+                      ))}
+                    {users.filter(
+                      (u) =>
+                        u.role === form.visibleTo && u.status === "approved",
+                    ).length === 0 && (
+                      <p className="text-xs text-slate-400 py-2 text-center">
+                        No{" "}
+                        {form.visibleTo === "supervisor"
+                          ? "supervisors"
+                          : "backend users"}{" "}
+                        found
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Live Preview */}
             <div className="space-y-2">
               <button
@@ -681,7 +960,9 @@ export default function AdminNoticesPage() {
                 <Eye className="h-4 w-4" />
                 Live Preview
                 <ChevronDown
-                  className={`h-3.5 w-3.5 transition-transform ${showPreview ? "rotate-180" : ""}`}
+                  className={`h-3.5 w-3.5 transition-transform ${
+                    showPreview ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {showPreview && (
@@ -702,17 +983,24 @@ export default function AdminNoticesPage() {
                         "Your notice message will appear here..."}
                     </span>
                   </div>
-                  <div className="bg-slate-50 px-3 py-1 text-xs text-slate-400 flex items-center gap-3">
+                  <div className="bg-slate-50 px-3 py-1 text-xs text-slate-400 flex items-center gap-3 flex-wrap">
                     <span>
-                      Direction:{" "}
+                      Mode:{" "}
                       {form.direction === "rtl"
                         ? "Right → Left"
-                        : "Left → Right"}
+                        : form.direction === "ltr"
+                          ? "Left → Right"
+                          : form.direction}
                     </span>
                     <span>Speed: {form.speed}</span>
                     <span>Font: {form.fontSize}</span>
                     {form.bold && <span className="font-bold">Bold</span>}
                     {form.italic && <span className="italic">Italic</span>}
+                    {form.animation !== "none" && (
+                      <span className="text-violet-500">
+                        ✨ {form.animation}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

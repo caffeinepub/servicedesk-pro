@@ -1,12 +1,21 @@
 import {
+  Activity,
   CheckCircle,
+  Circle,
+  Clock,
+  Eye,
+  Key,
+  Mail,
   Pencil,
+  Phone,
+  Shield,
   Trash2,
   UserCheck,
   UserPlus,
   Users,
   XCircle,
 } from "lucide-react";
+import { Shield as ShieldIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -235,11 +244,18 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Admin Panel</h2>
-        <p className="text-sm text-gray-500">
-          Manage users, approvals, and activity
-        </p>
+      <div className="bg-gradient-to-r from-violet-700 to-purple-700 text-white rounded-xl px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl">
+            <Users className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Admin Panel</h1>
+            <p className="text-violet-200 text-sm">
+              Manage users, approvals, and activity
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Stats */}

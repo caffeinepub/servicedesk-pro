@@ -345,12 +345,19 @@ export interface AdminNotice {
   title: string;
   message: string;
   expiryDate?: string;
+  startDate?: string;
   isActive: boolean;
   createdAt: string;
   createdBy: string;
-  direction?: "ltr" | "rtl";
+  direction?: "ltr" | "rtl" | "center" | "left" | "right";
   color?: string;
   speed?: "slow" | "normal" | "fast";
+  paused?: boolean;
+  fontSize?: "sm" | "base" | "lg";
+  bold?: boolean;
+  italic?: boolean;
+  visibleTo?: "all" | "supervisor" | "backend_user";
+  visibleToNames?: string[];
 }
 
 // ── StorePilotAuditLog ────────────────────────────────────────────────────────

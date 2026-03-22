@@ -1,4 +1,4 @@
-import { Search, User } from "lucide-react";
+import { Clock, History, Phone, Search, User, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import StatusBadge from "../components/StatusBadge";
 import { Input } from "../components/ui/input";
@@ -35,13 +35,38 @@ export default function CustomerHistoryPage() {
     return byPhone;
   }, [cases, query]);
 
+  const totalCustomers = grouped.size;
+  const totalCasesAll = cases.length;
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Customer History</h2>
-        <p className="text-sm text-gray-500">
-          All customer complaints — search by name or phone
-        </p>
+    <div className="space-y-5">
+      {/* Gradient Header */}
+      <div className="bg-gradient-to-r from-purple-600 to-violet-700 text-white rounded-2xl px-6 py-6 shadow-lg">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+            <History className="h-7 w-7" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">Customer History</h1>
+            <p className="text-purple-200 text-sm mt-0.5">
+              All customer complaints — search by name or phone
+            </p>
+            <div className="flex items-center gap-4 mt-3 flex-wrap">
+              <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-3 py-1.5">
+                <Users className="h-3.5 w-3.5 text-purple-200" />
+                <span className="text-xs font-semibold">
+                  Total Customers: {totalCustomers}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-3 py-1.5">
+                <Clock className="h-3.5 w-3.5 text-purple-200" />
+                <span className="text-xs font-semibold">
+                  Total Cases: {totalCasesAll}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="relative max-w-xl">
