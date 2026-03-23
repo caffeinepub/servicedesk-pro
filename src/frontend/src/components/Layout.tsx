@@ -4,25 +4,34 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  ArrowLeftRight,
   ArrowRightCircle,
+  BarChart2,
   BarChart3,
   Bell,
+  BookOpen,
+  Boxes,
   Brain,
   Briefcase,
   Building2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ClipboardCheck,
   ClipboardList,
   FileText,
+  FlaskConical,
   FolderOpen,
   GitBranch,
   Layers,
   LayoutDashboard,
+  LineChart,
   LogOut,
   Megaphone,
   Menu,
   Package,
+  PackageSearch,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
@@ -33,6 +42,7 @@ import {
   Shield,
   ShoppingBag,
   ShoppingCart,
+  SlidersHorizontal,
   Sparkles,
   Store,
   Tag,
@@ -59,43 +69,22 @@ type NavItem = {
   badge?: number;
 };
 
-const DASHBOARD_NAV: NavItem = {
-  icon: LayoutDashboard,
-  label: "Dashboard",
-  page: "dashboard",
+type SubGroup = {
+  label: string;
+  icon: React.ElementType;
+  items: NavItem[];
 };
 
-const CASES_NAV: NavItem[] = [
-  { icon: FileText, label: "All Cases", page: "cases" },
-  { icon: Briefcase, label: "New Case", page: "new-case" },
-  { icon: Users, label: "Customer History", page: "customer-history" },
-  { icon: Wrench, label: "Parts Tracking", page: "parts" },
-  { icon: ClipboardList, label: "Part Requests", page: "part-requests" },
-];
+type SectionDef = {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  section: "CASES" | "INVENTORY" | "ADMIN";
+  subGroups: SubGroup[];
+  roles: string[];
+};
 
-const INVENTORY_NAV: NavItem[] = [
-  { icon: Package, label: "Inventory", page: "inventory" },
-  { icon: ShoppingCart, label: "Purchase Entry", page: "purchase" },
-  { icon: ArrowRightCircle, label: "Issued Parts", page: "issued-parts" },
-  { icon: Store, label: "Vendors", page: "vendors" },
-  { icon: RotateCcw, label: "Return to Company", page: "return-to-company" },
-  { icon: GitBranch, label: "Lifecycle", page: "lifecycle" },
-  { icon: Brain, label: "AI Engine", page: "ai-engine" },
-  { icon: Warehouse, label: "Warehouse", page: "warehouse" },
-  { icon: Users, label: "Technicians", page: "technicians" },
-  { icon: BarChart3, label: "Reports", page: "reports" },
-];
-
-const ADMIN_NAV: NavItem[] = [
-  { icon: Settings2, label: "Admin Panel", page: "admin" },
-  { icon: Layers, label: "Masters", page: "masters" },
-  { icon: ClipboardCheck, label: "Audit Logs", page: "audit-logs" },
-  { icon: Megaphone, label: "Notices", page: "notices" },
-  { icon: Trash2, label: "Data Management", page: "data-management" },
-  { icon: Settings, label: "Settings", page: "settings" },
-];
-
-// ── Section config ─────────────────────────────────────────────────────────
+// ── Section colors ──────────────────────────────────────────────────────────
 const SECTION_COLORS = {
   CASES: {
     accent: "text-blue-400",
@@ -104,6 +93,10 @@ const SECTION_COLORS = {
     activeBorder: "border-l-2 border-blue-400",
     hoverBg: "hover:bg-blue-500/10",
     headerColor: "text-blue-400",
+    headerBg: "bg-blue-500/10",
+    subHeaderBg: "bg-blue-500/5",
+    subHeaderText: "text-blue-300",
+    chevronColor: "text-blue-400",
   },
   INVENTORY: {
     accent: "text-emerald-400",
@@ -112,6 +105,10 @@ const SECTION_COLORS = {
     activeBorder: "border-l-2 border-emerald-400",
     hoverBg: "hover:bg-emerald-500/10",
     headerColor: "text-emerald-400",
+    headerBg: "bg-emerald-500/10",
+    subHeaderBg: "bg-emerald-500/5",
+    subHeaderText: "text-emerald-300",
+    chevronColor: "text-emerald-400",
   },
   ADMIN: {
     accent: "text-violet-400",
@@ -120,6 +117,10 @@ const SECTION_COLORS = {
     activeBorder: "border-l-2 border-violet-400",
     hoverBg: "hover:bg-violet-500/10",
     headerColor: "text-violet-400",
+    headerBg: "bg-violet-500/10",
+    subHeaderBg: "bg-violet-500/5",
+    subHeaderText: "text-violet-300",
+    chevronColor: "text-violet-400",
   },
   DASHBOARD: {
     accent: "text-indigo-400",
@@ -128,7 +129,184 @@ const SECTION_COLORS = {
     activeBorder: "border-l-2 border-indigo-400",
     hoverBg: "hover:bg-indigo-500/10",
     headerColor: "text-indigo-400",
+    headerBg: "",
+    subHeaderBg: "",
+    subHeaderText: "",
+    chevronColor: "text-indigo-400",
   },
+};
+
+// ── Nav sections definition ─────────────────────────────────────────────────
+// CASES for backend_user (includes Part Requests + Insights/Reports)
+const CASES_SECTIONS_BACKEND_USER: SectionDef = {
+  key: "CASES",
+  label: "Cases",
+  icon: FolderOpen,
+  section: "CASES",
+  roles: ["backend_user"],
+  subGroups: [
+    {
+      label: "Case Management",
+      icon: Briefcase,
+      items: [
+        { icon: FileText, label: "All Cases", page: "cases" },
+        { icon: Briefcase, label: "New Case", page: "new-case" },
+        { icon: Users, label: "Customer History", page: "customer-history" },
+      ],
+    },
+    {
+      label: "Tracking",
+      icon: ClipboardList,
+      items: [
+        { icon: Wrench, label: "Parts Tracking", page: "parts" },
+        { icon: ClipboardList, label: "Part Requests", page: "part-requests" },
+      ],
+    },
+    {
+      label: "Insights",
+      icon: BarChart3,
+      items: [{ icon: BarChart3, label: "Reports", page: "reports" }],
+    },
+  ],
+};
+
+// CASES for admin (no Part Requests, no Insights sub-group — those are standalone at top)
+const CASES_SECTIONS_ADMIN: SectionDef = {
+  key: "CASES",
+  label: "Cases",
+  icon: FolderOpen,
+  section: "CASES",
+  roles: ["admin"],
+  subGroups: [
+    {
+      label: "Case Management",
+      icon: Briefcase,
+      items: [
+        { icon: FileText, label: "All Cases", page: "cases" },
+        { icon: Briefcase, label: "New Case", page: "new-case" },
+        { icon: Users, label: "Customer History", page: "customer-history" },
+      ],
+    },
+    {
+      label: "Tracking",
+      icon: ClipboardList,
+      items: [{ icon: Wrench, label: "Parts Tracking", page: "parts" }],
+    },
+  ],
+};
+
+// INVENTORY for admin (no Part Requests in Operations, no Masters & Config sub-group)
+const INVENTORY_SECTIONS_ADMIN: SectionDef = {
+  key: "INVENTORY",
+  label: "Inventory",
+  icon: Package,
+  section: "INVENTORY",
+  roles: ["admin"],
+  subGroups: [
+    {
+      label: "Stock Management",
+      icon: Boxes,
+      items: [
+        { icon: Warehouse, label: "Warehouse", page: "warehouse" },
+        { icon: Package, label: "Inventory", page: "inventory" },
+        { icon: ShoppingCart, label: "Purchase Entry", page: "purchase" },
+      ],
+    },
+    {
+      label: "Operations",
+      icon: ArrowLeftRight,
+      items: [
+        { icon: ArrowRightCircle, label: "Issued Parts", page: "issued-parts" },
+        {
+          icon: RotateCcw,
+          label: "Return to Company",
+          page: "return-to-company",
+        },
+      ],
+    },
+  ],
+};
+
+// INVENTORY for supervisor (with Part Requests in Operations, with Insights/Reports sub-group)
+const INVENTORY_SECTIONS_SUPERVISOR: SectionDef = {
+  key: "INVENTORY",
+  label: "Inventory",
+  icon: Package,
+  section: "INVENTORY",
+  roles: ["supervisor"],
+  subGroups: [
+    {
+      label: "Stock Management",
+      icon: Boxes,
+      items: [
+        { icon: Warehouse, label: "Warehouse", page: "warehouse" },
+        { icon: Package, label: "Inventory", page: "inventory" },
+        { icon: ShoppingCart, label: "Purchase Entry", page: "purchase" },
+      ],
+    },
+    {
+      label: "Operations",
+      icon: ArrowLeftRight,
+      items: [
+        { icon: ArrowRightCircle, label: "Issued Parts", page: "issued-parts" },
+        {
+          icon: RotateCcw,
+          label: "Return to Company",
+          page: "return-to-company",
+        },
+        { icon: ClipboardList, label: "Part Requests", page: "part-requests" },
+      ],
+    },
+    {
+      label: "Insights",
+      icon: BarChart3,
+      items: [{ icon: BarChart2, label: "Reports", page: "reports" }],
+    },
+  ],
+};
+
+const ADMIN_SECTIONS: SectionDef = {
+  key: "ADMIN",
+  label: "Admin",
+  icon: Shield,
+  section: "ADMIN",
+  roles: ["admin"],
+  subGroups: [
+    {
+      label: "Analytics",
+      icon: LineChart,
+      items: [
+        { icon: Brain, label: "AI Engine", page: "ai-engine" },
+        { icon: ScrollText, label: "Audit Logs", page: "audit-logs" },
+      ],
+    },
+    {
+      label: "Inventory Control",
+      icon: PackageSearch,
+      items: [
+        { icon: GitBranch, label: "Lifecycle", page: "lifecycle" },
+        { icon: Store, label: "Vendors", page: "vendors" },
+        { icon: Users, label: "Technicians", page: "technicians" },
+        { icon: Layers, label: "Masters", page: "masters" },
+      ],
+    },
+    {
+      label: "Administration",
+      icon: SlidersHorizontal,
+      items: [
+        { icon: Settings2, label: "Admin Panel", page: "admin" },
+        { icon: Megaphone, label: "Notices", page: "notices" },
+        { icon: Trash2, label: "Data Management", page: "data-management" },
+        { icon: Settings, label: "Settings", page: "settings" },
+      ],
+    },
+  ],
+};
+
+const DASHBOARD_NAV: NavItem = {
+  icon: LayoutDashboard,
+  label: "Dashboard",
+  page: "dashboard",
 };
 
 // ── InlineSearch ─────────────────────────────────────────────────────────────
@@ -457,11 +635,7 @@ const NOTICE_COLORS: Record<
     text: "text-white",
     border: "",
   },
-  rainbow: {
-    bg: "notice-rainbow-animated",
-    text: "text-white",
-    border: "",
-  },
+  rainbow: { bg: "notice-rainbow-animated", text: "text-white", border: "" },
 };
 
 function NoticeBanner() {
@@ -507,7 +681,6 @@ function NoticeBanner() {
   const isItalic = (notice as any).italic ?? false;
   const animation = (notice as any).animation ?? "none";
   const textColor = (notice as any).textColor ?? "";
-
   const isScrolling = direction === "rtl" || direction === "ltr";
 
   const getAnimationClass = () => {
@@ -571,11 +744,9 @@ function NoticeBanner() {
   };
 
   const getTextAnimStyle = (): React.CSSProperties => {
-    const isScrollingMode = direction === "rtl" || direction === "ltr";
     switch (textAnimation) {
       case "typewriter":
-        // In scrolling marquee context, typewriter width animation hides text; use glow instead
-        if (isScrollingMode) {
+        if (isScrolling) {
           return {
             display: "inline",
             color: "inherit",
@@ -604,7 +775,6 @@ function NoticeBanner() {
           animation: "textBounce 0.8s ease infinite",
         };
       case "text_fadein":
-        // min opacity 0.7 so text is always readable
         return {
           color: "inherit",
           animation: "textFadeinVisible 1.5s ease infinite",
@@ -646,30 +816,12 @@ function NoticeBanner() {
   return (
     <>
       <style>{`
-        @keyframes marquee-rtl {
-          0% { transform: translateX(0%); }
-          100% { transform: translateX(-100%); }
-        }
-        @keyframes marquee-ltr {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        @keyframes shimmer {
-          0% { background-position: 200% center; }
-          100% { background-position: -200% center; }
-        }
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
-        @keyframes fadeInBanner {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideInBanner {
-          from { transform: translateY(-100%); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
+        @keyframes marquee-rtl { 0% { transform: translateX(0%); } 100% { transform: translateX(-100%); } }
+        @keyframes marquee-ltr { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        @keyframes shimmer { 0% { background-position: 200% center; } 100% { background-position: -200% center; } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes fadeInBanner { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInBanner { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes rainbowBg {
           0%   { background-position: 0% 50%;   filter: brightness(1.1) saturate(1.5) drop-shadow(0 0 6px rgba(255,100,0,0.8)); }
           16%  { background-position: 80% 50%;  filter: brightness(1.3) saturate(2.0) drop-shadow(0 0 10px rgba(255,255,0,0.9)); }
@@ -684,47 +836,11 @@ function NoticeBanner() {
           33%  { box-shadow: 0 0 12px rgba(0,255,100,0.7), 0 2px 16px rgba(0,200,255,0.5); }
           66%  { box-shadow: 0 0 10px rgba(100,0,255,0.6), 0 2px 14px rgba(255,0,200,0.5); }
         }
-        @keyframes typewriter {
-          0%   { width: 0ch; overflow: hidden; }
-          80%  { width: 100%; overflow: hidden; }
-          100% { width: 100%; }
-        }
-        @keyframes textGlow {
-          0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.4); }
-          50% { text-shadow: 0 0 16px rgba(255,255,255,1), 0 0 30px rgba(255,255,255,0.6); }
-        }
-        @keyframes textBounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
-        }
-        @keyframes textFadein {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 1; }
-        }
-        @keyframes textFadeinVisible {
-          0%, 100% { opacity: 0.7; }
-          50% { opacity: 1; }
-        }
-        @keyframes textShimmer {
-          0% { background-position: 200% center; }
-          100% { background-position: -200% center; }
-        }
-        @keyframes textShimmerGlow {
-          0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.6); opacity: 0.9; }
-          50% { text-shadow: 0 0 12px rgba(255,255,255,1), 0 0 24px rgba(255,220,100,0.7), 0 0 36px rgba(255,180,50,0.4); opacity: 1; }
-        }
-        @keyframes textRainbow {
-          0% { filter: hue-rotate(0deg); }
-          100% { filter: hue-rotate(360deg); }
-        }
-        .notice-text-rainbow {
-          animation: textHueRotate 2s linear infinite !important;
-          color: #ff6644 !important;
-          -webkit-text-fill-color: initial !important;
-          background: none !important;
-          text-shadow: 0 0 8px currentColor, 0 0 16px rgba(255,200,0,0.6), 0 0 24px rgba(255,100,0,0.4) !important;
-          font-weight: bold !important;
-        }
+        @keyframes typewriter { 0% { width: 0ch; overflow: hidden; } 80% { width: 100%; overflow: hidden; } 100% { width: 100%; } }
+        @keyframes textGlow { 0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.4); } 50% { text-shadow: 0 0 16px rgba(255,255,255,1), 0 0 30px rgba(255,255,255,0.6); } }
+        @keyframes textBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        @keyframes textFadeinVisible { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+        @keyframes textShimmerGlow { 0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.6); opacity: 0.9; } 50% { text-shadow: 0 0 12px rgba(255,255,255,1), 0 0 24px rgba(255,220,100,0.7), 0 0 36px rgba(255,180,50,0.4); opacity: 1; } }
         @keyframes textHueRotate {
           0% { filter: hue-rotate(0deg) brightness(1.1); color: #ff4444; }
           16% { filter: hue-rotate(60deg) brightness(1.2); color: #ffaa00; }
@@ -734,26 +850,12 @@ function NoticeBanner() {
           83% { filter: hue-rotate(300deg) brightness(1.2); color: #ff44cc; }
           100% { filter: hue-rotate(360deg) brightness(1.1); color: #ff4444; }
         }
-        .notice-rainbow-swatch {
-          background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff);
-        }
-        .sidebar-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .sidebar-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .sidebar-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(99, 102, 241, 0.35);
-          border-radius: 9999px;
-        }
-        .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(99, 102, 241, 0.6);
-        }
-        .sidebar-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(99,102,241,0.35) transparent;
-        }
+        .notice-text-rainbow { animation: textHueRotate 2s linear infinite !important; color: #ff4444 !important; text-shadow: 0 0 8px currentColor, 0 0 16px rgba(255,200,0,0.6), 0 0 24px rgba(255,100,0,0.4) !important; font-weight: bold !important; }
+        .sidebar-scrollbar::-webkit-scrollbar { width: 4px; }
+        .sidebar-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.35); border-radius: 9999px; }
+        .sidebar-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.6); }
+        .sidebar-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(99,102,241,0.35) transparent; }
       `}</style>
       <div
         className={`${colorKey === "rainbow" ? "" : colors.bg} ${colors.text} px-4 py-2 flex items-center gap-3 relative z-40 overflow-hidden`}
@@ -828,6 +930,7 @@ function NavButton({
   badge,
   section,
   onNavigate,
+  indent = false,
 }: {
   item: NavItem;
   collapsed?: boolean;
@@ -835,6 +938,7 @@ function NavButton({
   badge?: number;
   section: "CASES" | "INVENTORY" | "ADMIN" | "DASHBOARD";
   onNavigate?: () => void;
+  indent?: boolean;
 }) {
   const { navigate } = useStore();
   const colors = SECTION_COLORS[section];
@@ -848,8 +952,10 @@ function NavButton({
         onNavigate?.();
       }}
       title={collapsed ? item.label : undefined}
-      className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-        collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
+      className={`w-full flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-200 relative ${
+        collapsed
+          ? "justify-center px-2 py-2.5"
+          : `${indent ? "pl-7 pr-3" : "px-3"} py-2`
       } ${
         isActive
           ? `${colors.activeBg} ${colors.activeText} ${colors.activeBorder} shadow-sm`
@@ -876,40 +982,162 @@ function NavButton({
   );
 }
 
-// ── SectionHeader ─────────────────────────────────────────────────────────────
-function SectionHeader({
-  label,
-  collapsed,
-  Icon,
-  section,
+// ── CollapsibleSection ────────────────────────────────────────────────────────
+function CollapsibleSection({
+  sectionDef,
+  collapsed: sidebarCollapsed,
+  currentPage,
+  onNavigate,
+  role: _role,
+  unread,
+  pendingApprovals,
 }: {
-  label: string;
+  sectionDef: SectionDef;
   collapsed?: boolean;
-  Icon: React.ElementType;
-  section: "CASES" | "INVENTORY" | "ADMIN";
+  currentPage: PageType;
+  onNavigate?: () => void;
+  role: string;
+  unread?: number;
+  pendingApprovals?: number;
 }) {
-  const colors = SECTION_COLORS[section];
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [subGroupOpen, setSubGroupOpen] = useState<Record<string, boolean>>({});
+
+  const colors = SECTION_COLORS[sectionDef.section];
+
+  const toggleSubGroup = (label: string) => {
+    setSubGroupOpen((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  // Check if any item in section is active to show indicator
+  const allItems = sectionDef.subGroups.flatMap((sg) => sg.items);
+  const hasActiveItem = allItems.some((item) => item.page === currentPage);
+
+  if (sidebarCollapsed) {
+    // Collapsed sidebar: show section icon only with tooltip
+    return (
+      <div className="px-2 py-1">
+        <button
+          type="button"
+          className={`w-full flex justify-center py-2 rounded-lg ${
+            hasActiveItem ? colors.headerBg : "hover:bg-slate-800/50"
+          }`}
+          title={sectionDef.label}
+          onClick={() => setGroupOpen((o) => !o)}
+        >
+          <sectionDef.icon
+            className={`h-4 w-4 ${hasActiveItem ? colors.headerColor : "text-slate-500"}`}
+          />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={`flex items-center gap-2 pt-4 pb-1.5 ${collapsed ? "px-2 justify-center" : "px-3"}`}
-    >
-      {collapsed ? (
-        <Icon className={`h-3.5 w-3.5 ${colors.headerColor}`} />
-      ) : (
-        <>
-          <Icon className={`h-3.5 w-3.5 ${colors.headerColor}`} />
+    <div className="mb-1">
+      {/* Main group header */}
+      <button
+        type="button"
+        onClick={() => setGroupOpen((o) => !o)}
+        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+          hasActiveItem ? `${colors.headerBg}` : "hover:bg-slate-800/40"
+        }`}
+      >
+        <div
+          className={`flex items-center justify-center w-6 h-6 rounded-md ${colors.headerBg}`}
+        >
+          <sectionDef.icon className={`h-3.5 w-3.5 ${colors.headerColor}`} />
+        </div>
+        <span
+          className={`flex-1 text-left text-[11px] font-bold uppercase tracking-widest ${colors.headerColor}`}
+        >
+          {sectionDef.label}
+        </span>
+        {hasActiveItem && !groupOpen && (
           <span
-            className={`text-[10px] font-bold ${colors.headerColor} uppercase tracking-widest`}
-          >
-            {label}
-          </span>
-        </>
+            className={`w-1.5 h-1.5 rounded-full bg-current ${colors.headerColor} mr-1`}
+          />
+        )}
+        {groupOpen ? (
+          <ChevronUp
+            className={`h-3.5 w-3.5 ${colors.chevronColor} flex-shrink-0`}
+          />
+        ) : (
+          <ChevronDown
+            className={`h-3.5 w-3.5 ${colors.chevronColor} flex-shrink-0`}
+          />
+        )}
+      </button>
+
+      {/* Sub-groups */}
+      {groupOpen && (
+        <div className="mt-0.5 space-y-0.5">
+          {sectionDef.subGroups.map((sg) => {
+            const isSubOpen = subGroupOpen[sg.label] ?? false;
+            // Filter items based on role for certain pages
+            const filteredItems = sg.items.filter((item) => {
+              // Part Requests in INVENTORY Operations: supervisor sees it, admin sees it
+              if (item.page === "part-requests") return true;
+              return true;
+            });
+
+            if (filteredItems.length === 0) return null;
+
+            return (
+              <div key={sg.label} className="ml-2">
+                {/* Sub-group header */}
+                <button
+                  type="button"
+                  onClick={() => toggleSubGroup(sg.label)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
+                    colors.subHeaderBg
+                  } ${colors.subHeaderText} hover:brightness-110`}
+                >
+                  <sg.icon className="h-3 w-3 flex-shrink-0" />
+                  <span className="flex-1 text-left tracking-wide">
+                    {sg.label}
+                  </span>
+                  {isSubOpen ? (
+                    <ChevronUp className="h-3 w-3 flex-shrink-0 opacity-60" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 flex-shrink-0 opacity-60" />
+                  )}
+                </button>
+
+                {/* Items */}
+                {isSubOpen && (
+                  <div className="ml-1 mt-0.5 space-y-0.5">
+                    {filteredItems.map((item) => (
+                      <NavButton
+                        key={item.page + item.label}
+                        item={item}
+                        currentPage={currentPage}
+                        section={sectionDef.section}
+                        onNavigate={onNavigate}
+                        indent
+                        badge={
+                          item.page === "notifications"
+                            ? unread
+                            : item.page === "admin"
+                              ? pendingApprovals && pendingApprovals > 0
+                                ? pendingApprovals
+                                : undefined
+                              : undefined
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-// ── Sidebar content ────────────────────────────────────────────────────────────
+// ── SidebarContent ────────────────────────────────────────────────────────────
 function SidebarContent({
   collapsed,
   onNavigate,
@@ -919,9 +1147,10 @@ function SidebarContent({
   onNavigate?: () => void;
   setCollapsed?: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
-  const { currentUser, currentPage, notifications, logout } = useStore();
+  const { currentUser, currentPage, notifications, logout, users } = useStore();
   const role = currentUser?.role ?? "backend_user";
   const unread = notifications.filter((n) => !n.isRead).length;
+  const pendingApprovals = users.filter((u) => u.status === "pending").length;
 
   const initials = (currentUser?.name ?? "U")
     .split(" ")
@@ -973,9 +1202,7 @@ function SidebarContent({
       {/* Collapse toggle - TOP */}
       {setCollapsed && (
         <div
-          className={`flex ${
-            collapsed ? "justify-center px-3" : "justify-end px-3"
-          } py-2 border-b border-slate-800/50`}
+          className={`flex ${collapsed ? "justify-center px-3" : "justify-end px-3"} py-2 border-b border-slate-800/50`}
         >
           <button
             type="button"
@@ -992,13 +1219,15 @@ function SidebarContent({
         </div>
       )}
 
-      {/* Nav sections */}
+      {/* Nav */}
       <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 sidebar-scrollbar">
         {/* Dashboard - always on top, standalone */}
         {(role === "admin" ||
           role === "backend_user" ||
           role === "supervisor") && (
-          <div className={`pt-2 pb-1 ${collapsed ? "px-2" : "px-1"}`}>
+          <div
+            className={`pb-2 mb-1 border-b border-slate-800/50 ${collapsed ? "px-2" : "px-1"}`}
+          >
             <NavButton
               item={DASHBOARD_NAV}
               collapsed={collapsed}
@@ -1009,86 +1238,88 @@ function SidebarContent({
           </div>
         )}
 
-        {/* CASES section */}
-        {(role === "admin" || role === "backend_user") && (
-          <>
-            <SectionHeader
-              label="Cases"
+        {/* Admin standalone: Reports + Part Requests (below Dashboard, above groups) */}
+        {role === "admin" && (
+          <div className={collapsed ? "px-2" : "px-1"}>
+            <NavButton
+              item={{ icon: BarChart3, label: "Reports", page: "reports" }}
               collapsed={collapsed}
-              Icon={FolderOpen}
-              section="CASES"
+              currentPage={currentPage}
+              section="ADMIN"
+              onNavigate={onNavigate}
             />
-            {CASES_NAV.map((item) => (
-              <NavButton
-                key={item.page}
-                item={item}
-                collapsed={collapsed}
-                currentPage={currentPage}
-                section="CASES"
-                onNavigate={onNavigate}
-              />
-            ))}
-          </>
+            <NavButton
+              item={{
+                icon: ClipboardList,
+                label: "Part Requests",
+                page: "part-requests",
+              }}
+              collapsed={collapsed}
+              currentPage={currentPage}
+              section="INVENTORY"
+              onNavigate={onNavigate}
+            />
+          </div>
+        )}
+
+        {/* CASES section */}
+        {role === "admin" && (
+          <CollapsibleSection
+            sectionDef={CASES_SECTIONS_ADMIN}
+            collapsed={collapsed}
+            currentPage={currentPage}
+            onNavigate={onNavigate}
+            role={role}
+            unread={unread}
+          />
+        )}
+        {role === "backend_user" && (
+          <CollapsibleSection
+            sectionDef={CASES_SECTIONS_BACKEND_USER}
+            collapsed={collapsed}
+            currentPage={currentPage}
+            onNavigate={onNavigate}
+            role={role}
+            unread={unread}
+          />
         )}
 
         {/* INVENTORY section */}
-        {(role === "admin" || role === "supervisor") && (
-          <>
-            <SectionHeader
-              label="Inventory"
-              collapsed={collapsed}
-              Icon={Package}
-              section="INVENTORY"
-            />
-            {role === "supervisor" && (
-              <NavButton
-                item={{
-                  icon: ClipboardList,
-                  label: "Part Requests",
-                  page: "part-requests",
-                }}
-                collapsed={collapsed}
-                currentPage={currentPage}
-                section="INVENTORY"
-                onNavigate={onNavigate}
-              />
-            )}
-            {INVENTORY_NAV.map((item) => (
-              <NavButton
-                key={item.page + item.label}
-                item={item}
-                collapsed={collapsed}
-                currentPage={currentPage}
-                section="INVENTORY"
-                onNavigate={onNavigate}
-              />
-            ))}
-          </>
+        {role === "admin" && (
+          <CollapsibleSection
+            sectionDef={INVENTORY_SECTIONS_ADMIN}
+            collapsed={collapsed}
+            currentPage={currentPage}
+            onNavigate={onNavigate}
+            role={role}
+            unread={unread}
+          />
+        )}
+        {role === "supervisor" && (
+          <CollapsibleSection
+            sectionDef={INVENTORY_SECTIONS_SUPERVISOR}
+            collapsed={collapsed}
+            currentPage={currentPage}
+            onNavigate={onNavigate}
+            role={role}
+            unread={unread}
+          />
         )}
 
         {/* ADMIN section */}
         {role === "admin" && (
-          <>
-            <SectionHeader
-              label="Admin"
-              collapsed={collapsed}
-              Icon={Shield}
-              section="ADMIN"
-            />
-            {ADMIN_NAV.map((item) => (
-              <NavButton
-                key={item.page}
-                item={item}
-                collapsed={collapsed}
-                currentPage={currentPage}
-                section="ADMIN"
-                onNavigate={onNavigate}
-              />
-            ))}
-          </>
+          <CollapsibleSection
+            sectionDef={ADMIN_SECTIONS}
+            collapsed={collapsed}
+            currentPage={currentPage}
+            onNavigate={onNavigate}
+            role={role}
+            unread={unread}
+            pendingApprovals={pendingApprovals}
+          />
         )}
 
-        {/* Notifications & Profile */}
+        {/* Quick access: Notifications & Profile always at bottom */}
         <div className={`pt-3 pb-1 ${collapsed ? "px-2" : "px-3"}`}>
           <div className="border-t border-slate-800/60" />
         </div>
@@ -1225,7 +1456,7 @@ const PAGE_SECTION: Record<
   vendors: {
     label: "Vendors",
     icon: Store,
-    gradient: "bg-gradient-to-r from-emerald-600 to-teal-600",
+    gradient: "bg-gradient-to-r from-violet-600 to-purple-600",
     text: "text-white",
   },
   "return-to-company": {
@@ -1237,7 +1468,7 @@ const PAGE_SECTION: Record<
   lifecycle: {
     label: "Lifecycle",
     icon: GitBranch,
-    gradient: "bg-gradient-to-r from-indigo-600 to-purple-600",
+    gradient: "bg-gradient-to-r from-violet-600 to-purple-600",
     text: "text-white",
   },
   "ai-engine": {
@@ -1255,7 +1486,7 @@ const PAGE_SECTION: Record<
   technicians: {
     label: "Technicians",
     icon: Users,
-    gradient: "bg-gradient-to-r from-emerald-600 to-teal-600",
+    gradient: "bg-gradient-to-r from-violet-600 to-purple-600",
     text: "text-white",
   },
   reports: {
@@ -1344,7 +1575,6 @@ export default function Layout({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const unread = notifications.filter((n) => !n.isRead).length;
-
   const currentPageStr = useStore.getState().currentPage as string;
 
   if (isMobile) {
@@ -1388,14 +1618,12 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="h-screen flex overflow-hidden bg-slate-50">
-      {/* Sidebar */}
       <aside
-        className={`flex-shrink-0 transition-all duration-300 ${collapsed ? "w-16" : "w-60"} overflow-hidden`}
+        className={`flex-shrink-0 transition-all duration-300 ${collapsed ? "w-16" : "w-64"} overflow-hidden`}
       >
         <SidebarContent collapsed={collapsed} setCollapsed={setCollapsed} />
       </aside>
 
-      {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <NoticeBanner />
         <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between flex-shrink-0 shadow-sm">
@@ -1404,7 +1632,6 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             <InlineSearch />
-            {/* Bell */}
             <button
               type="button"
               onClick={() => navigate("notifications")}
@@ -1417,7 +1644,6 @@ export default function Layout({ children }: { children: ReactNode }) {
                 </span>
               )}
             </button>
-            {/* Profile */}
             <button
               type="button"
               onClick={() => navigate("profile")}
@@ -1438,7 +1664,6 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {/* Page content with padding */}
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
     </div>

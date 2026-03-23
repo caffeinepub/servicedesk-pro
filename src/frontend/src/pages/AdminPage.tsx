@@ -16,7 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Shield as ShieldIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -57,6 +57,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
+import { backendGetUsers } from "../services/userBackend";
 import { useStore } from "../store";
 import type { User, UserRole } from "../types";
 
@@ -143,9 +144,36 @@ export default function AdminPage() {
     createUser,
     editUser,
     deleteUser,
+    setUsers,
   } = useStore();
 
   const isAdmin = currentUser?.role === "admin";
+
+  // Live polling: update users list every 10 seconds to catch new registrations
+  useEffect(() => {
+    if (!isAdmin) return;
+    const interval = setInterval(() => {
+      backendGetUsers()
+        .then((freshUsers) => {
+          if (freshUsers.length > 0) {
+            const localUsers = useStore.getState().users;
+            const merged = [...freshUsers];
+            for (const local of localUsers) {
+              if (
+                !merged.find(
+                  (b) => b.id === local.id || b.email === local.email,
+                )
+              ) {
+                merged.push(local);
+              }
+            }
+            setUsers(merged);
+          }
+        })
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isAdmin, setUsers]);
 
   // Create/Edit dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -189,9 +217,13 @@ export default function AdminPage() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name.trim() || !form.email.trim()) {
       toast.error("Name and email are required");
+      return;
+    }
+    if (!form.phone.trim() || !/^\d{10}$/.test(form.phone.trim())) {
+      toast.error("Mobile number is required and must be exactly 10 digits");
       return;
     }
     if (!editingUser && !form.password) {
@@ -209,7 +241,7 @@ export default function AdminPage() {
       editUser(editingUser.id, updates);
       toast.success("User updated successfully");
     } else {
-      createUser({
+      await createUser({
         name: form.name.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
@@ -350,7 +382,10 @@ export default function AdminPage() {
                     <div className="flex gap-2 flex-shrink-0">
                       <Button
                         size="sm"
-                        onClick={() => approveUser(u.id)}
+                        onClick={async () => {
+                          await approveUser(u.id);
+                          toast.success("User approved");
+                        }}
                         className="bg-green-600 hover:bg-green-700 h-8"
                         data-ocid="admin.confirm_button"
                       >
@@ -444,6 +479,9 @@ export default function AdminPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="supervisor">
+                                  Supervisor
+                                </SelectItem>
                                 <SelectItem value="backend_user">
                                   Backend User
                                 </SelectItem>
@@ -488,7 +526,10 @@ export default function AdminPage() {
                                 <>
                                   <Button
                                     size="sm"
-                                    onClick={() => approveUser(u.id)}
+                                    onClick={async () => {
+                                      await approveUser(u.id);
+                                      toast.success("User approved");
+                                    }}
                                     className="h-6 text-xs bg-green-600 hover:bg-green-700"
                                   >
                                     Approve
@@ -661,13 +702,19 @@ export default function AdminPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Phone</Label>
+              <Label>
+                Phone *{" "}
+                <span className="text-xs font-normal text-gray-500">
+                  (10 digits)
+                </span>
+              </Label>
               <Input
                 value={form.phone}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, phone: e.target.value }))
                 }
-                placeholder="Enter phone number"
+                placeholder="10-digit mobile number"
+                maxLength={10}
               />
             </div>
             <div className="space-y-1">
@@ -683,6 +730,7 @@ export default function AdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="supervisor">Supervisor</SelectItem>
                   <SelectItem value="backend_user">Backend User</SelectItem>
                 </SelectContent>
               </Select>

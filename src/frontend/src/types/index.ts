@@ -337,6 +337,9 @@ export interface PartRequest {
   rejectedAt: string;
   rejectedBy: string;
   rejectedByName: string;
+  message: string;
+  productType: string;
+  companyName: string;
 }
 
 // ── Admin Notices ────────────────────────────────────────────────────────────

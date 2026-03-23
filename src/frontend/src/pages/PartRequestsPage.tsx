@@ -5,6 +5,7 @@ import {
   FileText,
   Hash,
   Inbox,
+  MessageSquare,
   Package,
   Send,
   ShoppingCart,
@@ -156,7 +157,7 @@ export default function PartRequestsPage() {
             type="button"
             key={t.key}
             onClick={() => setActiveTab(t.key)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === t.key
                 ? "bg-blue-600 text-white"
                 : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
@@ -239,6 +240,19 @@ export default function PartRequestsPage() {
                         </span>
                       </div>
 
+                      {/* Supervisor: show requester badge prominently */}
+                      {isPrivileged && (
+                        <div className="mt-2">
+                          <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-full text-xs font-medium">
+                            <User className="h-3 w-3" />
+                            Requested by: <strong>{req.requestedByName}</strong>
+                            <span className="text-indigo-400">
+                              · Backend User
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
                       <div className="mt-2 flex flex-wrap gap-4 text-sm">
                         <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
                           <Package className="h-3.5 w-3.5" />
@@ -256,13 +270,37 @@ export default function PartRequestsPage() {
                             <span>{req.partCode}</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-                          <User className="h-3.5 w-3.5" />
-                          <span>{req.requestedByName}</span>
-                        </div>
+                        {!isPrivileged && (
+                          <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                            <User className="h-3.5 w-3.5" />
+                            <span>{req.requestedByName}</span>
+                          </div>
+                        )}
+                        {req.productType && (
+                          <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                            <span>{req.productType}</span>
+                          </div>
+                        )}
+                        {req.companyName && (
+                          <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                            <FileText className="h-3.5 w-3.5" />
+                            <span>{req.companyName}</span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Issued / rejected info */}
+                      {/* Supervisor: show pre-formatted message */}
+                      {isPrivileged && req.message && (
+                        <div className="mt-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 flex items-start gap-2">
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-500 mt-0.5 flex-shrink-0" />
+                          <p className="text-xs text-blue-800 italic leading-relaxed">
+                            {req.message}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Issued info — visible to ALL roles */}
                       {req.status === "issued" && (
                         <div className="mt-2 text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-md inline-flex items-center gap-1.5">
                           <CheckCircle className="h-3.5 w-3.5" />
@@ -274,6 +312,8 @@ export default function PartRequestsPage() {
                           {req.issuedByName}
                         </div>
                       )}
+
+                      {/* Rejected info — visible to ALL roles */}
                       {req.status === "rejected" && (
                         <div className="mt-2 text-xs bg-red-50 text-red-700 px-3 py-1.5 rounded-md">
                           <span className="font-medium">Rejected</span> by{" "}
@@ -325,6 +365,27 @@ export default function PartRequestsPage() {
           </DialogHeader>
           {issueModal && (
             <div className="space-y-4">
+              {/* Requester info */}
+              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                <User className="h-4 w-4 text-indigo-600" />
+                <div>
+                  <p className="text-xs text-indigo-500">Requested by</p>
+                  <p className="text-sm font-semibold text-indigo-800">
+                    {issueModal.requestedByName}
+                  </p>
+                </div>
+              </div>
+
+              {/* Pre-formatted message */}
+              {issueModal.message && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 flex items-start gap-2">
+                  <MessageSquare className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-blue-800 italic leading-relaxed">
+                    {issueModal.message}
+                  </p>
+                </div>
+              )}
+
               <div className="bg-[var(--bg-surface)] rounded-lg p-3 border border-[var(--border)] space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-[var(--text-muted)]">Case</span>
@@ -342,6 +403,22 @@ export default function PartRequestsPage() {
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Part Code</span>
                     <span className="font-medium">{issueModal.partCode}</span>
+                  </div>
+                )}
+                {issueModal.productType && (
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Product</span>
+                    <span className="font-medium">
+                      {issueModal.productType}
+                    </span>
+                  </div>
+                )}
+                {issueModal.companyName && (
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Company</span>
+                    <span className="font-medium">
+                      {issueModal.companyName}
+                    </span>
                   </div>
                 )}
               </div>

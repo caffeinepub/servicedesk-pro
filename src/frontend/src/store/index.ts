@@ -920,8 +920,9 @@ interface StoreState {
   // Actions
   setInitializing: (val: boolean) => void;
   setUsers: (users: User[]) => void;
+  mergeUsers: (backendUsers: User[]) => void;
   initUsers: () => Promise<void>;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   navigate: (
     page: PageType,
@@ -938,8 +939,8 @@ interface StoreState {
       User,
       "id" | "createdAt" | "status" | "lastLogin" | "lastActive" | "isOnline"
     >,
-  ) => void;
-  approveUser: (userId: string) => void;
+  ) => Promise<void>;
+  approveUser: (userId: string) => Promise<void>;
   rejectUser: (userId: string) => void;
   updateUserRole: (userId: string, role: User["role"]) => void;
   createUser: (userData: {
@@ -948,7 +949,7 @@ interface StoreState {
     phone: string;
     role: User["role"];
     password: string;
-  }) => void;
+  }) => Promise<void>;
   editUser: (userId: string, updates: Partial<User>) => void;
   deleteUser: (userId: string) => void;
   updateCurrentUser: (updates: Partial<User>) => void;
@@ -1083,6 +1084,7 @@ interface StoreState {
       | "rejectedAt"
       | "rejectedBy"
       | "rejectedByName"
+      | "message"
     >,
   ) => void;
   issuePartRequest: (id: string, technicianId: string) => void;
@@ -1163,6 +1165,18 @@ export const useStore = create<StoreState>()(
         storeNotifications: SEED_STORE_NOTIFICATIONS,
 
         setInitializing: (val) => set({ isInitializing: val }),
+        mergeUsers: (backendUsers) => {
+          const localUsers = get().users;
+          const merged = [...backendUsers];
+          for (const local of localUsers) {
+            if (
+              !merged.find((b) => b.id === local.id || b.email === local.email)
+            ) {
+              merged.push(local);
+            }
+          }
+          set({ users: merged });
+        },
         setUsers: (users) => set({ users }),
         initUsers: async () => {
           try {
@@ -1177,20 +1191,36 @@ export const useStore = create<StoreState>()(
             get().setInitializing(false);
           }
         },
-        login: (email, password) => {
-          const user = get().users.find(
+        login: async (email, password) => {
+          let user = get().users.find(
             (u) =>
-              u.email === email &&
+              u.email.toLowerCase().trim() === email.toLowerCase().trim() &&
               u.password === password &&
               u.status === "approved",
           );
+          if (!user) {
+            // Refresh from backend and retry
+            try {
+              const freshUsers = await backendGetUsers();
+              if (freshUsers.length > 0) {
+                get().mergeUsers(freshUsers);
+                user = get().users.find(
+                  (u) =>
+                    u.email.toLowerCase().trim() ===
+                      email.toLowerCase().trim() &&
+                    u.password === password &&
+                    u.status === "approved",
+                );
+              }
+            } catch (_e) {}
+          }
           if (!user) return false;
           const loginTime = now();
           set((s) => ({
-            currentUser: { ...user, isOnline: true, lastLogin: loginTime },
+            currentUser: { ...user!, isOnline: true, lastLogin: loginTime },
             currentPage: "dashboard" as PageType,
             users: s.users.map((u) =>
-              u.id === user.id
+              u.id === user!.id
                 ? {
                     ...u,
                     isOnline: true,
@@ -1370,7 +1400,7 @@ export const useStore = create<StoreState>()(
           }));
         },
 
-        registerUser: (user) => {
+        registerUser: async (user) => {
           const newRegUser = {
             ...user,
             id: uid(),
@@ -1381,19 +1411,25 @@ export const useStore = create<StoreState>()(
             isOnline: false,
           };
           set((s) => ({ users: [...s.users, newRegUser] }));
-          backendCreateUser(
-            newRegUser.id,
-            newRegUser.name,
-            newRegUser.email,
-            newRegUser.password,
-            newRegUser.phone,
-            newRegUser.role,
-            newRegUser.status,
-            newRegUser.createdAt,
-          ).catch(() => {});
+          try {
+            await backendCreateUser(
+              newRegUser.id,
+              newRegUser.name,
+              newRegUser.email,
+              newRegUser.password,
+              newRegUser.phone,
+              newRegUser.role,
+              newRegUser.status,
+              newRegUser.createdAt,
+            );
+            const freshUsers = await backendGetUsers();
+            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+          } catch (e) {
+            console.error("registerUser backend error:", e);
+          }
         },
 
-        approveUser: (userId) => {
+        approveUser: async (userId) => {
           const cu = get().currentUser;
           set((s) => ({
             users: s.users.map((u) =>
@@ -1407,7 +1443,13 @@ export const useStore = create<StoreState>()(
               "User Approved",
               `Approved user ${userId}`,
             );
-          backendApproveUser(userId).catch(() => {});
+          try {
+            await backendApproveUser(userId);
+            const freshUsers = await backendGetUsers();
+            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+          } catch (e) {
+            console.error("approveUser backend error:", e);
+          }
         },
 
         rejectUser: (userId) => {
@@ -1441,7 +1483,7 @@ export const useStore = create<StoreState>()(
             );
         },
 
-        createUser: (userData) => {
+        createUser: async (userData) => {
           const cu = get().currentUser;
           const newUser: User = {
             ...userData,
@@ -1460,16 +1502,22 @@ export const useStore = create<StoreState>()(
               "User Created",
               `Created user ${userData.name} (${userData.email})`,
             );
-          backendCreateUser(
-            newUser.id,
-            newUser.name,
-            newUser.email,
-            newUser.password,
-            newUser.phone,
-            newUser.role,
-            newUser.status,
-            newUser.createdAt,
-          ).catch(() => {});
+          try {
+            await backendCreateUser(
+              newUser.id,
+              newUser.name,
+              newUser.email,
+              newUser.password,
+              newUser.phone,
+              newUser.role,
+              newUser.status,
+              newUser.createdAt,
+            );
+            const freshUsers = await backendGetUsers();
+            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+          } catch (e) {
+            console.error("createUser backend error:", e);
+          }
         },
 
         editUser: (userId, updates) => {
@@ -2309,7 +2357,15 @@ export const useStore = create<StoreState>()(
         },
 
         // ── Part Request actions ────────────────────────────────────────────
-        addPartRequest: (req) =>
+        addPartRequest: (req) => {
+          const hour = new Date().getHours();
+          const greeting =
+            hour < 12
+              ? "Good Morning"
+              : hour < 17
+                ? "Good Afternoon"
+                : "Good Evening";
+          const message = `Hello ${greeting} ${req.requestedByName} ji, I am requesting a part for Case ${req.caseId} — Customer: ${req.customerName} | Product: ${req.productType || "N/A"} | Part: ${req.partName}${req.partCode ? ` (${req.partCode})` : ""} | Company: ${req.companyName || "N/A"}`;
           set((s) => ({
             partRequests: [
               {
@@ -2325,10 +2381,12 @@ export const useStore = create<StoreState>()(
                 rejectedAt: "",
                 rejectedBy: "",
                 rejectedByName: "",
+                message,
               },
               ...s.partRequests,
             ],
-          })),
+          }));
+        },
 
         issuePartRequest: (id, technicianId) => {
           const cu = get().currentUser;

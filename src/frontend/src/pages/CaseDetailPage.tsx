@@ -703,6 +703,14 @@ export default function CaseDetailPage() {
                           partPhotoUrl: partPhotoUrl || caseData.partPhotoUrl,
                           requestedBy: currentUser?.id ?? "",
                           requestedByName: currentUser?.name ?? "",
+                          productType:
+                            (caseData as any).product ||
+                            (caseData as any).productType ||
+                            "",
+                          companyName:
+                            (caseData as any).companyName ||
+                            (caseData as any).company ||
+                            "",
                         });
                         toast.success("Part request sent to supervisor!");
                       }}
