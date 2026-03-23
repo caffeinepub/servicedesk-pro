@@ -1,12 +1,4 @@
-import {
-  CheckCircle,
-  Lock,
-  Mail,
-  Phone,
-  Shield,
-  User,
-  Wrench,
-} from "lucide-react";
+import { Lock, Mail, Phone, Shield, User, Wrench } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import {
@@ -28,8 +20,7 @@ import {
 import { useStore } from "../store";
 
 export default function RegisterPage() {
-  const { registerUser, navigate } = useStore();
-  const [done, setDone] = useState(false);
+  const { registerUser, navigate, setRejectionReason } = useStore();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -40,6 +31,8 @@ export default function RegisterPage() {
 
   const [phoneError, setPhoneError] = useState("");
 
+  const [submitError, setSubmitError] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.phone.trim() || !/^[0-9]{10}$/.test(form.phone.trim())) {
@@ -47,38 +40,32 @@ export default function RegisterPage() {
       return;
     }
     setPhoneError("");
-    await registerUser(form);
-    setDone(true);
+    setSubmitError("");
+    const result = await registerUser(form);
+    if (result.message === "pending") {
+      navigate("register-pending");
+      return;
+    }
+    if (result.message === "approved") {
+      navigate("register-approved");
+      return;
+    }
+    if (result.message === "rejected") {
+      setRejectionReason(result.reason || "");
+      navigate("register-rejected");
+      return;
+    }
+    if (!result.success) {
+      if (result.message === "phone_exists") {
+        setSubmitError("This mobile number is already registered.");
+      } else {
+        setSubmitError("Registration failed. Please try again.");
+      }
+      return;
+    }
+    // New successful registration -> go to pending page
+    navigate("register-pending");
   };
-
-  if (done) {
-    return (
-      <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden bg-gradient-to-br from-gray-950 via-slate-900 to-teal-950">
-        <div className="absolute top-[-10%] left-[-5%] w-72 h-72 rounded-full bg-teal-600/20 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-96 h-96 rounded-full bg-emerald-700/15 blur-3xl pointer-events-none" />
-        <Card className="w-full max-w-md shadow-2xl border border-teal-900/30 bg-white/[0.97] backdrop-blur-sm relative z-10">
-          <CardContent className="pt-10 pb-10 text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-teal-100 to-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-teal-200">
-              <CheckCircle className="h-9 w-9 text-teal-600" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              Request Submitted!
-            </h2>
-            <p className="text-gray-500 text-sm mb-6">
-              Your request is pending admin approval. You will be notified once
-              your account is activated.
-            </p>
-            <Button
-              onClick={() => navigate("login")}
-              className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-semibold shadow-md shadow-teal-900/20"
-            >
-              Back to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden bg-gradient-to-br from-gray-950 via-slate-900 to-teal-950">
@@ -169,6 +156,11 @@ export default function RegisterPage() {
                 </div>
                 {phoneError && (
                   <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+                )}
+                {submitError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {submitError}
+                  </div>
                 )}
               </div>
 

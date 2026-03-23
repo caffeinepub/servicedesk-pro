@@ -21,13 +21,17 @@ import PartRequestsPage from "./pages/PartRequestsPage";
 import PartsPage from "./pages/PartsPage";
 import ProfilePage from "./pages/ProfilePage";
 import PurchasePage from "./pages/PurchasePage";
+import RegisterApprovedPage from "./pages/RegisterApprovedPage";
 import RegisterPage from "./pages/RegisterPage";
+import RegisterPendingPage from "./pages/RegisterPendingPage";
+import RegisterRejectedPage from "./pages/RegisterRejectedPage";
 import ReportsPage from "./pages/ReportsPage";
 import ReturnToCompanyPage from "./pages/ReturnToCompanyPage";
 import SettingsPage from "./pages/SettingsPage";
 import TechniciansPage from "./pages/TechniciansPage";
 import VendorsPage from "./pages/VendorsPage";
 import WarehousePage from "./pages/WarehousePage";
+import { backendGetUsers } from "./services/userBackend";
 import { useStore } from "./store";
 
 export default function App() {
@@ -37,6 +41,35 @@ export default function App() {
   useEffect(() => {
     initUsers();
   }, []);
+
+  // Auto-logout polling: if logged in user is deleted by admin, log them out live.
+  // IMPORTANT: Only log out if backend returns a NON-EMPTY list and the user is missing.
+  // Never log out on empty responses (could be network error / canister unavailable).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional polling
+  useEffect(() => {
+    if (!currentUser) return;
+    const check = () => {
+      backendGetUsers()
+        .then((users) => {
+          // Guard: if backend returns empty list, it's likely a network/canister error.
+          // Do NOT log out in that case -- only log out when we get a real list back.
+          if (users.length === 0) return;
+          const found = users.find(
+            (u) =>
+              u.id === currentUser.id ||
+              u.email.toLowerCase() === currentUser.email.toLowerCase(),
+          );
+          if (!found) {
+            useStore.getState().logout();
+          }
+        })
+        .catch(() => {
+          // Network error -- do nothing, keep user logged in
+        });
+    };
+    const interval = setInterval(check, 8000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
 
   if (isInitializing) {
     return (
@@ -53,6 +86,9 @@ export default function App() {
 
   if (!currentUser) {
     if (currentPage === "register") return <RegisterPage />;
+    if (currentPage === "register-pending") return <RegisterPendingPage />;
+    if (currentPage === "register-approved") return <RegisterApprovedPage />;
+    if (currentPage === "register-rejected") return <RegisterRejectedPage />;
     return <LoginPage />;
   }
 

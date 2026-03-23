@@ -53,11 +53,11 @@ import {
   Warehouse,
   Wrench,
   X,
-  Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
+import { backendGetUsers } from "../services/userBackend";
 import { useStore } from "../store";
 import type { PageType } from "../types";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
@@ -969,12 +969,16 @@ function NavButton({
         <span className="flex-1 text-left truncate">{item.label}</span>
       )}
       {!collapsed && badge && badge > 0 ? (
-        <span className="bg-red-500 text-white text-xs font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+        <span
+          className={`text-white text-xs font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center ${section === "ADMIN" ? "bg-violet-500" : section === "CASES" ? "bg-blue-500" : section === "INVENTORY" ? "bg-emerald-500" : "bg-slate-500"}`}
+        >
           {badge}
         </span>
       ) : null}
       {collapsed && badge && badge > 0 ? (
-        <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+        <span
+          className={`absolute top-1 right-1 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center ${section === "ADMIN" ? "bg-violet-500" : section === "CASES" ? "bg-blue-500" : section === "INVENTORY" ? "bg-emerald-500" : "bg-slate-500"}`}
+        >
           {badge > 9 ? "9+" : badge}
         </span>
       ) : null}
@@ -1019,7 +1023,7 @@ function CollapsibleSection({
       <div className="px-2 py-1">
         <button
           type="button"
-          className={`w-full flex justify-center py-2 rounded-lg ${
+          className={`w-full flex justify-center py-2 rounded-lg relative ${
             hasActiveItem ? colors.headerBg : "hover:bg-slate-800/50"
           }`}
           title={sectionDef.label}
@@ -1028,6 +1032,13 @@ function CollapsibleSection({
           <sectionDef.icon
             className={`h-4 w-4 ${hasActiveItem ? colors.headerColor : "text-slate-500"}`}
           />
+          {pendingApprovals &&
+          pendingApprovals > 0 &&
+          sectionDef.section === "ADMIN" ? (
+            <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-violet-500 text-white text-[8px] font-bold flex items-center justify-center">
+              {pendingApprovals > 9 ? "9+" : pendingApprovals}
+            </span>
+          ) : null}
         </button>
       </div>
     );
@@ -1058,6 +1069,14 @@ function CollapsibleSection({
             className={`w-1.5 h-1.5 rounded-full bg-current ${colors.headerColor} mr-1`}
           />
         )}
+        {!groupOpen &&
+        pendingApprovals &&
+        pendingApprovals > 0 &&
+        sectionDef.section === "ADMIN" ? (
+          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-violet-500 text-white text-[9px] font-bold mr-1">
+            {pendingApprovals > 9 ? "9+" : pendingApprovals}
+          </span>
+        ) : null}
         {groupOpen ? (
           <ChevronUp
             className={`h-3.5 w-3.5 ${colors.chevronColor} flex-shrink-0`}
@@ -1147,10 +1166,20 @@ function SidebarContent({
   onNavigate?: () => void;
   setCollapsed?: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
-  const { currentUser, currentPage, notifications, logout, users } = useStore();
+  const {
+    currentUser,
+    currentPage,
+    notifications,
+    logout,
+    users,
+    partRequests,
+  } = useStore();
   const role = currentUser?.role ?? "backend_user";
   const unread = notifications.filter((n) => !n.isRead).length;
   const pendingApprovals = users.filter((u) => u.status === "pending").length;
+  const pendingPartRequests = partRequests.filter(
+    (r) => r.status === "pending",
+  ).length;
 
   const initials = (currentUser?.name ?? "U")
     .split(" ")
@@ -1179,20 +1208,17 @@ function SidebarContent({
         }`}
       >
         <div className="relative flex-shrink-0">
-          <img
-            src="/assets/generated/servicedesk-logo-transparent.dim_64x64.png"
-            alt="ServiceDesk Pro"
-            className="w-9 h-9 rounded-xl shadow-lg object-cover"
-          />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-teal-900/50">
+            <Wrench className="h-5 w-5 text-white" />
+          </div>
           <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900" />
         </div>
         {!collapsed && (
           <div className="flex-1 min-w-0">
-            <div className="font-extrabold text-sm leading-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-violet-400 bg-clip-text text-transparent tracking-tight">
+            <div className="font-bold text-sm text-white leading-tight tracking-tight">
               ServiceDesk Pro
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-              <Zap className="h-2.5 w-2.5 text-amber-400" />
+            <div className="text-[10px] text-teal-400 mt-0.5">
               Powering Service Excellence
             </div>
           </div>
@@ -1258,6 +1284,7 @@ function SidebarContent({
               currentPage={currentPage}
               section="INVENTORY"
               onNavigate={onNavigate}
+              badge={pendingPartRequests > 0 ? pendingPartRequests : undefined}
             />
           </div>
         )}
@@ -1571,9 +1598,25 @@ function SectionPill({ page }: { page: string }) {
 
 // ── Main Layout ───────────────────────────────────────────────────────────────
 export default function Layout({ children }: { children: ReactNode }) {
-  const { currentUser, notifications, navigate } = useStore();
+  const { currentUser, notifications, navigate, mergeUsers } = useStore();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Global live polling for admin: keep user list fresh so pending badge updates without reload
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mergeUsers is stable
+  useEffect(() => {
+    if (currentUser?.role !== "admin") return;
+    const poll = () => {
+      backendGetUsers()
+        .then((freshUsers) => {
+          if (freshUsers.length > 0) mergeUsers(freshUsers);
+        })
+        .catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [currentUser?.role]);
   const unread = notifications.filter((n) => !n.isRead).length;
   const currentPageStr = useStore.getState().currentPage as string;
 

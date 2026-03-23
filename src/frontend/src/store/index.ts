@@ -7,6 +7,7 @@ import {
   backendEditUser,
   backendGetUsers,
   backendInitSeedUsers,
+  backendLoginUser,
   backendRejectUser,
   backendUpdateLastLogin,
 } from "../services/userBackend";
@@ -939,9 +940,11 @@ interface StoreState {
       User,
       "id" | "createdAt" | "status" | "lastLogin" | "lastActive" | "isOnline"
     >,
-  ) => Promise<void>;
+  ) => Promise<{ success: boolean; message?: string; reason?: string }>;
   approveUser: (userId: string) => Promise<void>;
-  rejectUser: (userId: string) => void;
+  rejectUser: (userId: string, reason: string) => void;
+  rejectionReason: string;
+  setRejectionReason: (reason: string) => void;
   updateUserRole: (userId: string, role: User["role"]) => void;
   createUser: (userData: {
     name: string;
@@ -1131,6 +1134,7 @@ export const useStore = create<StoreState>()(
         storePilotAuditLogs: SEED_STOREPILOT_AUDIT_LOGS,
         notificationsGeneratedDate: "",
         lastMidnightResetDate: "",
+        rejectionReason: "",
         users: SEED_USERS,
         technicians: SEED_TECHNICIANS,
         cases: SEED_CASES,
@@ -1167,7 +1171,16 @@ export const useStore = create<StoreState>()(
         setInitializing: (val) => set({ isInitializing: val }),
         mergeUsers: (backendUsers) => {
           const localUsers = get().users;
-          const merged = [...backendUsers];
+          const merged = backendUsers.map((bu) => {
+            const local = localUsers.find((l) => l.id === bu.id);
+            if (!local) return bu;
+            return {
+              ...bu,
+              phone: bu.phone || local.phone,
+              role: bu.role || local.role,
+              password: bu.password || local.password,
+            };
+          });
           for (const local of localUsers) {
             if (
               !merged.find((b) => b.id === local.id || b.email === local.email)
@@ -1183,7 +1196,7 @@ export const useStore = create<StoreState>()(
             await backendInitSeedUsers();
             const backendUsers = await backendGetUsers();
             if (backendUsers.length > 0) {
-              get().setUsers(backendUsers);
+              get().mergeUsers(backendUsers);
             }
           } catch (e) {
             console.error("initUsers error:", e);
@@ -1192,43 +1205,86 @@ export const useStore = create<StoreState>()(
           }
         },
         login: async (email, password) => {
-          let user = get().users.find(
-            (u) =>
-              u.email.toLowerCase().trim() === email.toLowerCase().trim() &&
-              u.password === password &&
-              u.status === "approved",
-          );
+          // 1. Try backend direct authentication first (most reliable - server-side check)
+          let user: ReturnType<typeof get>["users"][0] | null | undefined;
+          try {
+            const backendAuthUser = await backendLoginUser(email, password);
+            if (backendAuthUser) {
+              // Merge with local state to preserve extra local-only fields
+              const local = get().users.find(
+                (u) => u.id === backendAuthUser.id,
+              );
+              user = local
+                ? {
+                    ...backendAuthUser,
+                    ...local,
+                    status: "approved" as const,
+                    isOnline: true,
+                  }
+                : { ...backendAuthUser, isOnline: true };
+            }
+          } catch (_e) {}
+
+          // 2. Fall back to local state check
           if (!user) {
-            // Refresh from backend and retry
+            user = get().users.find(
+              (u) =>
+                u.email.toLowerCase().trim() === email.toLowerCase().trim() &&
+                u.password === password &&
+                u.status === "approved",
+            );
+          }
+
+          // 3. Refresh from backend and retry
+          if (!user) {
             try {
               const freshUsers = await backendGetUsers();
               if (freshUsers.length > 0) {
                 get().mergeUsers(freshUsers);
-                user = get().users.find(
-                  (u) =>
-                    u.email.toLowerCase().trim() ===
-                      email.toLowerCase().trim() &&
-                    u.password === password &&
-                    u.status === "approved",
-                );
+                user =
+                  freshUsers.find(
+                    (u) =>
+                      u.email.toLowerCase().trim() ===
+                        email.toLowerCase().trim() &&
+                      u.password === password &&
+                      u.status === "approved",
+                  ) ??
+                  get().users.find(
+                    (u) =>
+                      u.email.toLowerCase().trim() ===
+                        email.toLowerCase().trim() &&
+                      u.password === password &&
+                      u.status === "approved",
+                  );
               }
             } catch (_e) {}
           }
+
           if (!user) return false;
           const loginTime = now();
           set((s) => ({
             currentUser: { ...user!, isOnline: true, lastLogin: loginTime },
             currentPage: "dashboard" as PageType,
-            users: s.users.map((u) =>
-              u.id === user!.id
-                ? {
-                    ...u,
+            users: s.users.some((u) => u.id === user!.id)
+              ? s.users.map((u) =>
+                  u.id === user!.id
+                    ? {
+                        ...u,
+                        isOnline: true,
+                        lastLogin: loginTime,
+                        lastActive: loginTime,
+                      }
+                    : u,
+                )
+              : [
+                  ...s.users,
+                  {
+                    ...user!,
                     isOnline: true,
                     lastLogin: loginTime,
                     lastActive: loginTime,
-                  }
-                : u,
-            ),
+                  },
+                ],
           }));
           logActivity(user.id, user.name, "Login", "User logged in");
           backendUpdateLastLogin(user.id, loginTime).catch(() => {});
@@ -1282,6 +1338,7 @@ export const useStore = create<StoreState>()(
           })),
 
         clearNavVendorId: () => set({ navVendorId: null }),
+        setRejectionReason: (reason) => set({ rejectionReason: reason }),
 
         generateAutoNotifications: () => {
           const today = todayStr();
@@ -1401,6 +1458,35 @@ export const useStore = create<StoreState>()(
         },
 
         registerUser: async (user) => {
+          // Fetch fresh users from backend before checking duplicates
+          try {
+            const freshUsers = await backendGetUsers();
+            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+          } catch (e) {
+            console.error("registerUser pre-check backend error:", e);
+          }
+          const existingUsers = get().users;
+          const emailMatch = existingUsers.find(
+            (u) =>
+              u.email.toLowerCase().trim() === user.email.toLowerCase().trim(),
+          );
+          if (emailMatch) {
+            if (emailMatch.status === "pending")
+              return { success: false, message: "pending" };
+            if (emailMatch.status === "approved")
+              return { success: false, message: "approved" };
+            if (emailMatch.status === "rejected")
+              return {
+                success: false,
+                message: "rejected",
+                reason: emailMatch.rejectionReason || "",
+              };
+          }
+          const phoneMatch = existingUsers.find(
+            (u) => u.phone && u.phone.trim() === user.phone.trim(),
+          );
+          if (phoneMatch) return { success: false, message: "phone_exists" };
+
           const newRegUser = {
             ...user,
             id: uid(),
@@ -1427,6 +1513,7 @@ export const useStore = create<StoreState>()(
           } catch (e) {
             console.error("registerUser backend error:", e);
           }
+          return { success: true };
         },
 
         approveUser: async (userId) => {
@@ -1452,11 +1539,13 @@ export const useStore = create<StoreState>()(
           }
         },
 
-        rejectUser: (userId) => {
+        rejectUser: (userId, reason) => {
           const cu = get().currentUser;
           set((s) => ({
             users: s.users.map((u) =>
-              u.id === userId ? { ...u, status: "rejected" as const } : u,
+              u.id === userId
+                ? { ...u, status: "rejected" as const, rejectionReason: reason }
+                : u,
             ),
           }));
           if (cu)
@@ -1464,7 +1553,7 @@ export const useStore = create<StoreState>()(
               cu.id,
               cu.name,
               "User Rejected",
-              `Rejected user ${userId}`,
+              `Rejected user ${userId}. Reason: ${reason}`,
             );
           backendRejectUser(userId).catch(() => {});
         },
@@ -1485,6 +1574,17 @@ export const useStore = create<StoreState>()(
 
         createUser: async (userData) => {
           const cu = get().currentUser;
+          const existingUsers = get().users;
+          const emailMatch = existingUsers.find(
+            (u) =>
+              u.email.toLowerCase().trim() ===
+              userData.email.toLowerCase().trim(),
+          );
+          if (emailMatch) throw new Error("email_exists");
+          const phoneMatch = existingUsers.find(
+            (u) => u.phone && u.phone.trim() === userData.phone.trim(),
+          );
+          if (phoneMatch) throw new Error("phone_exists");
           const newUser: User = {
             ...userData,
             id: uid(),
@@ -1522,6 +1622,25 @@ export const useStore = create<StoreState>()(
 
         editUser: (userId, updates) => {
           const cu = get().currentUser;
+          const existingUsers = get().users;
+          if (updates.email) {
+            const emailMatch = existingUsers.find(
+              (u) =>
+                u.id !== userId &&
+                u.email.toLowerCase().trim() ===
+                  updates.email!.toLowerCase().trim(),
+            );
+            if (emailMatch) throw new Error("email_exists");
+          }
+          if (updates.phone) {
+            const phoneMatch = existingUsers.find(
+              (u) =>
+                u.id !== userId &&
+                u.phone &&
+                u.phone.trim() === updates.phone!.trim(),
+            );
+            if (phoneMatch) throw new Error("phone_exists");
+          }
           set((s) => ({
             users: s.users.map((u) =>
               u.id === userId ? { ...u, ...updates } : u,

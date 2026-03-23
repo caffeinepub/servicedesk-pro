@@ -40,6 +40,7 @@ export interface User {
   lastLogin: string;
   lastActive: string;
   isOnline: boolean;
+  rejectionReason?: string;
 }
 
 export interface ActivityLog {
@@ -179,7 +180,10 @@ export type PageType =
   | "notifications"
   | "audit-logs"
   | "notices"
-  | "data-management";
+  | "data-management"
+  | "register-pending"
+  | "register-approved"
+  | "register-rejected";
 
 // ── StorePilot Types ────────────────────────────────────────────────────────
 

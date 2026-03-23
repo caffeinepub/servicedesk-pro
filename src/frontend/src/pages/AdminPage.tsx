@@ -57,6 +57,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
+import { Textarea } from "../components/ui/textarea";
 import { backendGetUsers } from "../services/userBackend";
 import { useStore } from "../store";
 import type { User, UserRole } from "../types";
@@ -140,40 +141,30 @@ export default function AdminPage() {
     activityLog,
     approveUser,
     rejectUser,
-    updateUserRole,
     createUser,
     editUser,
     deleteUser,
-    setUsers,
+    mergeUsers,
   } = useStore();
 
   const isAdmin = currentUser?.role === "admin";
 
-  // Live polling: update users list every 10 seconds to catch new registrations
+  // Live polling: update users list every 5 seconds to catch new registrations live
   useEffect(() => {
     if (!isAdmin) return;
-    const interval = setInterval(() => {
+    const fetchUsers = () => {
       backendGetUsers()
         .then((freshUsers) => {
           if (freshUsers.length > 0) {
-            const localUsers = useStore.getState().users;
-            const merged = [...freshUsers];
-            for (const local of localUsers) {
-              if (
-                !merged.find(
-                  (b) => b.id === local.id || b.email === local.email,
-                )
-              ) {
-                merged.push(local);
-              }
-            }
-            setUsers(merged);
+            mergeUsers(freshUsers);
           }
         })
         .catch(() => {});
-    }, 10000);
+    };
+    fetchUsers(); // immediate fetch on mount
+    const interval = setInterval(fetchUsers, 5000);
     return () => clearInterval(interval);
-  }, [isAdmin, setUsers]);
+  }, [isAdmin, mergeUsers]);
 
   // Create/Edit dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -182,6 +173,11 @@ export default function AdminPage() {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+
+  // Reject dialog state
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectTargetUser, setRejectTargetUser] = useState<User | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Activity log filters
   const [logSearch, setLogSearch] = useState("");
@@ -238,17 +234,39 @@ export default function AdminPage() {
         role: form.role,
       };
       if (form.password) updates.password = form.password;
-      editUser(editingUser.id, updates);
-      toast.success("User updated successfully");
+      try {
+        editUser(editingUser.id, updates);
+        toast.success("User updated successfully");
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          if (err.message === "email_exists")
+            toast.error("A user with this email already exists");
+          else if (err.message === "phone_exists")
+            toast.error("This mobile number is already registered");
+          else toast.error("Failed to update user");
+        }
+        return;
+      }
     } else {
-      await createUser({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        role: form.role,
-        password: form.password,
-      });
-      toast.success("User created successfully");
+      try {
+        await createUser({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          role: form.role,
+          password: form.password,
+        });
+        toast.success("User created successfully");
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          if (err.message === "email_exists")
+            toast.error("A user with this email already exists");
+          else if (err.message === "phone_exists")
+            toast.error("This mobile number is already registered");
+          else toast.error("Failed to create user");
+        }
+        return;
+      }
     }
     setDialogOpen(false);
   };
@@ -395,7 +413,11 @@ export default function AdminPage() {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => rejectUser(u.id)}
+                        onClick={() => {
+                          setRejectTargetUser(u);
+                          setRejectReason("");
+                          setRejectDialogOpen(true);
+                        }}
                         className="h-8"
                         data-ocid="admin.delete_button"
                       >
@@ -450,132 +472,129 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((u) => {
-                      const active = isActiveNow(u);
-                      return (
-                        <tr
-                          key={u.id}
-                          className="border-b last:border-0 hover:bg-gray-50"
-                        >
-                          <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">
-                            {u.name}
-                          </td>
-                          <td className="px-3 py-3 text-gray-500 text-xs">
-                            {u.email}
-                          </td>
-                          <td className="px-3 py-3 text-gray-500 text-xs whitespace-nowrap">
-                            {u.phone || "—"}
-                          </td>
-                          <td className="px-3 py-3">
-                            <Select
-                              value={u.role}
-                              onValueChange={(v: UserRole) =>
-                                updateUserRole(u.id, v)
-                              }
-                              disabled={u.id === currentUser?.id}
-                            >
-                              <SelectTrigger className="h-7 w-32 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="supervisor">
-                                  Supervisor
-                                </SelectItem>
-                                <SelectItem value="backend_user">
-                                  Backend User
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="px-3 py-3">
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
-                                u.status === "approved"
-                                  ? "bg-green-100 text-green-700"
-                                  : u.status === "pending"
-                                    ? "bg-yellow-100 text-yellow-700"
-                                    : "bg-red-100 text-red-700"
-                              }`}
-                            >
-                              {u.status}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
+                    {users
+                      .filter((u) => u.status !== "rejected")
+                      .map((u) => {
+                        const active = isActiveNow(u);
+                        return (
+                          <tr
+                            key={u.id}
+                            className="border-b last:border-0 hover:bg-gray-50"
+                          >
+                            <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">
+                              {u.name}
+                            </td>
+                            <td className="px-3 py-3 text-gray-500 text-xs">
+                              {u.email}
+                            </td>
+                            <td className="px-3 py-3 text-gray-500 text-xs whitespace-nowrap">
+                              {u.phone || "—"}
+                            </td>
+                            <td className="px-3 py-3">
                               <span
-                                className={`w-2 h-2 rounded-full flex-shrink-0 ${active ? "bg-green-500" : "bg-gray-300"}`}
-                              />
-                              <span
-                                className={`text-xs ${active ? "text-green-700 font-medium" : "text-gray-500"}`}
+                                className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${
+                                  u.role === "admin"
+                                    ? "bg-violet-100 text-violet-700"
+                                    : u.role === "supervisor"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : "bg-gray-100 text-gray-700"
+                                }`}
                               >
-                                {active
-                                  ? "Active"
-                                  : u.lastActive
-                                    ? `Last seen: ${formatRelativeTime(u.lastActive)}`
-                                    : "Never"}
+                                {u.role.replace("_", " ")}
                               </span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">
-                            {formatDateTime(u.lastLogin)}
-                          </td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center gap-1">
-                              {u.status === "pending" && (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    onClick={async () => {
-                                      await approveUser(u.id);
-                                      toast.success("User approved");
-                                    }}
-                                    className="h-6 text-xs bg-green-600 hover:bg-green-700"
-                                  >
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => rejectUser(u.id)}
-                                    className="h-6 text-xs"
-                                  >
-                                    Reject
-                                  </Button>
-                                </>
-                              )}
-                              {u.id !== currentUser?.id && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => openEdit(u)}
-                                    className="p-1 rounded hover:bg-blue-50 text-blue-600"
-                                    title="Edit user"
-                                    data-ocid="admin.edit_button"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleteTarget(u)}
-                                    className="p-1 rounded hover:bg-red-50 text-red-500"
-                                    title="Delete user"
-                                    data-ocid="admin.delete_button"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </>
-                              )}
-                              {u.id === currentUser?.id && (
-                                <span className="text-xs text-gray-400">
-                                  Current user
+                            </td>
+                            <td className="px-3 py-3">
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
+                                  u.status === "approved"
+                                    ? "bg-green-100 text-green-700"
+                                    : u.status === "pending"
+                                      ? "bg-yellow-100 text-yellow-700"
+                                      : "bg-red-100 text-red-700"
+                                }`}
+                              >
+                                {u.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`w-2 h-2 rounded-full flex-shrink-0 ${active ? "bg-green-500" : "bg-gray-300"}`}
+                                />
+                                <span
+                                  className={`text-xs ${active ? "text-green-700 font-medium" : "text-gray-500"}`}
+                                >
+                                  {active
+                                    ? "Active"
+                                    : u.lastActive
+                                      ? `Last seen: ${formatRelativeTime(u.lastActive)}`
+                                      : "Never"}
                                 </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">
+                              {formatDateTime(u.lastLogin)}
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="flex items-center gap-1">
+                                {u.status === "pending" && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      onClick={async () => {
+                                        await approveUser(u.id);
+                                        toast.success("User approved");
+                                      }}
+                                      className="h-6 text-xs bg-green-600 hover:bg-green-700"
+                                    >
+                                      Approve
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() => {
+                                        setRejectTargetUser(u);
+                                        setRejectReason("");
+                                        setRejectDialogOpen(true);
+                                      }}
+                                      className="h-6 text-xs"
+                                    >
+                                      Reject
+                                    </Button>
+                                  </>
+                                )}
+                                {u.id !== currentUser?.id && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEdit(u)}
+                                      className="p-1 rounded hover:bg-blue-50 text-blue-600"
+                                      title="Edit user"
+                                      data-ocid="admin.edit_button"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeleteTarget(u)}
+                                      className="p-1 rounded hover:bg-red-50 text-red-500"
+                                      title="Delete user"
+                                      data-ocid="admin.delete_button"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                                {u.id === currentUser?.id && (
+                                  <span className="text-xs text-gray-400">
+                                    Current user
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -800,6 +819,83 @@ export default function AdminPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reject Application Dialog */}
+      <Dialog
+        open={rejectDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectDialogOpen(false);
+            setRejectTargetUser(null);
+            setRejectReason("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700">
+              <XCircle className="h-5 w-5" />
+              Reject Application
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            {rejectTargetUser && (
+              <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-100">
+                <p className="font-semibold text-gray-900">
+                  {rejectTargetUser.name}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {rejectTargetUser.email}
+                </p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-gray-700">
+                Rejection Reason <span className="text-rose-500">*</span>
+              </Label>
+              <Textarea
+                placeholder="Enter reason for rejection (minimum 5 characters)..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                className="resize-none focus-visible:ring-rose-500"
+                rows={3}
+              />
+              {rejectReason.length > 0 && rejectReason.trim().length < 5 && (
+                <p className="text-xs text-rose-500">
+                  Please enter at least 5 characters.
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectDialogOpen(false);
+                setRejectTargetUser(null);
+                setRejectReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={rejectReason.trim().length < 5}
+              onClick={() => {
+                if (rejectTargetUser) {
+                  rejectUser(rejectTargetUser.id, rejectReason.trim());
+                  toast.success("Application rejected");
+                }
+                setRejectDialogOpen(false);
+                setRejectTargetUser(null);
+                setRejectReason("");
+              }}
+            >
+              Confirm Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
