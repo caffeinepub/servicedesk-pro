@@ -9,6 +9,8 @@ import CasesPage from "./pages/CasesPage";
 import CustomerHistoryPage from "./pages/CustomerHistoryPage";
 import DashboardPage from "./pages/DashboardPage";
 import DataManagementPage from "./pages/DataManagementPage";
+import ExistingCasesPage from "./pages/ExistingCasesPage";
+import ExistingStockPage from "./pages/ExistingStockPage";
 import InventoryPage from "./pages/InventoryPage";
 import IssuedPartsPage from "./pages/IssuedPartsPage";
 import LifecyclePage from "./pages/LifecyclePage";
@@ -120,6 +122,8 @@ export default function App() {
       {currentPage === "audit-logs" && <AuditLogsPage />}
       {currentPage === "notices" && <AdminNoticesPage />}
       {currentPage === "data-management" && <DataManagementPage />}
+      {currentPage === "existing-stock" && <ExistingStockPage />}
+      {currentPage === "existing-cases" && <ExistingCasesPage />}
       {![
         "dashboard",
         "cases",
@@ -147,6 +151,8 @@ export default function App() {
         "audit-logs",
         "notices",
         "data-management",
+        "existing-stock",
+        "existing-cases",
       ].includes(currentPage) && <DashboardPage />}
     </Layout>
   );

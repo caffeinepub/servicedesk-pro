@@ -20,6 +20,7 @@ import {
   ChevronUp,
   ClipboardCheck,
   ClipboardList,
+  ClipboardPlus,
   FileText,
   FlaskConical,
   FolderOpen,
@@ -31,6 +32,7 @@ import {
   Megaphone,
   Menu,
   Package,
+  PackagePlus,
   PackageSearch,
   PanelLeftClose,
   PanelLeftOpen,
@@ -294,6 +296,12 @@ const ADMIN_SECTIONS: SectionDef = {
       label: "Administration",
       icon: SlidersHorizontal,
       items: [
+        { icon: PackagePlus, label: "Existing Stock", page: "existing-stock" },
+        {
+          icon: ClipboardPlus,
+          label: "Existing Cases",
+          page: "existing-cases",
+        },
         { icon: Settings2, label: "Admin Panel", page: "admin" },
         { icon: Megaphone, label: "Notices", page: "notices" },
         { icon: Trash2, label: "Data Management", page: "data-management" },
@@ -995,6 +1003,7 @@ function CollapsibleSection({
   role: _role,
   unread,
   pendingApprovals,
+  pendingPartRequests,
 }: {
   sectionDef: SectionDef;
   collapsed?: boolean;
@@ -1003,6 +1012,7 @@ function CollapsibleSection({
   role: string;
   unread?: number;
   pendingApprovals?: number;
+  pendingPartRequests?: number;
 }) {
   const [groupOpen, setGroupOpen] = useState(false);
   const [subGroupOpen, setSubGroupOpen] = useState<Record<string, boolean>>({});
@@ -1038,6 +1048,12 @@ function CollapsibleSection({
             <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-violet-500 text-white text-[8px] font-bold flex items-center justify-center">
               {pendingApprovals > 9 ? "9+" : pendingApprovals}
             </span>
+          ) : pendingPartRequests &&
+            pendingPartRequests > 0 &&
+            sectionDef.section === "INVENTORY" ? (
+            <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-orange-500 text-white text-[8px] font-bold flex items-center justify-center">
+              {pendingPartRequests > 9 ? "9+" : pendingPartRequests}
+            </span>
           ) : null}
         </button>
       </div>
@@ -1069,12 +1085,17 @@ function CollapsibleSection({
             className={`w-1.5 h-1.5 rounded-full bg-current ${colors.headerColor} mr-1`}
           />
         )}
-        {!groupOpen &&
-        pendingApprovals &&
+        {pendingApprovals &&
         pendingApprovals > 0 &&
         sectionDef.section === "ADMIN" ? (
-          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-violet-500 text-white text-[9px] font-bold mr-1">
+          <span className="flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-violet-500 text-white text-[9px] font-bold mr-1">
             {pendingApprovals > 9 ? "9+" : pendingApprovals}
+          </span>
+        ) : pendingPartRequests &&
+          pendingPartRequests > 0 &&
+          sectionDef.section === "INVENTORY" ? (
+          <span className="flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-orange-500 text-white text-[9px] font-bold mr-1">
+            {pendingPartRequests > 9 ? "9+" : pendingPartRequests}
           </span>
         ) : null}
         {groupOpen ? (
@@ -1116,6 +1137,19 @@ function CollapsibleSection({
                   <span className="flex-1 text-left tracking-wide">
                     {sg.label}
                   </span>
+                  {sg.label === "Administration" &&
+                  pendingApprovals &&
+                  pendingApprovals > 0 ? (
+                    <span className="flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-violet-500 text-white text-[9px] font-bold flex-shrink-0">
+                      {pendingApprovals > 9 ? "9+" : pendingApprovals}
+                    </span>
+                  ) : sg.label === "Operations" &&
+                    pendingPartRequests &&
+                    pendingPartRequests > 0 ? (
+                    <span className="flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-orange-500 text-white text-[9px] font-bold flex-shrink-0">
+                      {pendingPartRequests > 9 ? "9+" : pendingPartRequests}
+                    </span>
+                  ) : null}
                   {isSubOpen ? (
                     <ChevronUp className="h-3 w-3 flex-shrink-0 opacity-60" />
                   ) : (
@@ -1141,7 +1175,11 @@ function CollapsibleSection({
                               ? pendingApprovals && pendingApprovals > 0
                                 ? pendingApprovals
                                 : undefined
-                              : undefined
+                              : item.page === "part-requests"
+                                ? pendingPartRequests && pendingPartRequests > 0
+                                  ? pendingPartRequests
+                                  : undefined
+                                : undefined
                         }
                       />
                     ))}
@@ -1320,6 +1358,7 @@ function SidebarContent({
             onNavigate={onNavigate}
             role={role}
             unread={unread}
+            pendingPartRequests={pendingPartRequests}
           />
         )}
         {role === "supervisor" && (
@@ -1330,6 +1369,7 @@ function SidebarContent({
             onNavigate={onNavigate}
             role={role}
             unread={unread}
+            pendingPartRequests={pendingPartRequests}
           />
         )}
 
@@ -1568,6 +1608,18 @@ const PAGE_SECTION: Record<
     label: "Notices",
     icon: Megaphone,
     gradient: "bg-gradient-to-r from-rose-600 to-pink-600",
+    text: "text-white",
+  },
+  "existing-stock": {
+    label: "Existing Stock Entry",
+    icon: PackagePlus,
+    gradient: "bg-gradient-to-r from-teal-600 to-emerald-600",
+    text: "text-white",
+  },
+  "existing-cases": {
+    label: "Existing Cases Entry",
+    icon: ClipboardPlus,
+    gradient: "bg-gradient-to-r from-blue-600 to-indigo-600",
     text: "text-white",
   },
   "data-management": {

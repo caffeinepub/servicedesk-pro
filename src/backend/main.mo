@@ -7,6 +7,7 @@ import UserApproval "user-approval/approval";
 import AccessControl "authorization/access-control";
 import Array "mo:base/Array";
 import Nat "mo:base/Nat";
+import Text "mo:base/Text";
 
 actor {
   // Add storage functionality
@@ -65,22 +66,27 @@ actor {
     lastLogin : Text;
   };
 
-  stable var sdUsers : [SdUser] = [];
-  stable var sdUserCounter : Nat = 100;
+  var sdUsers : [SdUser] = [];
+  var sdUserCounter : Nat = 100;
 
   func nextSdUserId() : Text {
     sdUserCounter += 1;
     "sd" # Nat.toText(sdUserCounter);
   };
 
-  // Initialize seed users if none exist
+  // Initialize seed users if none exist — only seeds admin
   public func initSeedUsers() : async () {
-    if (sdUsers.size() == 0) {
-      sdUsers := [
-        { id = "u1"; name = "Admin"; email = "kumardsemail@gmail.com"; password = "Admin@123"; phone = ""; role = "admin"; status = "approved"; createdAt = "2025-01-01"; lastLogin = "" },
-        { id = "u2"; name = "Rahul Verma"; email = "rahul@servicedesk.com"; password = "User@123"; phone = "9876543210"; role = "backend_user"; status = "approved"; createdAt = "2025-01-01"; lastLogin = "" },
-        { id = "u3"; name = "Supervisor"; email = "supervisor@servicedesk.com"; password = "Super@123"; phone = "9876543211"; role = "supervisor"; status = "approved"; createdAt = "2025-01-01"; lastLogin = "" },
-      ];
+    let adminExists = Array.find(sdUsers, func(u : SdUser) : Bool {
+      Text.toLowercase(u.email) == "kumardsemail@gmail.com" and u.role == "admin"
+    });
+    if (adminExists == null) {
+      let nonSeedUsers = Array.filter(sdUsers, func(u : SdUser) : Bool {
+        Text.toLowercase(u.email) != "rahul@servicedesk.com" and
+        Text.toLowercase(u.email) != "supervisor@servicedesk.com"
+      });
+      sdUsers := Array.append(nonSeedUsers, [
+        { id = "u1"; name = "Admin"; email = "kumardsemail@gmail.com"; password = "Admin@123"; phone = ""; role = "admin"; status = "approved"; createdAt = "2025-01-01"; lastLogin = "" }
+      ]);
     };
   };
 
@@ -89,18 +95,18 @@ actor {
     sdUsers;
   };
 
-  // Verify login credentials
+  // Verify login credentials — case-insensitive email match
   public query func loginSdUser(email : Text, password : Text) : async ?SdUser {
     var found : ?SdUser = null;
     for (u in sdUsers.vals()) {
-      if (u.email == email and u.password == password and u.status == "approved") {
+      if (Text.toLowercase(u.email) == Text.toLowercase(email) and u.password == password and u.status == "approved") {
         found := ?u;
       };
     };
     found;
   };
 
-  // Create a user with a given ID (admin creates, status approved)
+  // Create a user with a given ID
   public func createSdUser(id : Text, name : Text, email : Text, password : Text, phone : Text, role : Text, status : Text, createdAt : Text) : async SdUser {
     let newId = if (id == "") { nextSdUserId() } else { id };
     let user : SdUser = { id = newId; name; email; password; phone; role; status; createdAt; lastLogin = "" };
@@ -138,7 +144,7 @@ actor {
 
   // Delete a user
   public func deleteSdUser(userId : Text) : async () {
-    sdUsers := Array.filter<SdUser>(sdUsers, func(u) { u.id != userId });
+    sdUsers := Array.filter(sdUsers, func(u : SdUser) : Bool { u.id != userId });
   };
 
   // Update last login time

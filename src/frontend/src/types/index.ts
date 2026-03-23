@@ -183,7 +183,9 @@ export type PageType =
   | "data-management"
   | "register-pending"
   | "register-approved"
-  | "register-rejected";
+  | "register-rejected"
+  | "existing-stock"
+  | "existing-cases";
 
 // ── StorePilot Types ────────────────────────────────────────────────────────
 

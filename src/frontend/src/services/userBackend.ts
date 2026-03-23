@@ -99,6 +99,11 @@ export async function backendLoginUser(email: string, password: string) {
   }
 }
 
+/**
+ * Creates a user in the backend canister.
+ * THROWS on failure so callers can detect and handle errors.
+ * Returns the created user on success.
+ */
 export async function backendCreateUser(
   id: string,
   name: string,
@@ -108,22 +113,19 @@ export async function backendCreateUser(
   role: string,
   status: string,
   createdAt: string,
-): Promise<void> {
-  try {
-    const actor = await getBackendActor();
-    await actor.createSdUser(
-      id,
-      name,
-      email,
-      password,
-      phone,
-      role,
-      status,
-      createdAt,
-    );
-  } catch (e) {
-    console.error("backendCreateUser error:", e);
-  }
+): Promise<SdUser> {
+  const actor = await getBackendActor();
+  const result = await actor.createSdUser(
+    id,
+    name,
+    email,
+    password,
+    phone,
+    role,
+    status,
+    createdAt,
+  );
+  return result;
 }
 
 export async function backendApproveUser(userId: string): Promise<void> {

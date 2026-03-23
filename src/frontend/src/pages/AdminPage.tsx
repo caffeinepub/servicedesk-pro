@@ -162,7 +162,7 @@ export default function AdminPage() {
         .catch(() => {});
     };
     fetchUsers(); // immediate fetch on mount
-    const interval = setInterval(fetchUsers, 5000);
+    const interval = setInterval(fetchUsers, 3000);
     return () => clearInterval(interval);
   }, [isAdmin, mergeUsers]);
 

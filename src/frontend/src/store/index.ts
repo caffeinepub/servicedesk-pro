@@ -61,32 +61,6 @@ const SEED_USERS: User[] = [
     lastActive: "",
     isOnline: false,
   },
-  {
-    id: "u2",
-    name: "Rahul Verma",
-    email: "rahul@servicedesk.com",
-    phone: "9888888888",
-    password: "User@123",
-    role: "backend_user",
-    status: "approved",
-    createdAt: now(),
-    lastLogin: "",
-    lastActive: "",
-    isOnline: false,
-  },
-  {
-    id: "u3",
-    name: "Supervisor",
-    email: "supervisor@servicedesk.com",
-    phone: "9777777777",
-    password: "Super@123",
-    role: "supervisor" as const,
-    status: "approved" as const,
-    createdAt: now(),
-    lastLogin: "",
-    lastActive: "",
-    isOnline: false,
-  },
 ];
 
 const SEED_TECHNICIANS: Technician[] = [
@@ -1096,6 +1070,20 @@ interface StoreState {
   removePartImage: (partId: string, imageUrl: string) => void;
   updatePurchaseInvoiceImage: (purchaseId: string, imageUrl: string) => void;
   removePurchaseInvoiceImage: (purchaseId: string) => void;
+  addExistingStock: (
+    entries: Array<{
+      partCode: string;
+      companyId: string;
+      categoryId: string;
+      partNameId: string;
+      quantity: number;
+      costPrice?: number;
+      rackId?: string;
+      shelfId?: string;
+      binId?: string;
+      notes?: string;
+    }>,
+  ) => void;
 }
 
 export const useStore = create<StoreState>()(
@@ -1497,21 +1485,39 @@ export const useStore = create<StoreState>()(
             isOnline: false,
           };
           set((s) => ({ users: [...s.users, newRegUser] }));
+          // Try to save to backend with retry
+          let backendSuccess = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              if (attempt > 0) await new Promise((r) => setTimeout(r, 1000));
+              await backendCreateUser(
+                newRegUser.id,
+                newRegUser.name,
+                newRegUser.email,
+                newRegUser.password,
+                newRegUser.phone,
+                newRegUser.role,
+                newRegUser.status,
+                newRegUser.createdAt,
+              );
+              backendSuccess = true;
+              break;
+            } catch (e) {
+              console.error(
+                `registerUser backend attempt ${attempt + 1} failed:`,
+                e,
+              );
+            }
+          }
+          // Always re-fetch from backend regardless of success/failure
           try {
-            await backendCreateUser(
-              newRegUser.id,
-              newRegUser.name,
-              newRegUser.email,
-              newRegUser.password,
-              newRegUser.phone,
-              newRegUser.role,
-              newRegUser.status,
-              newRegUser.createdAt,
-            );
             const freshUsers = await backendGetUsers();
             if (freshUsers.length > 0) get().mergeUsers(freshUsers);
-          } catch (e) {
-            console.error("registerUser backend error:", e);
+          } catch (_e) {}
+          if (!backendSuccess) {
+            console.warn(
+              "Registration saved locally only - backend unavailable",
+            );
           }
           return { success: true };
         },
@@ -1532,11 +1538,14 @@ export const useStore = create<StoreState>()(
             );
           try {
             await backendApproveUser(userId);
-            const freshUsers = await backendGetUsers();
-            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
           } catch (e) {
             console.error("approveUser backend error:", e);
           }
+          // Always re-fetch so admin sees the updated status immediately
+          try {
+            const freshUsers = await backendGetUsers();
+            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+          } catch (_e) {}
         },
 
         rejectUser: (userId, reason) => {
@@ -1602,21 +1611,37 @@ export const useStore = create<StoreState>()(
               "User Created",
               `Created user ${userData.name} (${userData.email})`,
             );
+          let backendSuccess = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              if (attempt > 0) await new Promise((r) => setTimeout(r, 1000));
+              await backendCreateUser(
+                newUser.id,
+                newUser.name,
+                newUser.email,
+                newUser.password,
+                newUser.phone,
+                newUser.role,
+                newUser.status,
+                newUser.createdAt,
+              );
+              backendSuccess = true;
+              break;
+            } catch (e) {
+              console.error(
+                `createUser backend attempt ${attempt + 1} failed:`,
+                e,
+              );
+            }
+          }
           try {
-            await backendCreateUser(
-              newUser.id,
-              newUser.name,
-              newUser.email,
-              newUser.password,
-              newUser.phone,
-              newUser.role,
-              newUser.status,
-              newUser.createdAt,
-            );
             const freshUsers = await backendGetUsers();
             if (freshUsers.length > 0) get().mergeUsers(freshUsers);
-          } catch (e) {
-            console.error("createUser backend error:", e);
+          } catch (_e) {}
+          if (!backendSuccess) {
+            console.warn(
+              "User creation saved locally only - backend unavailable",
+            );
           }
         },
 
@@ -2613,6 +2638,57 @@ export const useStore = create<StoreState>()(
               pe.id === purchaseId ? { ...pe, invoiceImageUrl: undefined } : pe,
             ),
           })),
+
+        addExistingStock: (entries) => {
+          const cu = get().currentUser;
+          const items: PartInventoryItem[] = entries.flatMap((entry) =>
+            Array.from({ length: entry.quantity }, () => ({
+              id: uid(),
+              partCode: entry.partCode,
+              purchaseId: "existing-stock",
+              companyId: entry.companyId,
+              categoryId: entry.categoryId,
+              partNameId: entry.partNameId,
+              rackId: entry.rackId ?? "",
+              shelfId: entry.shelfId ?? "",
+              binId: entry.binId ?? "",
+              imageUrl: "",
+              status: "in_stock" as PartItemStatus,
+              technicianId: "",
+              caseId: "",
+              issueDate: "",
+              issuedBy: "",
+              installedAt: "",
+              returnedToStoreAt: "",
+              returnRemarks: "",
+              returnedToCompanyAt: "",
+              returnToCompanyReason: "",
+              returnToCompanyRemarks: "",
+              returnedToCompanyBy: "",
+              createdAt: now(),
+            })),
+          );
+          const lifecycles: PartLifecycleEntry[] = items.map((item) => ({
+            id: uid(),
+            partId: item.id,
+            action: "Purchased",
+            details: `Existing stock added${entries.find((e) => e.partCode === item.partCode)?.notes ? `: ${entries.find((e) => e.partCode === item.partCode)?.notes}` : ""}`,
+            userId: cu?.id ?? "",
+            userName: cu?.name ?? "",
+            timestamp: now(),
+          }));
+          set((s) => ({
+            partItems: [...s.partItems, ...items],
+            partLifecycle: [...s.partLifecycle, ...lifecycles],
+          }));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Existing Stock Added",
+              `Added ${items.length} existing stock item(s)`,
+            );
+        },
       };
     },
     {
