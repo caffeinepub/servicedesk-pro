@@ -298,7 +298,7 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-6 rounded-2xl shadow-lg">
+      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-4 rounded-2xl shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
@@ -377,7 +377,7 @@ export default function NotificationsPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl space-y-6">
+      <div className="space-y-6">
         {/* Reminders section */}
         {(filter === "all" || filter === "reminders") && (
           <div>

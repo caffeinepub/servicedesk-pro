@@ -358,6 +358,10 @@ export interface AdminNotice {
   italic?: boolean;
   visibleTo?: "all" | "supervisor" | "backend_user";
   visibleToNames?: string[];
+  animation?: string;
+  textAnimation?: string;
+  textColor?: string;
+  customBannerColor?: string;
 }
 
 // ── StorePilotAuditLog ────────────────────────────────────────────────────────

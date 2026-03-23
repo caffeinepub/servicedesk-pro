@@ -1990,7 +1990,28 @@ export const useStore = create<StoreState>()(
             racks: s.racks.map((r) => (r.id === id ? { ...r, name } : r)),
           })),
         deleteRack: (id) =>
-          set((s) => ({ racks: s.racks.filter((r) => r.id !== id) })),
+          set((s) => {
+            const childShelves = s.shelves
+              .filter((sh) => sh.rackId === id)
+              .map((sh) => sh.id);
+            const childBins = s.bins
+              .filter((b) => childShelves.includes(b.shelfId))
+              .map((b) => b.id);
+            return {
+              racks: s.racks.filter((r) => r.id !== id),
+              shelves: s.shelves.filter((sh) => sh.rackId !== id),
+              bins: s.bins.filter((b) => !childShelves.includes(b.shelfId)),
+              partItems: s.partItems.map((p) => {
+                if (p.rackId === id)
+                  return { ...p, rackId: "", shelfId: "", binId: "" };
+                if (childShelves.includes(p.shelfId ?? ""))
+                  return { ...p, shelfId: "", binId: "", rackId: "" };
+                if (childBins.includes(p.binId ?? ""))
+                  return { ...p, rackId: "", shelfId: "", binId: "" };
+                return p;
+              }) as PartInventoryItem[],
+            };
+          }),
 
         addShelf: (name, rackId) =>
           set((s) => ({
@@ -2006,7 +2027,22 @@ export const useStore = create<StoreState>()(
             ),
           })),
         deleteShelf: (id) =>
-          set((s) => ({ shelves: s.shelves.filter((sh) => sh.id !== id) })),
+          set((s) => {
+            const childBins = s.bins
+              .filter((b) => b.shelfId === id)
+              .map((b) => b.id);
+            return {
+              shelves: s.shelves.filter((sh) => sh.id !== id),
+              bins: s.bins.filter((b) => b.shelfId !== id),
+              partItems: s.partItems.map((p) => {
+                if (p.shelfId === id)
+                  return { ...p, shelfId: "", binId: "", rackId: "" };
+                if (childBins.includes(p.binId ?? ""))
+                  return { ...p, rackId: "", shelfId: "", binId: "" };
+                return p;
+              }) as PartInventoryItem[],
+            };
+          }),
 
         addBin: (name, shelfId) =>
           set((s) => ({
@@ -2017,7 +2053,12 @@ export const useStore = create<StoreState>()(
             bins: s.bins.map((b) => (b.id === id ? { ...b, ...updates } : b)),
           })),
         deleteBin: (id) =>
-          set((s) => ({ bins: s.bins.filter((b) => b.id !== id) })),
+          set((s) => ({
+            bins: s.bins.filter((b) => b.id !== id),
+            partItems: s.partItems.map((p) =>
+              p.binId === id ? { ...p, rackId: "", shelfId: "", binId: "" } : p,
+            ) as PartInventoryItem[],
+          })),
 
         addPurchaseEntry: (entry, partCodes) => {
           const cu = get().currentUser;

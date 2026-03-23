@@ -11,6 +11,7 @@ import {
   Eye,
   Italic,
   Megaphone,
+  Palette,
   Pause,
   Play,
   Plus,
@@ -173,6 +174,8 @@ type FormState = {
   paused: boolean;
   animation: string;
   textAnimation: string;
+  textColor: string;
+  customBannerColor: string;
   visibleTo: "all" | "supervisor" | "backend_user";
   visibleToNames: string[];
 };
@@ -192,6 +195,8 @@ const defaultForm: FormState = {
   paused: false,
   animation: "none",
   textAnimation: "none",
+  textColor: "",
+  customBannerColor: "",
   visibleTo: "all",
   visibleToNames: [],
 };
@@ -252,6 +257,8 @@ export default function AdminNoticesPage() {
       paused: (n as any).paused ?? false,
       animation: (n as any).animation ?? "none",
       textAnimation: (n as any).textAnimation ?? "none",
+      textColor: (n as any).textColor ?? "",
+      customBannerColor: (n as any).customBannerColor ?? "",
       visibleTo: (n as any).visibleTo ?? "all",
       visibleToNames: (n as any).visibleToNames ?? [],
     });
@@ -281,6 +288,8 @@ export default function AdminNoticesPage() {
       paused: form.paused,
       animation: form.animation,
       textAnimation: form.textAnimation,
+      textColor: form.textColor,
+      customBannerColor: form.customBannerColor,
       visibleTo: form.visibleTo,
       visibleToNames: form.visibleToNames,
     };
@@ -300,8 +309,35 @@ export default function AdminNoticesPage() {
 
   return (
     <div className="space-y-6">
+      <style>{`
+        @keyframes rainbowBg {
+          0% { background-position: 0% 50%; filter: brightness(1) saturate(1.2); }
+          25% { background-position: 100% 50%; filter: brightness(1.2) saturate(1.5); }
+          50% { background-position: 200% 50%; filter: brightness(1.3) saturate(1.8); }
+          75% { background-position: 300% 50%; filter: brightness(1.2) saturate(1.5); }
+          100% { background-position: 400% 50%; filter: brightness(1) saturate(1.2); }
+        }
+        .notice-text-rainbow {
+          animation: textHueRotate2 2s linear infinite !important;
+          color: #ff4444 !important;
+          -webkit-text-fill-color: initial !important;
+          background: none !important;
+          text-shadow: 0 0 8px rgba(255,100,68,0.6) !important;
+          font-weight: bold !important;
+        }
+        @keyframes textHueRotate2 {
+          0% { filter: hue-rotate(0deg) brightness(1.1); color: #ff4444; }
+          33% { filter: hue-rotate(120deg) brightness(1.2); color: #44ff44; }
+          66% { filter: hue-rotate(240deg) brightness(1.1); color: #4444ff; }
+          100% { filter: hue-rotate(360deg) brightness(1.1); color: #ff4444; }
+        }
+        @keyframes textShimmerGlow2 {
+          0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.6); opacity: 0.9; }
+          50% { text-shadow: 0 0 12px rgba(255,255,255,1), 0 0 24px rgba(255,220,100,0.7); opacity: 1; }
+        }
+      `}</style>
       {/* Header */}
-      <div className="bg-gradient-to-r from-rose-600 to-pink-600 text-white rounded-2xl px-6 py-6 shadow-lg">
+      <div className="bg-gradient-to-r from-rose-600 to-pink-600 text-white rounded-2xl px-6 py-4 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
@@ -535,9 +571,16 @@ export default function AdminNoticesPage() {
                     setForm({ ...form, message: e.target.value })
                   }
                   placeholder="Notice message..."
-                  className="mt-1 resize-none overflow-y-auto"
-                  rows={3}
-                  style={{ height: "76px" }}
+                  className="mt-1"
+                  style={{
+                    resize: "none",
+                    height: "80px",
+                    minHeight: "80px",
+                    maxHeight: "80px",
+                    overflow: "auto",
+                    wordWrap: "break-word",
+                    whiteSpace: "pre-wrap",
+                  }}
                   data-ocid="notices.textarea"
                 />
               </div>
@@ -628,6 +671,85 @@ export default function AdminNoticesPage() {
                       {c.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Custom Banner Color */}
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <Palette className="h-3.5 w-3.5 text-rose-500" />
+                  Custom Banner Color (overrides theme)
+                </Label>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {[
+                      {
+                        color: "",
+                        label: "Theme",
+                        cls: "bg-gradient-to-r from-slate-400 to-slate-600",
+                      },
+                      { color: "#ef4444", label: "Red", cls: "bg-red-500" },
+                      {
+                        color: "#f97316",
+                        label: "Orange",
+                        cls: "bg-orange-500",
+                      },
+                      {
+                        color: "#eab308",
+                        label: "Yellow",
+                        cls: "bg-yellow-500",
+                      },
+                      { color: "#22c55e", label: "Green", cls: "bg-green-500" },
+                      { color: "#3b82f6", label: "Blue", cls: "bg-blue-500" },
+                      {
+                        color: "#8b5cf6",
+                        label: "Violet",
+                        cls: "bg-violet-500",
+                      },
+                      { color: "#000000", label: "Black", cls: "bg-black" },
+                    ].map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.label}
+                        title={opt.label}
+                        onClick={() =>
+                          setForm({ ...form, customBannerColor: opt.color })
+                        }
+                        className={`w-7 h-7 rounded-full ${opt.cls} transition-all hover:scale-110 ${form.customBannerColor === opt.color ? "ring-2 ring-offset-2 ring-slate-600 scale-110" : ""}`}
+                      />
+                    ))}
+                    <div className="flex flex-col items-center gap-1 ml-1">
+                      <div className="relative">
+                        <input
+                          type="color"
+                          value={form.customBannerColor || "#ef4444"}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              customBannerColor: e.target.value,
+                            })
+                          }
+                          className="w-8 h-8 cursor-pointer opacity-0 absolute inset-0"
+                          title="Pick custom banner color"
+                          style={{ borderRadius: "50%" }}
+                        />
+                        <div
+                          className="w-8 h-8 rounded-full border-2 border-slate-300 shadow-sm cursor-pointer hover:scale-110 transition-transform flex items-center justify-center"
+                          style={{
+                            backgroundColor:
+                              form.customBannerColor || "#9c9c9c",
+                          }}
+                        >
+                          {!form.customBannerColor && (
+                            <span className="text-[8px] text-white font-bold">
+                              +
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-slate-500">Custom</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -783,6 +905,76 @@ export default function AdminNoticesPage() {
                       {a.label}
                     </button>
                   ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Text Color */}
+            <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                <Palette className="h-4 w-4 text-pink-500" /> Text Color
+              </h3>
+              <div>
+                <Label className="text-xs font-medium text-slate-600 mb-2 block">
+                  Preset Colors
+                </Label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    {
+                      color: "",
+                      label: "Auto",
+                      cls: "bg-gradient-to-r from-slate-400 to-slate-600",
+                    },
+                    {
+                      color: "#ffffff",
+                      label: "White",
+                      cls: "bg-white border-2 border-slate-200",
+                    },
+                    { color: "#000000", label: "Black", cls: "bg-black" },
+                    { color: "#fbbf24", label: "Yellow", cls: "bg-yellow-400" },
+                    { color: "#22d3ee", label: "Cyan", cls: "bg-cyan-400" },
+                    { color: "#f472b6", label: "Pink", cls: "bg-pink-400" },
+                    { color: "#fb923c", label: "Orange", cls: "bg-orange-400" },
+                    { color: "#f87171", label: "Red", cls: "bg-red-400" },
+                    { color: "#4ade80", label: "Green", cls: "bg-green-400" },
+                  ].map((opt) => (
+                    <button
+                      type="button"
+                      key={opt.label}
+                      title={opt.label}
+                      onClick={() => setForm({ ...form, textColor: opt.color })}
+                      className={`w-7 h-7 rounded-full ${opt.cls} transition-all hover:scale-110 ${
+                        form.textColor === opt.color
+                          ? "ring-2 ring-offset-2 ring-slate-600 scale-110"
+                          : ""
+                      }`}
+                    />
+                  ))}
+                  <div className="flex flex-col items-center gap-1 ml-2">
+                    <div className="relative">
+                      <input
+                        type="color"
+                        value={form.textColor || "#ffffff"}
+                        onChange={(e) =>
+                          setForm({ ...form, textColor: e.target.value })
+                        }
+                        className="w-8 h-8 cursor-pointer opacity-0 absolute inset-0"
+                        title="Pick custom color"
+                        style={{ borderRadius: "50%" }}
+                      />
+                      <div
+                        className="w-8 h-8 rounded-full border-2 border-slate-300 shadow-sm cursor-pointer hover:scale-110 transition-transform flex items-center justify-center"
+                        style={{ backgroundColor: form.textColor || "#9c9c9c" }}
+                      >
+                        {!form.textColor && (
+                          <span className="text-[8px] text-white font-bold">
+                            +
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-slate-500">Custom</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -968,7 +1160,17 @@ export default function AdminNoticesPage() {
               {showPreview && (
                 <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                   <div
-                    className={`px-3 py-2 flex items-center gap-2 text-white overflow-hidden ${colorOption.preview}`}
+                    className={`px-3 py-2 flex items-center gap-2 text-white overflow-hidden ${form.color === "rainbow" ? "" : colorOption.preview}`}
+                    style={
+                      form.color === "rainbow"
+                        ? {
+                            background:
+                              "linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ffff00, #00ff88, #00ccff, #0044ff, #8800ff, #ff00cc, #ff0000)",
+                            backgroundSize: "400% 100%",
+                            animation: "rainbowBg 1.2s linear infinite",
+                          }
+                        : undefined
+                    }
                   >
                     <Megaphone className="h-4 w-4 flex-shrink-0" />
                     <span className="font-semibold flex-shrink-0 text-sm">
@@ -977,7 +1179,20 @@ export default function AdminNoticesPage() {
                     <span
                       className={`truncate text-${form.fontSize} ${
                         form.bold ? "font-bold" : "font-normal"
-                      } ${form.italic ? "italic" : ""}`}
+                      } ${form.italic ? "italic" : ""} ${form.textAnimation === "text_rainbow" ? "notice-text-rainbow" : ""}`}
+                      style={{
+                        color:
+                          form.textAnimation !== "text_rainbow"
+                            ? form.textColor || undefined
+                            : undefined,
+                        ...(form.textAnimation === "text_shimmer"
+                          ? {
+                              animation:
+                                "textShimmerGlow2 2s ease-in-out infinite",
+                              textShadow: "0 0 8px rgba(255,255,255,1)",
+                            }
+                          : {}),
+                      }}
                     >
                       {form.message ||
                         "Your notice message will appear here..."}

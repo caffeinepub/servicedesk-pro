@@ -7,6 +7,7 @@ import {
   Folder,
   FolderOpen,
   Layers,
+  Lightbulb,
   MapPin,
   Package,
   PackageOpen,
@@ -345,17 +346,19 @@ function SparePartsTab() {
                     >
                       <div className="flex items-center gap-2.5">
                         {isCompanyOpen ? (
-                          <FolderOpen className="h-4 w-4 text-amber-500" />
+                          <FolderOpen className="h-4 w-4 text-blue-500" />
                         ) : (
                           <Folder className="h-4 w-4 text-slate-400" />
                         )}
-                        <Building2 className="h-4 w-4 text-slate-500" />
-                        <span className="font-semibold text-slate-800">
+                        <div className="p-1 bg-blue-100 rounded">
+                          <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                        </div>
+                        <span className="font-semibold text-blue-900">
                           {companyName}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-full font-medium">
+                        <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-full font-medium">
                           {company.categories.length}{" "}
                           {company.categories.length === 1
                             ? "category"
@@ -387,17 +390,19 @@ function SparePartsTab() {
                               >
                                 <div className="flex items-center gap-2">
                                   {isCatOpen ? (
-                                    <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
+                                    <FolderOpen className="h-3.5 w-3.5 text-emerald-500" />
                                   ) : (
                                     <Folder className="h-3.5 w-3.5 text-slate-400" />
                                   )}
-                                  <Layers className="h-3.5 w-3.5 text-slate-400" />
-                                  <span className="text-sm font-medium text-slate-700">
+                                  <div className="p-0.5 bg-emerald-100 rounded">
+                                    <Layers className="h-3 w-3 text-emerald-600" />
+                                  </div>
+                                  <span className="text-sm font-semibold text-emerald-900">
                                     {catName}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full">
+                                  <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
                                     {cat.partNames.length}{" "}
                                     {cat.partNames.length === 1
                                       ? "part"
@@ -691,8 +696,14 @@ interface RelocateModalProps {
 }
 
 function RelocateModal({ item, onClose }: RelocateModalProps) {
-  const { racks, shelves, bins, assignPartLocation, stockPartNames } =
-    useStore();
+  const {
+    racks,
+    shelves,
+    bins,
+    assignPartLocation,
+    stockPartNames,
+    partItems,
+  } = useStore();
   const { locationStr } = useLocationHelpers();
 
   const [selectedRack, setSelectedRack] = useState(item.rackId ?? "");
@@ -705,6 +716,28 @@ function RelocateModal({ item, onClose }: RelocateModalProps) {
   const partName =
     stockPartNames.find((p) => p.id === item.partNameId)?.name ?? "—";
 
+  const sameCodeSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const results: { rackName: string; shelfName: string; binName: string }[] =
+      [];
+    for (const p of partItems) {
+      if (p.partCode === item.partCode && p.id !== item.id && p.rackId) {
+        const rk = racks.find((r) => r.id === p.rackId);
+        const sh = shelves.find((s) => s.id === p.shelfId);
+        const bn = bins.find((b) => b.id === p.binId);
+        const key = `${p.rackId}-${p.shelfId}-${p.binId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            rackName: rk?.name ?? "—",
+            shelfName: sh?.name ?? "—",
+            binName: bn?.name ?? "—",
+          });
+        }
+      }
+    }
+    return results;
+  }, [partItems, item, racks, shelves, bins]);
   const handleSave = () => {
     assignPartLocation(item.id, selectedRack, selectedShelf, selectedBin);
     onClose();
@@ -761,6 +794,24 @@ function RelocateModal({ item, onClose }: RelocateModalProps) {
             </span>
           </div>
 
+          {sameCodeSuggestions.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 flex gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <div className="text-xs text-amber-800">
+                <p className="font-semibold mb-1">
+                  Same part code already located at:
+                </p>
+                {sameCodeSuggestions.map((s) => (
+                  <p
+                    key={`${s.rackName}-${s.shelfName}-${s.binName}`}
+                    className="font-mono"
+                  >
+                    {s.rackName} › {s.shelfName} › {s.binName}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-3">
             <div>
               <label
@@ -1140,16 +1191,16 @@ export default function InventoryPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="border-b border-slate-200">
-        <nav className="flex gap-1" aria-label="Inventory tabs">
+      <div className="border-b border-slate-200 bg-white/80">
+        <nav className="flex gap-1 px-1" aria-label="Inventory tabs">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold transition-all border-b-2 -mb-px ${
                 activeTab === tab.id
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                  ? "border-emerald-600 text-emerald-600 bg-emerald-50/60"
+                  : "border-transparent text-slate-500 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50/40"
               }`}
               onClick={() => setActiveTab(tab.id)}
               data-ocid="inventory.tab"

@@ -506,6 +506,7 @@ function NoticeBanner() {
   const isBold = (notice as any).bold ?? false;
   const isItalic = (notice as any).italic ?? false;
   const animation = (notice as any).animation ?? "none";
+  const textColor = (notice as any).textColor ?? "";
 
   const isScrolling = direction === "rtl" || direction === "ltr";
 
@@ -526,7 +527,7 @@ function NoticeBanner() {
     const base: React.CSSProperties =
       colorKey === "rainbow"
         ? {
-            animation: "rainbowBg 3s linear infinite",
+            animation: "rainbowBg 1.2s linear infinite",
             backgroundSize: "400% 100%",
           }
         : {};
@@ -570,34 +571,55 @@ function NoticeBanner() {
   };
 
   const getTextAnimStyle = (): React.CSSProperties => {
+    const isScrollingMode = direction === "rtl" || direction === "ltr";
     switch (textAnimation) {
       case "typewriter":
-        return { animation: "typewriter 4s steps(40) infinite" };
+        // In scrolling marquee context, typewriter width animation hides text; use glow instead
+        if (isScrollingMode) {
+          return {
+            display: "inline",
+            color: "inherit",
+            animation: "textGlow 1.5s ease-in-out infinite",
+            textShadow:
+              "0 0 10px rgba(255,255,255,0.9), 0 0 20px rgba(255,255,255,0.5)",
+          };
+        }
+        return {
+          display: "inline-block",
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          animation: "typewriter 3s steps(30, end) infinite",
+          color: "inherit",
+        };
       case "glow_pulse":
         return {
+          color: "inherit",
           animation: "textGlow 2s ease-in-out infinite",
           textShadow: "0 0 8px rgba(255,255,255,0.8)",
         };
       case "text_bounce":
         return {
           display: "inline-block",
+          color: "inherit",
           animation: "textBounce 0.8s ease infinite",
         };
       case "text_fadein":
-        return { animation: "textFadein 1.5s ease infinite" };
+        // min opacity 0.7 so text is always readable
+        return {
+          color: "inherit",
+          animation: "textFadeinVisible 1.5s ease infinite",
+        };
       case "text_shimmer":
         return {
-          animation: "textShimmer 2s linear infinite",
-          backgroundClip: "text",
-          WebkitBackgroundClip: "text",
+          animation: "textShimmerGlow 2s ease-in-out infinite",
+          textShadow:
+            "0 0 8px rgba(255,255,255,1), 0 0 20px rgba(255,255,255,0.6), 0 0 30px rgba(255,200,100,0.4)",
+          color: "white",
         };
       case "text_rainbow":
         return {
-          animation: "textRainbow 3s linear infinite",
-          backgroundSize: "400%",
-          backgroundClip: "text",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
+          animation: "textHueRotate 2s linear infinite",
+          color: "#ff4444",
         };
       default:
         return {};
@@ -616,6 +638,7 @@ function NoticeBanner() {
         display: "block",
         textAlign: direction as "center" | "left" | "right",
         whiteSpace: "normal",
+        wordBreak: "break-word",
       };
 
   const textClass = `text-${fontSize} ${isBold ? "font-bold" : "font-normal"} ${isItalic ? "italic" : ""} ${getAnimationClass()}`;
@@ -648,12 +671,23 @@ function NoticeBanner() {
           to { transform: translateY(0); opacity: 1; }
         }
         @keyframes rainbowBg {
-          0% { background-position: 0% 50%; }
-          100% { background-position: 400% 50%; }
+          0%   { background-position: 0% 50%;   filter: brightness(1.1) saturate(1.5) drop-shadow(0 0 6px rgba(255,100,0,0.8)); }
+          16%  { background-position: 80% 50%;  filter: brightness(1.3) saturate(2.0) drop-shadow(0 0 10px rgba(255,255,0,0.9)); }
+          33%  { background-position: 160% 50%; filter: brightness(1.2) saturate(1.8) drop-shadow(0 0 8px rgba(0,255,100,0.8)); }
+          50%  { background-position: 240% 50%; filter: brightness(1.4) saturate(2.2) drop-shadow(0 0 12px rgba(0,200,255,1.0)); }
+          66%  { background-position: 300% 50%; filter: brightness(1.2) saturate(1.8) drop-shadow(0 0 8px rgba(100,0,255,0.9)); }
+          83%  { background-position: 360% 50%; filter: brightness(1.3) saturate(2.0) drop-shadow(0 0 10px rgba(255,0,200,0.9)); }
+          100% { background-position: 400% 50%; filter: brightness(1.1) saturate(1.5) drop-shadow(0 0 6px rgba(255,100,0,0.8)); }
+        }
+        @keyframes rainbowGlow {
+          0%, 100% { box-shadow: 0 0 8px rgba(255,100,0,0.6), 0 2px 12px rgba(255,50,0,0.4); }
+          33%  { box-shadow: 0 0 12px rgba(0,255,100,0.7), 0 2px 16px rgba(0,200,255,0.5); }
+          66%  { box-shadow: 0 0 10px rgba(100,0,255,0.6), 0 2px 14px rgba(255,0,200,0.5); }
         }
         @keyframes typewriter {
-          0%, 100% { clip-path: inset(0 100% 0 0); }
-          50% { clip-path: inset(0 0% 0 0); }
+          0%   { width: 0ch; overflow: hidden; }
+          80%  { width: 100%; overflow: hidden; }
+          100% { width: 100%; }
         }
         @keyframes textGlow {
           0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.4); }
@@ -667,21 +701,38 @@ function NoticeBanner() {
           0%, 100% { opacity: 0.3; }
           50% { opacity: 1; }
         }
+        @keyframes textFadeinVisible {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
         @keyframes textShimmer {
           0% { background-position: 200% center; }
           100% { background-position: -200% center; }
         }
+        @keyframes textShimmerGlow {
+          0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.6); opacity: 0.9; }
+          50% { text-shadow: 0 0 12px rgba(255,255,255,1), 0 0 24px rgba(255,220,100,0.7), 0 0 36px rgba(255,180,50,0.4); opacity: 1; }
+        }
         @keyframes textRainbow {
-          0% { background-position: 0% 50%; }
-          100% { background-position: 400% 50%; }
+          0% { filter: hue-rotate(0deg); }
+          100% { filter: hue-rotate(360deg); }
         }
         .notice-text-rainbow {
-          background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000);
-          background-size: 400% 100%;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          animation: textRainbow 3s linear infinite !important;
+          animation: textHueRotate 2s linear infinite !important;
+          color: #ff6644 !important;
+          -webkit-text-fill-color: initial !important;
+          background: none !important;
+          text-shadow: 0 0 8px currentColor, 0 0 16px rgba(255,200,0,0.6), 0 0 24px rgba(255,100,0,0.4) !important;
+          font-weight: bold !important;
+        }
+        @keyframes textHueRotate {
+          0% { filter: hue-rotate(0deg) brightness(1.1); color: #ff4444; }
+          16% { filter: hue-rotate(60deg) brightness(1.2); color: #ffaa00; }
+          33% { filter: hue-rotate(120deg) brightness(1.1); color: #44ff44; }
+          50% { filter: hue-rotate(180deg) brightness(1.2); color: #00ccff; }
+          66% { filter: hue-rotate(240deg) brightness(1.1); color: #6644ff; }
+          83% { filter: hue-rotate(300deg) brightness(1.2); color: #ff44cc; }
+          100% { filter: hue-rotate(360deg) brightness(1.1); color: #ff4444; }
         }
         .notice-rainbow-swatch {
           background: linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff);
@@ -711,11 +762,14 @@ function NoticeBanner() {
           ...(colorKey === "rainbow"
             ? {
                 background:
-                  "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff, #ff0000)",
+                  "linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ffff00, #00ff88, #00ccff, #0044ff, #8800ff, #ff00cc, #ff0000)",
                 backgroundSize: "400% 100%",
-                animation: "rainbowBg 3s linear infinite",
+                animation:
+                  "rainbowBg 1.2s linear infinite, rainbowGlow 0.8s linear infinite",
               }
-            : {}),
+            : (notice as any).customBannerColor
+              ? { background: (notice as any).customBannerColor }
+              : {}),
         }}
       >
         <Megaphone className="h-4 w-4 flex-shrink-0" />
@@ -724,7 +778,15 @@ function NoticeBanner() {
         </span>
         <div className={`flex-1 ${isScrolling ? "overflow-hidden" : ""}`}>
           <span
-            style={{ ...marqueeStyle, ...getTextAnimStyle() }}
+            style={{
+              ...marqueeStyle,
+              ...getTextAnimStyle(),
+              ...(textColor &&
+              textAnimation !== "text_shimmer" &&
+              textAnimation !== "text_rainbow"
+                ? { color: textColor }
+                : {}),
+            }}
             className={`${textClass} ${textAnimation === "text_rainbow" ? "notice-text-rainbow" : ""}`}
           >
             {notice.message}

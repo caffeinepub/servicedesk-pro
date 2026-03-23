@@ -1,11 +1,12 @@
-import { useNavigate } from "@tanstack/react-router";
 import {
   AlignJustify,
   Box,
   Building2,
   Folder,
   FolderOpen,
+  Layers,
   LayoutGrid,
+  Lightbulb,
   MapPin,
   Package,
   Pencil,
@@ -43,6 +44,7 @@ import {
 } from "../components/ui/tabs";
 import { useStore } from "../store";
 import type {
+  PartInventoryItem,
   Warehouse,
   WarehouseBin,
   WarehouseRack,
@@ -97,6 +99,8 @@ function DeleteConfirm({
 function AssignLocationDialog({
   open,
   partId,
+  partCode,
+  allPartItems,
   racks,
   shelves,
   bins,
@@ -105,6 +109,8 @@ function AssignLocationDialog({
 }: {
   open: boolean;
   partId: string;
+  partCode: string;
+  allPartItems: PartInventoryItem[];
   racks: WarehouseRack[];
   shelves: WarehouseShelf[];
   bins: WarehouseBin[];
@@ -120,6 +126,27 @@ function AssignLocationDialog({
   const [shelf, setShelf] = useState("");
   const [bin, setBin] = useState("");
 
+  // Find other parts with same partCode that already have a location assigned
+  const sameCodeLocations = (() => {
+    const seen = new Set<string>();
+    const results: { rackName: string; shelfName: string; binName: string }[] =
+      [];
+    for (const p of allPartItems) {
+      if (p.partCode === partCode && p.id !== partId && p.rackId) {
+        const key = `${p.rackId}-${p.shelfId}-${p.binId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          const rackName =
+            racks.find((r) => r.id === p.rackId)?.name ?? p.rackId;
+          const shelfName = shelves.find((s) => s.id === p.shelfId)?.name ?? "";
+          const binName = bins.find((b) => b.id === p.binId)?.name ?? "";
+          results.push({ rackName, shelfName, binName });
+        }
+      }
+    }
+    return results;
+  })();
+
   const handleClose = () => {
     setRack("");
     setShelf("");
@@ -127,91 +154,219 @@ function AssignLocationDialog({
     onClose();
   };
 
+  const selectedRackName = racks.find((r) => r.id === rack)?.name;
+  const selectedShelfName = shelves.find((s) => s.id === shelf)?.name;
+  const selectedBinName = bins.find((b) => b.id === bin)?.name;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Assign Location</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-2">
-          <Label>Rack</Label>
-          <Select
-            value={rack}
-            onValueChange={(v) => {
-              setRack(v);
-              setShelf("");
-              setBin("");
-            }}
-          >
-            <SelectTrigger data-ocid="warehouse.select">
-              <SelectValue placeholder="Select rack" />
-            </SelectTrigger>
-            <SelectContent>
-              {racks.map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  {r.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Label>Shelf</Label>
-          <Select
-            value={shelf}
-            onValueChange={(v) => {
-              setShelf(v);
-              setBin("");
-            }}
-            disabled={!rack}
-          >
-            <SelectTrigger data-ocid="warehouse.select">
-              <SelectValue placeholder="Select shelf" />
-            </SelectTrigger>
-            <SelectContent>
-              {shelves
-                .filter((s) => s.rackId === rack)
-                .map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-          <Label>Bin (optional)</Label>
-          <Select value={bin} onValueChange={setBin} disabled={!shelf}>
-            <SelectTrigger data-ocid="warehouse.select">
-              <SelectValue placeholder="Select bin" />
-            </SelectTrigger>
-            <SelectContent>
-              {bins
-                .filter((b) => b.shelfId === shelf)
-                .map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+        {/* Gradient Header */}
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5 text-white">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl">
+              <MapPin className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold">Assign Location</h2>
+              <p className="text-indigo-200 text-xs mt-0.5">
+                Select a rack, shelf and bin for this part
+              </p>
+            </div>
+          </div>
+          {/* Visual location path */}
+          <div className="mt-4 flex items-center gap-2 bg-white/15 rounded-xl px-4 py-2.5">
+            <span
+              className={`text-sm font-semibold ${selectedRackName ? "text-white" : "text-indigo-300"}`}
+            >
+              {selectedRackName ?? "Rack"}
+            </span>
+            <span className="text-indigo-300 text-sm">›</span>
+            <span
+              className={`text-sm font-semibold ${selectedShelfName ? "text-white" : "text-indigo-300"}`}
+            >
+              {selectedShelfName ?? "Shelf"}
+            </span>
+            <span className="text-indigo-300 text-sm">›</span>
+            <span
+              className={`text-sm font-semibold ${selectedBinName ? "text-white" : "text-indigo-300"}`}
+            >
+              {selectedBinName ?? "Bin"}
+            </span>
+          </div>
         </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            data-ocid="warehouse.cancel_button"
+
+        <div className="px-6 py-5 space-y-4">
+          {/* Suggestion: same part code already assigned to a location */}
+          {sameCodeLocations.length > 0 && (
+            <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3">
+              <div className="flex items-start gap-2.5">
+                <div className="p-1 bg-yellow-200 rounded-md mt-0.5 shrink-0">
+                  <Lightbulb className="h-3.5 w-3.5 text-yellow-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-yellow-800 mb-1.5">
+                    Same part code already assigned to:
+                  </p>
+                  <div className="space-y-1">
+                    {sameCodeLocations.map((loc) => (
+                      <div
+                        key={`${loc.rackName}-${loc.shelfName}-${loc.binName}`}
+                        className="text-xs text-yellow-700 bg-yellow-100 rounded-lg px-2.5 py-1.5 font-mono"
+                      >
+                        {loc.rackName}
+                        {loc.shelfName ? ` › ${loc.shelfName}` : ""}
+                        {loc.binName ? ` › ${loc.binName}` : ""}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-yellow-600 mt-1.5 italic">
+                    You can assign this part to the same location for easy
+                    tracking.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rack */}
+          <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+              <div className="p-1 bg-amber-200 rounded-md">
+                <Server className="h-3.5 w-3.5 text-amber-700" />
+              </div>
+              Rack
+            </div>
+            <Select
+              value={rack}
+              onValueChange={(v) => {
+                setRack(v);
+                setShelf("");
+                setBin("");
+              }}
+            >
+              <SelectTrigger
+                className="bg-white border-amber-200 focus:ring-amber-400"
+                data-ocid="warehouse.select"
+              >
+                <SelectValue placeholder="Select rack" />
+              </SelectTrigger>
+              <SelectContent>
+                {racks.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Shelf */}
+          <div
+            className={`rounded-xl border px-4 py-3 space-y-2 transition-opacity ${rack ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100 opacity-60"}`}
           >
-            Cancel
-          </Button>
-          <Button
-            className="bg-blue-600 hover:bg-blue-700"
-            disabled={!rack || !shelf}
-            onClick={() => {
-              onAssign(partId, rack, shelf, bin);
-              handleClose();
-            }}
-            data-ocid="warehouse.confirm_button"
+            <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+              <div className="p-1 bg-emerald-200 rounded-md">
+                <AlignJustify className="h-3.5 w-3.5 text-emerald-700" />
+              </div>
+              Shelf
+            </div>
+            <Select
+              value={shelf}
+              onValueChange={(v) => {
+                setShelf(v);
+                setBin("");
+              }}
+              disabled={!rack}
+            >
+              <SelectTrigger
+                className="bg-white border-emerald-200 focus:ring-emerald-400"
+                data-ocid="warehouse.select"
+              >
+                <SelectValue placeholder="Select shelf" />
+              </SelectTrigger>
+              <SelectContent>
+                {shelves
+                  .filter((s) => s.rackId === rack)
+                  .map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Bin */}
+          <div
+            className={`rounded-xl border px-4 py-3 space-y-2 transition-opacity ${shelf ? "bg-blue-50 border-blue-100" : "bg-slate-50 border-slate-100 opacity-60"}`}
           >
-            Assign
-          </Button>
-        </DialogFooter>
+            <div className="flex items-center gap-2 text-sm font-semibold text-blue-700">
+              <div className="p-1 bg-blue-200 rounded-md">
+                <Box className="h-3.5 w-3.5 text-blue-700" />
+              </div>
+              Bin <span className="text-slate-400 font-normal">(optional)</span>
+            </div>
+            <Select value={bin} onValueChange={setBin} disabled={!shelf}>
+              <SelectTrigger
+                className="bg-white border-blue-200 focus:ring-blue-400"
+                data-ocid="warehouse.select"
+              >
+                <SelectValue placeholder="Select bin" />
+              </SelectTrigger>
+              <SelectContent>
+                {bins
+                  .filter((b) => b.shelfId === shelf)
+                  .map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Summary card */}
+          {rack && shelf && (
+            <div className="rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 px-4 py-3 flex items-center gap-3">
+              <div className="p-1.5 bg-indigo-100 rounded-lg">
+                <MapPin className="h-4 w-4 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-xs text-indigo-500 font-medium">
+                  Selected path
+                </p>
+                <p className="text-sm font-bold text-indigo-700">
+                  {selectedRackName} › {selectedShelfName}
+                  {selectedBinName ? ` › ${selectedBinName}` : ""}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              className="flex-1"
+              data-ocid="warehouse.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-md"
+              disabled={!rack || !shelf}
+              onClick={() => {
+                onAssign(partId, rack, shelf, bin);
+                handleClose();
+              }}
+              data-ocid="warehouse.confirm_button"
+            >
+              <MapPin className="h-4 w-4 mr-2" />
+              Assign Location
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -368,30 +523,31 @@ function WarehouseLayoutView({
                 data-ocid={`warehouse.item.${ri + 1}`}
               >
                 {/* Rack Row */}
-                <div className="flex items-center px-4 py-3 bg-slate-50 gap-2">
+                <div className="flex items-center px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 gap-2">
                   <button
                     type="button"
                     onClick={() => toggleRack(rack.id)}
                     className="flex items-center gap-2 flex-1 text-left"
                   >
                     {isExpanded ? (
-                      <FolderOpen className="h-5 w-5 text-amber-500" />
+                      <FolderOpen className="h-5 w-5 text-white/80" />
                     ) : (
-                      <Folder className="h-5 w-5 text-slate-400" />
+                      <Folder className="h-5 w-5 text-blue-200" />
                     )}
-                    <Server className="h-4 w-4 text-slate-500" />
-                    <span className="font-semibold text-slate-800">
-                      {rack.name}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
+                    <div className="p-1 bg-white/20 rounded-md">
+                      <Server className="h-4 w-4 text-white" />
+                    </div>
+                    <span className="font-bold text-white">{rack.name}</span>
+                    <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full font-medium">
                       {rackShelves.length} shelf(ves)
-                    </Badge>
+                    </span>
                   </button>
                   {isAdmin && (
                     <div className="flex gap-1">
                       <Button
                         size="sm"
                         variant="ghost"
+                        className="text-white/80 hover:text-white hover:bg-white/20"
                         onClick={() => onEditRack(rack)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -399,7 +555,7 @@ function WarehouseLayoutView({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-red-500"
+                        className="text-red-200 hover:text-white hover:bg-red-500/30"
                         onClick={() => onDeleteRack(rack)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -422,30 +578,33 @@ function WarehouseLayoutView({
                           className="border border-slate-200 rounded-md overflow-hidden"
                           data-ocid={`warehouse.item.${si + 1}`}
                         >
-                          <div className="flex items-center px-3 py-2 bg-white gap-2">
+                          <div className="flex items-center px-3 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 gap-2">
                             <button
                               type="button"
                               onClick={() => toggleShelf(shelf.id)}
                               className="flex items-center gap-2 flex-1 text-left"
                             >
                               {isShelfExpanded ? (
-                                <FolderOpen className="h-4 w-4 text-amber-400" />
+                                <FolderOpen className="h-4 w-4 text-emerald-500" />
                               ) : (
-                                <Folder className="h-4 w-4 text-slate-300" />
+                                <Folder className="h-4 w-4 text-emerald-300" />
                               )}
-                              <AlignJustify className="h-3.5 w-3.5 text-slate-400" />
-                              <span className="text-sm font-medium text-slate-700">
+                              <div className="p-0.5 bg-emerald-100 rounded">
+                                <AlignJustify className="h-3.5 w-3.5 text-emerald-600" />
+                              </div>
+                              <span className="text-sm font-semibold text-emerald-800">
                                 {shelf.name}
                               </span>
-                              <Badge variant="outline" className="text-xs">
+                              <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-medium">
                                 {shelfBins.length} bin(s)
-                              </Badge>
+                              </span>
                             </button>
                             {isAdmin && (
                               <div className="flex gap-1">
                                 <Button
                                   size="sm"
                                   variant="ghost"
+                                  className="text-emerald-600 hover:bg-emerald-100"
                                   onClick={() => onEditShelf(shelf)}
                                 >
                                   <Pencil className="h-3 w-3" />
@@ -453,7 +612,7 @@ function WarehouseLayoutView({
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="text-red-500"
+                                  className="text-red-400 hover:bg-red-50"
                                   onClick={() => onDeleteShelf(shelf)}
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -468,9 +627,9 @@ function WarehouseLayoutView({
                                 {shelfBins.map((bin) => (
                                   <div
                                     key={bin.id}
-                                    className="flex items-center gap-1 bg-slate-100 rounded-full px-2.5 py-1 text-xs text-slate-600"
+                                    className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 text-xs text-amber-800 font-medium"
                                   >
-                                    <Box className="h-3 w-3 text-slate-400" />
+                                    <Box className="h-3 w-3 text-amber-500" />
                                     {bin.name}
                                     {isAdmin && (
                                       <>
@@ -530,7 +689,22 @@ function WarehouseLayoutView({
 
       {/* Parts by Location */}
       <div className="mt-6">
-        <h3 className="font-semibold text-slate-900 mb-3">Parts by Location</h3>
+        <div className="flex items-center gap-2 mb-3 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl">
+          <div className="p-1.5 bg-indigo-100 rounded-lg">
+            <Package className="h-4 w-4 text-indigo-600" />
+          </div>
+          <h3 className="font-bold text-indigo-900 text-sm">
+            Parts by Location
+          </h3>
+          <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full ml-auto font-medium">
+            {
+              partItems.filter(
+                (p) => p.rackId && p.status !== "returned_to_company",
+              ).length
+            }{" "}
+            Parts
+          </span>
+        </div>
         <div className="space-y-2">
           {warehouseRacks.map((rack, ri) => {
             const rackParts = partItems.filter(
@@ -547,36 +721,39 @@ function WarehouseLayoutView({
                 <button
                   type="button"
                   onClick={() => toggleLocRack(rack.id)}
-                  className="w-full flex items-center px-4 py-3 bg-slate-50 gap-2 text-left"
+                  className="w-full flex items-center px-4 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 gap-2 text-left"
                 >
                   {isExpanded ? (
-                    <FolderOpen className="h-5 w-5 text-amber-500" />
+                    <FolderOpen className="h-5 w-5 text-white/80" />
                   ) : (
-                    <Folder className="h-5 w-5 text-slate-400" />
+                    <Folder className="h-5 w-5 text-blue-200" />
                   )}
-                  <Server className="h-4 w-4 text-slate-500" />
-                  <span className="font-medium text-slate-800">
-                    {rack.name}
-                  </span>
+                  <div className="p-1 bg-white/20 rounded-md">
+                    <Server className="h-4 w-4 text-white" />
+                  </div>
+                  <span className="font-bold text-white">{rack.name}</span>
                   <div className="ml-auto flex gap-1.5">
-                    <Badge variant="outline" className="text-xs">
+                    <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full font-medium">
                       {rackShelves.length} Shelves
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
+                    </span>
+                    <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full font-medium">
                       {rackParts.length} Parts
-                    </Badge>
+                    </span>
                   </div>
                 </button>
                 {isExpanded && (
                   <div className="pl-6 pr-4 pb-3 space-y-2 mt-2">
                     {rackShelves.map((shelf, si) => {
+                      const shelfBins = bins.filter(
+                        (b) => b.shelfId === shelf.id,
+                      );
+                      const shelfBinIds = shelfBins.map((b) => b.id);
                       const shelfParts = partItems.filter(
                         (p) =>
                           p.shelfId === shelf.id &&
+                          p.binId &&
+                          shelfBinIds.includes(p.binId) &&
                           p.status !== "returned_to_company",
-                      );
-                      const shelfBins = bins.filter(
-                        (b) => b.shelfId === shelf.id,
                       );
                       const isShelfExpanded = expandedLocShelves.has(shelf.id);
                       return (
@@ -588,24 +765,28 @@ function WarehouseLayoutView({
                           <button
                             type="button"
                             onClick={() => toggleLocShelf(shelf.id)}
-                            className="w-full flex items-center px-3 py-2 bg-white gap-2 text-left"
+                            className="w-full flex items-center px-3 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 gap-2 text-left"
                           >
                             {isShelfExpanded ? (
-                              <FolderOpen className="h-4 w-4 text-amber-400" />
+                              <FolderOpen className="h-4 w-4 text-emerald-500" />
                             ) : (
-                              <Folder className="h-4 w-4 text-slate-300" />
+                              <Folder className="h-4 w-4 text-emerald-300" />
                             )}
-                            <AlignJustify className="h-3.5 w-3.5 text-slate-400" />
-                            <span className="text-sm text-slate-700">
+                            <div className="p-0.5 bg-emerald-100 rounded">
+                              <AlignJustify className="h-3.5 w-3.5 text-emerald-600" />
+                            </div>
+                            <span className="text-sm font-semibold text-emerald-800">
                               {shelf.name}
                             </span>
                             <div className="ml-auto flex gap-1.5">
-                              <Badge variant="outline" className="text-xs">
+                              <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-medium">
                                 {shelfBins.length} Bins
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {shelfParts.length} Parts
-                              </Badge>
+                              </span>
+                              {shelfParts.length > 0 && (
+                                <span className="bg-teal-100 text-teal-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                                  {shelfParts.length} Parts
+                                </span>
+                              )}
                             </div>
                           </button>
                           {isShelfExpanded && (
@@ -613,6 +794,8 @@ function WarehouseLayoutView({
                               {shelfBins.map((bin) => {
                                 const binParts = partItems.filter(
                                   (p) =>
+                                    p.binId &&
+                                    bin.id &&
                                     p.binId === bin.id &&
                                     p.status !== "returned_to_company",
                                 );
@@ -627,23 +810,22 @@ function WarehouseLayoutView({
                                     <button
                                       type="button"
                                       onClick={() => toggleLocBin(bin.id)}
-                                      className="w-full flex items-center px-2 py-1.5 bg-slate-50 gap-2 text-left"
+                                      className="w-full flex items-center px-2 py-1.5 bg-amber-50 border-b border-amber-100 gap-2 text-left"
                                     >
                                       {isBinExpanded ? (
-                                        <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
+                                        <FolderOpen className="h-3.5 w-3.5 text-amber-500" />
                                       ) : (
-                                        <Folder className="h-3.5 w-3.5 text-slate-300" />
+                                        <Folder className="h-3.5 w-3.5 text-amber-300" />
                                       )}
-                                      <Box className="h-3 w-3 text-slate-400" />
-                                      <span className="text-xs font-medium text-slate-600">
+                                      <Box className="h-3 w-3 text-amber-500" />
+                                      <span className="text-xs font-semibold text-amber-800">
                                         {bin.name}
                                       </span>
-                                      <Badge
-                                        variant="outline"
-                                        className="text-xs ml-auto"
-                                      >
-                                        {binParts.length} Parts
-                                      </Badge>
+                                      {binParts.length > 0 && (
+                                        <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-medium ml-auto">
+                                          {binParts.length} Parts
+                                        </span>
+                                      )}
                                     </button>
                                     {isBinExpanded && (
                                       <div className="px-3 pb-2 space-y-1">
@@ -727,7 +909,6 @@ function WarehouseLayoutView({
 
 // ── Main WarehousePage ────────────────────────────────────────────────────────
 export default function WarehousePage() {
-  const navigate = useNavigate();
   const {
     warehouses,
     racks,
@@ -751,6 +932,7 @@ export default function WarehousePage() {
     updateBin,
     deleteBin,
     assignPartLocation,
+    navigate,
   } = useStore();
 
   const isAdmin = currentUser?.role === "admin";
@@ -800,7 +982,8 @@ export default function WarehousePage() {
   const [pendingSearch, setPendingSearch] = useState("");
 
   const locationPending = partItems.filter(
-    (p) => !p.rackId && p.status !== "returned_to_company",
+    (p) =>
+      !p.rackId && p.status !== "returned_to_company" && p.status !== "issued",
   );
 
   const filteredPending = pendingSearch.trim()
@@ -820,7 +1003,8 @@ export default function WarehousePage() {
   };
 
   const handlePartClick = (partCode: string) => {
-    navigate({ to: "/inventory/part/$partCode", params: { partCode } });
+    const item = partItems.find((p) => p.partCode === partCode);
+    if (item) navigate("part-detail", undefined, item.id);
   };
 
   // Warehouse handlers
@@ -910,16 +1094,60 @@ export default function WarehousePage() {
 
   return (
     <div className="space-y-5">
-      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white rounded-2xl px-6 py-6 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-white/20 rounded-xl">
-            <Building2 className="h-6 w-6" />
+      <div className="bg-gradient-to-r from-indigo-700 via-blue-700 to-cyan-700 text-white rounded-2xl px-6 py-5 shadow-lg">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-white/20 rounded-2xl shadow-inner">
+              <Building2 className="h-7 w-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">
+                Warehouse Management
+              </h1>
+              <p className="text-blue-200 text-sm mt-0.5">
+                Manage warehouse locations and track stock placement
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Warehouse</h1>
-            <p className="text-slate-300 text-sm">
-              Manage warehouse locations and stock placement
-            </p>
+          <div className="hidden md:flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 border border-white/20">
+              <Server className="h-4 w-4 text-blue-200" />
+              <div className="text-center">
+                <div className="text-lg font-bold leading-none">
+                  {racks.length}
+                </div>
+                <div className="text-[10px] text-blue-200 mt-0.5">Racks</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 border border-white/20">
+              <AlignJustify className="h-4 w-4 text-emerald-200" />
+              <div className="text-center">
+                <div className="text-lg font-bold leading-none">
+                  {shelves.length}
+                </div>
+                <div className="text-[10px] text-emerald-200 mt-0.5">
+                  Shelves
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 border border-white/20">
+              <Box className="h-4 w-4 text-amber-200" />
+              <div className="text-center">
+                <div className="text-lg font-bold leading-none">
+                  {bins.length}
+                </div>
+                <div className="text-[10px] text-amber-200 mt-0.5">Bins</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 border border-white/20">
+              <Package className="h-4 w-4 text-cyan-200" />
+              <div className="text-center">
+                <div className="text-lg font-bold leading-none">
+                  {locationPending.length}
+                </div>
+                <div className="text-[10px] text-cyan-200 mt-0.5">Pending</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -985,12 +1213,22 @@ export default function WarehousePage() {
           ) : (
             <div className="space-y-4">
               {/* Warehouse List Header */}
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-slate-900">Warehouses</h2>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-indigo-100 rounded-lg">
+                    <Building2 className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <h2 className="font-bold text-slate-900 text-base">
+                    Warehouses
+                  </h2>
+                  <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+                    {(warehouses ?? []).length}
+                  </span>
+                </div>
                 {isAdmin && (
                   <Button
                     size="sm"
-                    className="bg-blue-600 hover:bg-blue-700"
+                    className="bg-indigo-600 hover:bg-indigo-700 ml-1"
                     onClick={openAddWarehouse}
                     data-ocid="warehouse.open_modal_button"
                   >
@@ -1135,23 +1373,32 @@ export default function WarehousePage() {
               <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">
-                        Part Code
+                    <tr className="border-b border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50">
+                      <th className="text-left px-4 py-3 text-xs font-bold text-amber-800 uppercase tracking-wide">
+                        <span className="flex items-center gap-1.5">
+                          <Tag className="h-3 w-3" />
+                          Part Code
+                        </span>
                       </th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500">
+                      <th className="text-left px-3 py-3 text-xs font-bold text-amber-800 uppercase tracking-wide">
                         Part Name
                       </th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500">
-                        Company
+                      <th className="text-left px-3 py-3 text-xs font-bold text-amber-800 uppercase tracking-wide">
+                        <span className="flex items-center gap-1.5">
+                          <Building2 className="h-3 w-3" />
+                          Company
+                        </span>
                       </th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500">
-                        Category
+                      <th className="text-left px-3 py-3 text-xs font-bold text-amber-800 uppercase tracking-wide">
+                        <span className="flex items-center gap-1.5">
+                          <Layers className="h-3 w-3" />
+                          Category
+                        </span>
                       </th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500">
+                      <th className="text-left px-3 py-3 text-xs font-bold text-amber-800 uppercase tracking-wide">
                         Status
                       </th>
-                      <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500">
+                      <th className="text-left px-3 py-3 text-xs font-bold text-amber-800 uppercase tracking-wide">
                         Action
                       </th>
                     </tr>
@@ -1417,6 +1664,8 @@ export default function WarehousePage() {
       <AssignLocationDialog
         open={assignDialog}
         partId={assignPartId}
+        partCode={partItems.find((p) => p.id === assignPartId)?.partCode ?? ""}
+        allPartItems={partItems}
         racks={racks}
         shelves={shelves}
         bins={bins}

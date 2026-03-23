@@ -4,17 +4,26 @@ import {
   AlertTriangle,
   ArrowLeft,
   Building2,
+  Calendar,
+  CheckCircle,
+  DollarSign,
   Download,
   Eye,
   FileText,
   Image,
   Layers,
+  Lightbulb,
   MapPin,
   Package,
   Plus,
+  RefreshCw,
   RotateCcw,
+  Send,
+  Server,
+  ShoppingBag,
   Tag,
   Trash2,
+  Truck,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -203,6 +212,29 @@ export default function PartDetailPage() {
     [partItems, part],
   );
 
+  const sameCodeSuggestions = useMemo(() => {
+    if (!part) return [];
+    const seen = new Set<string>();
+    const results: { rackName: string; shelfName: string; binName: string }[] =
+      [];
+    for (const p of partItems) {
+      if (p.partCode === part.partCode && p.id !== part.id && p.rackId) {
+        const rk = racks.find((r) => r.id === p.rackId);
+        const sh = shelves.find((s) => s.id === p.shelfId);
+        const bn = bins.find((b) => b.id === p.binId);
+        const key = `${p.rackId}-${p.shelfId}-${p.binId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            rackName: rk?.name ?? "—",
+            shelfName: sh?.name ?? "—",
+            binName: bn?.name ?? "—",
+          });
+        }
+      }
+    }
+    return results;
+  }, [partItems, part, racks, shelves, bins]);
   const uniqueVendors = useMemo(() => {
     if (!part) return [];
     const purchasesForPart = purchaseEntries.filter((pe) =>
@@ -394,19 +426,25 @@ export default function PartDetailPage() {
         {/* ── LEFT column (2/3) ── */}
         <div className="md:col-span-2 space-y-4">
           {/* Part Details */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <Tag className="h-4 w-4 text-blue-500" />
-                Part Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
+          <Card className="shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Tag className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-bold text-white">Part Details</span>
+            </div>
+            <CardContent className="pt-3">
               <div className="divide-y divide-slate-100">
                 {(
                   [
                     [
-                      "Part Code",
+                      <span
+                        key="code-lbl"
+                        className="flex items-center gap-1.5"
+                      >
+                        <Tag className="h-3.5 w-3.5 text-blue-400" />
+                        Part Code
+                      </span>,
                       <span
                         key="code"
                         className="font-mono font-semibold text-blue-600"
@@ -414,23 +452,63 @@ export default function PartDetailPage() {
                         {part.partCode}
                       </span>,
                     ],
-                    ["Part Name", partName],
                     [
-                      "Stock",
+                      <span
+                        key="name-lbl"
+                        className="flex items-center gap-1.5"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-slate-400" />
+                        Part Name
+                      </span>,
+                      partName,
+                    ],
+                    [
+                      <span
+                        key="stock-lbl"
+                        className="flex items-center gap-1.5"
+                      >
+                        <Package className="h-3.5 w-3.5 text-emerald-500" />
+                        Stock
+                      </span>,
                       <span
                         key="stock"
-                        className="font-semibold text-green-700"
+                        className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-xs border border-emerald-200"
                       >
                         {aggregateStockCount} units
                       </span>,
                     ],
-                    ["Company", company],
-                    ["Category", category],
-                    ["Added", formattedDate],
-                  ] as [string, React.ReactNode][]
+                    [
+                      <span key="co-lbl" className="flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-indigo-400" />
+                        Company
+                      </span>,
+                      company,
+                    ],
+                    [
+                      <span key="cat-lbl" className="flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-violet-400" />
+                        Category
+                      </span>,
+                      category,
+                    ],
+                    [
+                      <span
+                        key="date-lbl"
+                        className="flex items-center gap-1.5"
+                      >
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        Added
+                      </span>,
+                      formattedDate,
+                    ],
+                  ] as [React.ReactNode, React.ReactNode][]
                 ).map(([label, value]) => (
                   <div
-                    key={label}
+                    key={
+                      typeof label === "string"
+                        ? label
+                        : Math.random().toString()
+                    }
                     className="flex items-center justify-between py-2.5 text-sm"
                   >
                     <span className="text-slate-500">{label}</span>
@@ -444,14 +522,16 @@ export default function PartDetailPage() {
           </Card>
 
           {/* Location */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-blue-500" />
+          <Card className="shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <MapPin className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-bold text-white">
                 {locationHeading}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-3">
+              </span>
+            </div>
+            <CardContent className="pt-3 space-y-3">
               {rack ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg text-sm font-medium text-slate-700">
@@ -501,6 +581,24 @@ export default function PartDetailPage() {
 
               {showRelocate && (
                 <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 space-y-3">
+                  {sameCodeSuggestions.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 flex gap-2">
+                      <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                      <div className="text-xs text-amber-800">
+                        <p className="font-semibold mb-1">
+                          Same part code already located at:
+                        </p>
+                        {sameCodeSuggestions.map((s) => (
+                          <p
+                            key={`${s.rackName}-${s.shelfName}-${s.binName}`}
+                            className="font-mono"
+                          >
+                            {s.rackName} › {s.shelfName} › {s.binName}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label
                       htmlFor="rel-rack"
@@ -600,13 +698,13 @@ export default function PartDetailPage() {
           </Card>
 
           {/* Part Images */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <Image className="h-4 w-4 text-blue-500" />
-                Part Images
-              </CardTitle>
-            </CardHeader>
+          <Card className="shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-violet-600 to-purple-600 px-4 py-3 flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Image className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-bold text-white">Part Images</span>
+            </div>
             <CardContent className="pt-0">
               <input
                 ref={partImageInputRef}
@@ -711,30 +809,63 @@ export default function PartDetailPage() {
           </Card>
 
           {/* Purchase Info */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-blue-500" />
+          <Card className="shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <ShoppingBag className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-bold text-white">
                 Purchase Info
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
+              </span>
+            </div>
+            <CardContent className="pt-3">
               <div className="divide-y divide-slate-100">
                 {(
                   [
-                    ["Vendor", purchase?.vendorName ?? "—"],
-                    ["Invoice No.", purchase?.invoiceNumber ?? "—"],
-                    ["Purchase Date", purchase?.invoiceDate ?? "—"],
                     [
-                      "Cost",
+                      <span key="v-lbl" className="flex items-center gap-1.5">
+                        <Truck className="h-3.5 w-3.5 text-amber-500" />
+                        Vendor
+                      </span>,
+                      purchase?.vendorName ?? "—",
+                    ],
+                    [
+                      <span key="inv-lbl" className="flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-slate-400" />
+                        Invoice No.
+                      </span>,
+                      purchase?.invoiceNumber ?? "—",
+                    ],
+                    [
+                      <span
+                        key="date-lbl"
+                        className="flex items-center gap-1.5"
+                      >
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        Purchase Date
+                      </span>,
+                      purchase?.invoiceDate ?? "—",
+                    ],
+                    [
+                      <span
+                        key="cost-lbl"
+                        className="flex items-center gap-1.5"
+                      >
+                        <DollarSign className="h-3.5 w-3.5 text-green-500" />
+                        Cost
+                      </span>,
                       purchase?.costPrice != null
                         ? `₹${purchase.costPrice.toLocaleString()}`
                         : "—",
                     ],
-                  ] as [string, string][]
+                  ] as [React.ReactNode, string][]
                 ).map(([label, value]) => (
                   <div
-                    key={label}
+                    key={
+                      typeof label === "string"
+                        ? label
+                        : Math.random().toString()
+                    }
                     className="flex items-center justify-between py-2.5 text-sm"
                   >
                     <span className="text-slate-500">{label}</span>
@@ -874,14 +1005,16 @@ export default function PartDetailPage() {
 
           {/* Issue Details - shown for both issued and installed parts */}
           {(isIssued || isInstalled) && (
-            <Card className="shadow-sm">
-              <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-amber-500" />
+            <Card className="shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-amber-500 to-yellow-500 px-4 py-3 flex items-center gap-2">
+                <div className="p-1.5 bg-white/20 rounded-lg">
+                  <Send className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-sm font-bold text-white">
                   Issue Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-3">
+                </span>
+              </div>
+              <CardContent className="pt-3 space-y-3">
                 <div className="space-y-2 text-sm divide-y divide-slate-100">
                   {(
                     [
@@ -982,14 +1115,16 @@ export default function PartDetailPage() {
 
           {/* Return to Company — right column */}
           {!isReturnedToCompany && (
-            <Card className="shadow-sm border-red-100">
-              <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-semibold text-red-700 flex items-center gap-2">
-                  <RotateCcw className="h-4 w-4" />
+            <Card className="shadow-sm overflow-hidden border-red-100">
+              <div className="bg-gradient-to-r from-red-600 to-rose-600 px-4 py-3 flex items-center gap-2">
+                <div className="p-1.5 bg-white/20 rounded-lg">
+                  <RotateCcw className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-sm font-bold text-white">
                   Return to Company
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-3">
+                </span>
+              </div>
+              <CardContent className="pt-3 space-y-3">
                 {isIssued ? (
                   <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-3">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
@@ -1141,13 +1276,13 @@ export default function PartDetailPage() {
           )}
 
           {/* Lifecycle Timeline */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <Activity className="h-4 w-4 text-blue-500" />
-                Lifecycle
-              </CardTitle>
-            </CardHeader>
+          <Card className="shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Activity className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-bold text-white">Lifecycle</span>
+            </div>
             <CardContent className="pt-0">
               {lifecycle.length === 0 ? (
                 <p className="text-slate-400 text-sm">No history yet.</p>
@@ -1197,9 +1332,19 @@ export default function PartDetailPage() {
       {/* ── Issue to Technician Dialog ── */}
       <Dialog open={issueDialog} onOpenChange={setIssueDialog}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Issue to Technician</DialogTitle>
-          </DialogHeader>
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 rounded-t-lg flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl">
+              <Send className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">
+                Issue to Technician
+              </h2>
+              <p className="text-blue-200 text-xs">
+                Assign this part to a technician
+              </p>
+            </div>
+          </div>
           <div className="space-y-3 py-2">
             <div>
               <Label>Technician *</Label>
@@ -1267,9 +1412,17 @@ export default function PartDetailPage() {
       {/* ── Return to Store Dialog ── */}
       <Dialog open={returnDialog} onOpenChange={setReturnDialog}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Return to Store</DialogTitle>
-          </DialogHeader>
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 rounded-t-lg flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl">
+              <RefreshCw className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">Return to Store</h2>
+              <p className="text-emerald-200 text-xs">
+                Return this part from technician
+              </p>
+            </div>
+          </div>
           <div className="space-y-3 py-2">
             <Label>Remarks / Reason</Label>
             <Textarea

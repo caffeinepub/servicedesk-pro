@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle,
+  ChevronDown,
   ClipboardList,
   List,
   Package,
@@ -375,6 +376,9 @@ export default function IssuedPartsPage() {
                       data-ocid={`issued.status_button.${i + 1}`}
                     >
                       {STATUS_LABELS[p.status]}
+                      {p.status === "issued" && (
+                        <ChevronDown className="h-3 w-3 opacity-70" />
+                      )}
                     </button>
                   ) : (
                     <span

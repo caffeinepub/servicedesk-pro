@@ -473,7 +473,7 @@ export default function LifecyclePage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-6 rounded-2xl shadow-lg">
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-4 rounded-2xl shadow-lg">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-sm">
             <GitBranch className="h-6 w-6" />
@@ -514,7 +514,7 @@ export default function LifecyclePage() {
         })}
       </div>
 
-      <div className="max-w-5xl">
+      <div>
         {/* Search + Date Filter */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <div className="relative flex-1">
