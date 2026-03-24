@@ -8,6 +8,8 @@ export type CaseStatus =
   | "transferred"
   | "rescheduled"
   | "part_required"
+  | "part_available"
+  | "part_issued"
   | "part_ordered"
   | "part_received"
   | "re_open"
@@ -321,7 +323,7 @@ export interface StoreNotification {
 
 // ── Part Request Types ────────────────────────────────────────────────────────
 
-export type PartRequestStatus = "pending" | "issued" | "rejected";
+export type PartRequestStatus = "pending" | "issued" | "rejected" | "cancelled";
 
 export interface PartRequest {
   id: string;
@@ -346,6 +348,10 @@ export interface PartRequest {
   message: string;
   productType: string;
   companyName: string;
+  priority?: string;
+  cancelledBy?: string;
+  cancelledByName?: string;
+  cancelledAt?: string;
 }
 
 // ── Admin Notices ────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -112,8 +113,13 @@ export default function VendorsPage() {
 
   const saveVendor = () => {
     if (!form.name.trim()) return;
-    if (editId) updateVendor(editId, form);
-    else addVendor(form);
+    if (editId) {
+      updateVendor(editId, form);
+      toast.success("Vendor updated");
+    } else {
+      addVendor(form);
+      toast.success("Vendor added successfully");
+    }
     setShowModal(false);
   };
 

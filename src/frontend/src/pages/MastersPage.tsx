@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -105,6 +106,7 @@ export default function MastersPage() {
       if (editId) updateStockPartName(editId, editName);
       else addStockPartName(editName);
     }
+    toast.success(editId ? "Updated successfully" : "Added successfully");
     setDialog(false);
   };
   const handleDelete = () => {
@@ -125,6 +127,7 @@ export default function MastersPage() {
       else if (bulkType === "category") addStockCategory(n);
       else addStockPartName(n);
     }
+    toast.success("Items added successfully");
     setBulkOpen(false);
     setBulkText("");
   };

@@ -80,6 +80,7 @@ export default function CaseDetailPage() {
     deleteCase,
     resetStaleTechnician,
     addPartRequest,
+    partRequests,
   } = useStore();
 
   const caseData = cases.find((c) => c.id === selectedCaseId);
@@ -90,6 +91,7 @@ export default function CaseDetailPage() {
   const [techId, setTechId] = useState("");
   const [partName, setPartName] = useState("");
   const [partCode, setPartCode] = useState("");
+  const [partPriority, setPartPriority] = useState("normal");
   const [partPhotoUrl, setPartPhotoUrl] = useState("");
   const [partPhotoFile, setPartPhotoFile] = useState<File | null>(null);
   const [poNumber, setPoNumber] = useState("");
@@ -202,6 +204,7 @@ export default function CaseDetailPage() {
 
     if (Object.keys(updates).length > 0) updateCase(caseData.id, updates);
     changeStatus(caseData.id, newStatus, details);
+    toast.success(`Case status updated to ${newStatus.replace(/_/g, " ")}`);
 
     // Add closing photo if present
     if (
@@ -227,6 +230,7 @@ export default function CaseDetailPage() {
     setTechId("");
     setPartName("");
     setPartCode("");
+    setPartPriority("normal");
     setPartPhotoUrl("");
     setPartPhotoFile(null);
     setPoNumber("");
@@ -549,6 +553,46 @@ export default function CaseDetailPage() {
                 )}
               </div>
             )}
+            {/* Part issued info banner */}
+            {[
+              "part_issued",
+              "on_route",
+              "closed",
+              "adjustment_closed",
+              "replacement_done",
+              "gas_charge_done",
+            ].includes(caseData.status) &&
+              (() => {
+                const relatedReq = partRequests.find(
+                  (r) => r.caseDbId === caseData.id && r.status === "issued",
+                );
+                if (!relatedReq) return null;
+                const issuedTech = technicians.find(
+                  (t) => t.id === relatedReq.technicianId,
+                );
+                return (
+                  <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-xs font-semibold text-green-700">
+                      Part Issued
+                    </p>
+                    <p className="text-xs text-green-600">
+                      Issued by <strong>{relatedReq.issuedByName}</strong> to{" "}
+                      <strong>
+                        {issuedTech?.name ?? relatedReq.technicianId}
+                      </strong>
+                      {relatedReq.issuedAt && (
+                        <>
+                          {" "}
+                          on{" "}
+                          {new Date(relatedReq.issuedAt).toLocaleDateString(
+                            "en-IN",
+                          )}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                );
+              })()}
           </CardContent>
         </Card>
 
@@ -676,6 +720,26 @@ export default function CaseDetailPage() {
                         </div>
                       )}
                     </div>
+                    {/* Priority Dropdown */}
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="partPriority"
+                        className="text-xs font-medium text-gray-600"
+                      >
+                        Request Priority
+                      </label>
+                      <select
+                        id="partPriority"
+                        value={partPriority}
+                        onChange={(e) => setPartPriority(e.target.value)}
+                        className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="low">Low</option>
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </div>
                     <a
                       href={waPartQuery()}
                       target="_blank"
@@ -711,8 +775,9 @@ export default function CaseDetailPage() {
                             (caseData as any).companyName ||
                             (caseData as any).company ||
                             "",
-                        });
-                        toast.success("Part request sent to supervisor!");
+                          priority: partPriority,
+                        } as any);
+                        toast.success("Part requested successfully");
                       }}
                       className="flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-100 w-full justify-center"
                     >

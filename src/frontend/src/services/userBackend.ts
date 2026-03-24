@@ -13,7 +13,7 @@ export interface SdUser {
   lastLogin: string;
 }
 
-// IDL factory for SD user methods — must follow the ({ IDL }) => IDL.Service({}) pattern
+// IDL factory for SD user methods
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sdUserIdlFactory = ({ IDL }: any) => {
   const SdUser = IDL.Record({
@@ -60,7 +60,6 @@ const sdUserIdlFactory = ({ IDL }: any) => {
 type SdUserActor = {
   initSeedUsers(): Promise<void>;
   getSdUsers(): Promise<SdUser[]>;
-  // ICP encodes Motoko ?T (Option) as [] | [T] at runtime
   loginSdUser(email: string, password: string): Promise<[] | [SdUser]>;
   createSdUser(
     id: string,
@@ -143,7 +142,6 @@ export async function backendGetUsers() {
 export async function backendLoginUser(email: string, password: string) {
   try {
     const actor = await getBackendActor();
-    // ICP encodes Motoko ?T as [] | [T]
     const result = await actor.loginSdUser(email, password);
     if (Array.isArray(result) && result.length > 0 && result[0]) {
       return mapSdUser(result[0]);
@@ -155,10 +153,6 @@ export async function backendLoginUser(email: string, password: string) {
   }
 }
 
-/**
- * Creates a user in the backend canister.
- * THROWS on failure so callers can detect and handle errors.
- */
 export async function backendCreateUser(
   id: string,
   name: string,
@@ -170,7 +164,7 @@ export async function backendCreateUser(
   createdAt: string,
 ): Promise<SdUser> {
   const actor = await getBackendActor();
-  const result = await actor.createSdUser(
+  return actor.createSdUser(
     id,
     name,
     email,
@@ -180,7 +174,6 @@ export async function backendCreateUser(
     status,
     createdAt,
   );
-  return result;
 }
 
 export async function backendApproveUser(userId: string): Promise<void> {
@@ -263,6 +256,10 @@ export interface SdPartRequest {
   message: string;
   productType: string;
   companyName: string;
+  priority: string;
+  cancelledBy: string;
+  cancelledByName: string;
+  cancelledAt: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -290,11 +287,18 @@ const sdPartRequestIdlFactory = ({ IDL }: any) => {
     message: IDL.Text,
     productType: IDL.Text,
     companyName: IDL.Text,
+    priority: IDL.Text,
+    cancelledBy: IDL.Text,
+    cancelledByName: IDL.Text,
+    cancelledAt: IDL.Text,
   });
   return IDL.Service({
     getSdPartRequests: IDL.Func([], [IDL.Vec(SdPartRequest)], ["query"]),
+    // 14 params: id, caseId, caseDbId, customerName, partName, partCode, partPhotoUrl,
+    //            requestedBy, requestedByName, requestedAt, message, productType, companyName, priority
     createSdPartRequest: IDL.Func(
       [
+        IDL.Text,
         IDL.Text,
         IDL.Text,
         IDL.Text,
@@ -323,6 +327,12 @@ const sdPartRequestIdlFactory = ({ IDL }: any) => {
       [],
     ),
     deleteSdPartRequest: IDL.Func([IDL.Text], [], []),
+    // 4 params: id, cancelledBy, cancelledByName, cancelledAt
+    cancelSdPartRequest: IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [],
+      [],
+    ),
   });
 };
 
@@ -342,6 +352,7 @@ type SdPartRequestActor = {
     message: string,
     productType: string,
     companyName: string,
+    priority: string,
   ): Promise<SdPartRequest>;
   issueSdPartRequest(
     id: string,
@@ -358,6 +369,12 @@ type SdPartRequestActor = {
     rejectedByName: string,
   ): Promise<void>;
   deleteSdPartRequest(id: string): Promise<void>;
+  cancelSdPartRequest(
+    id: string,
+    cancelledBy: string,
+    cancelledByName: string,
+    cancelledAt: string,
+  ): Promise<void>;
 };
 
 let cachedPartReqActor: SdPartRequestActor | null = null;
@@ -402,6 +419,7 @@ export async function backendCreatePartRequest(
   message: string,
   productType: string,
   companyName: string,
+  priority: string,
 ): Promise<SdPartRequest> {
   const actor = await getPartReqActor();
   return actor.createSdPartRequest(
@@ -418,6 +436,7 @@ export async function backendCreatePartRequest(
     message,
     productType,
     companyName,
+    priority,
   );
 }
 
@@ -469,5 +488,157 @@ export async function backendDeletePartRequest(id: string): Promise<void> {
     await actor.deleteSdPartRequest(id);
   } catch (e) {
     console.error("backendDeletePartRequest error:", e);
+  }
+}
+
+export async function backendCancelPartRequest(
+  id: string,
+  cancelledBy: string,
+  cancelledByName: string,
+  cancelledAt: string,
+): Promise<void> {
+  try {
+    const actor = await getPartReqActor();
+    await actor.cancelSdPartRequest(
+      id,
+      cancelledBy,
+      cancelledByName,
+      cancelledAt,
+    );
+  } catch (e) {
+    console.error("backendCancelPartRequest error:", e);
+  }
+}
+
+// ─── Generic JSON Blob actor factory ────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeJsonBlobIdlFactory(setMethod: string, getMethod: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ({ IDL }: any) =>
+    IDL.Service({
+      [setMethod]: IDL.Func([IDL.Text], [], []),
+      [getMethod]: IDL.Func([], [IDL.Text], ["query"]),
+    });
+}
+
+type JsonBlobActor = {
+  [key: string]: (arg?: string) => Promise<string | undefined>;
+};
+
+async function makeJsonBlobActor(
+  setMethod: string,
+  getMethod: string,
+): Promise<JsonBlobActor> {
+  const config = await loadConfig();
+  const agent = new HttpAgent({ host: config.backend_host });
+  if (config.backend_host?.includes("localhost")) {
+    await agent.fetchRootKey().catch(() => {});
+  }
+  const factory = makeJsonBlobIdlFactory(setMethod, getMethod);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return Actor.createActor(factory as any, {
+    agent,
+    canisterId: config.backend_canister_id,
+  }) as unknown as JsonBlobActor;
+}
+
+// ─── Cases JSON blob ─────────────────────────────────────────────────────────
+let cachedCasesActor: JsonBlobActor | null = null;
+async function getCasesActor() {
+  if (!cachedCasesActor)
+    cachedCasesActor = await makeJsonBlobActor("setSdCases", "getSdCasesJson");
+  return cachedCasesActor;
+}
+export async function backendGetCasesJson(): Promise<string> {
+  try {
+    return (await (await getCasesActor()).getSdCasesJson()) as string;
+  } catch (e) {
+    console.error("backendGetCasesJson error:", e);
+    return "[]";
+  }
+}
+export async function backendSetCasesJson(json: string): Promise<void> {
+  try {
+    await (await getCasesActor()).setSdCases(json);
+  } catch (e) {
+    console.error("backendSetCasesJson error:", e);
+  }
+}
+
+// ─── Notices JSON blob ─────────────────────────────────────────────────────────
+let cachedNoticesActor: JsonBlobActor | null = null;
+async function getNoticesActor() {
+  if (!cachedNoticesActor)
+    cachedNoticesActor = await makeJsonBlobActor(
+      "setSdNotices",
+      "getSdNoticesJson",
+    );
+  return cachedNoticesActor;
+}
+export async function backendGetNoticesJson(): Promise<string> {
+  try {
+    return (await (await getNoticesActor()).getSdNoticesJson()) as string;
+  } catch (e) {
+    console.error("backendGetNoticesJson error:", e);
+    return "[]";
+  }
+}
+export async function backendSetNoticesJson(json: string): Promise<void> {
+  try {
+    await (await getNoticesActor()).setSdNotices(json);
+  } catch (e) {
+    console.error("backendSetNoticesJson error:", e);
+  }
+}
+
+// ─── Inventory JSON blob ─────────────────────────────────────────────────────
+let cachedInventoryActor: JsonBlobActor | null = null;
+async function getInventoryActor() {
+  if (!cachedInventoryActor)
+    cachedInventoryActor = await makeJsonBlobActor(
+      "setSdInventory",
+      "getSdInventoryJson",
+    );
+  return cachedInventoryActor;
+}
+export async function backendGetInventoryJson(): Promise<string> {
+  try {
+    return (await (await getInventoryActor()).getSdInventoryJson()) as string;
+  } catch (e) {
+    console.error("backendGetInventoryJson error:", e);
+    return "{}";
+  }
+}
+export async function backendSetInventoryJson(json: string): Promise<void> {
+  try {
+    await (await getInventoryActor()).setSdInventory(json);
+  } catch (e) {
+    console.error("backendSetInventoryJson error:", e);
+  }
+}
+
+// ─── App Data JSON blob (warehouse, technicians, vendors, masters, etc.) ─────
+let cachedAppDataActor: JsonBlobActor | null = null;
+async function getAppDataActor() {
+  if (!cachedAppDataActor)
+    cachedAppDataActor = await makeJsonBlobActor(
+      "setSdAppData",
+      "getSdAppDataJson",
+    );
+  return cachedAppDataActor;
+}
+export async function backendGetAppDataJson(): Promise<string> {
+  try {
+    return (await (await getAppDataActor()).getSdAppDataJson()) as string;
+  } catch (e) {
+    console.error("backendGetAppDataJson error:", e);
+    return "{}";
+  }
+}
+export async function backendSetAppDataJson(json: string): Promise<void> {
+  try {
+    await (await getAppDataActor()).setSdAppData(json);
+  } catch (e) {
+    console.error("backendSetAppDataJson error:", e);
   }
 }

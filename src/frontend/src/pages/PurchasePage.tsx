@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -635,6 +636,7 @@ function NewPurchaseModal({
       );
     }
 
+    toast.success("Purchase entry saved");
     reset();
     onSuccess();
     onClose();

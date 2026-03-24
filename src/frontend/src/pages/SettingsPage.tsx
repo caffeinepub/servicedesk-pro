@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -43,6 +44,7 @@ export default function SettingsPage() {
       products,
     });
     setSaved(true);
+    toast.success("Settings saved");
     setTimeout(() => setSaved(false), 3000);
   };
 

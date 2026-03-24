@@ -12,10 +12,19 @@ import {
   backendUpdateLastLogin,
 } from "../services/userBackend";
 import {
+  backendCancelPartRequest,
   backendCreatePartRequest,
+  backendGetAppDataJson,
+  backendGetCasesJson,
+  backendGetInventoryJson,
+  backendGetNoticesJson,
   backendGetPartRequests,
   backendIssuePartRequest,
   backendRejectPartRequest,
+  backendSetAppDataJson,
+  backendSetCasesJson,
+  backendSetInventoryJson,
+  backendSetNoticesJson,
 } from "../services/userBackend";
 import type {
   ActivityLog,
@@ -872,6 +881,9 @@ interface StoreState {
   storePilotAuditLogs: StorePilotAuditLog[];
   notificationsGeneratedDate: string;
   lastMidnightResetDate: string;
+  sessionExpired: boolean;
+  seenPartRequestsCount: number;
+  seenApprovalsCount: number;
 
   // Data
   users: User[];
@@ -905,6 +917,9 @@ interface StoreState {
   initUsers: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  setSessionExpired: (val: boolean) => void;
+  markPartRequestsSeen: () => void;
+  markApprovalsSeen: () => void;
   navigate: (
     page: PageType,
     caseId?: string,
@@ -1072,7 +1087,16 @@ interface StoreState {
   ) => void;
   issuePartRequest: (id: string, technicianId: string) => void;
   rejectPartRequest: (id: string, reason: string) => void;
+  cancelPartRequest: (id: string) => void;
   syncPartRequests: () => Promise<void>;
+  syncCases: () => Promise<void>;
+  syncNotices: () => Promise<void>;
+  saveCasesToBackend: () => Promise<void>;
+  saveNoticesToBackend: () => Promise<void>;
+  syncInventory: () => Promise<void>;
+  syncAppData: () => Promise<void>;
+  saveInventoryToBackend: () => Promise<void>;
+  saveAppDataToBackend: () => Promise<void>;
   addPartImages: (partId: string, imageUrls: string[]) => void;
   removePartImage: (partId: string, imageUrl: string) => void;
   updatePurchaseInvoiceImage: (purchaseId: string, imageUrl: string) => void;
@@ -1130,6 +1154,9 @@ export const useStore = create<StoreState>()(
         notificationsGeneratedDate: "",
         lastMidnightResetDate: "",
         rejectionReason: "",
+        sessionExpired: false,
+        seenPartRequestsCount: 0,
+        seenApprovalsCount: 0,
         users: SEED_USERS,
         technicians: SEED_TECHNICIANS,
         cases: SEED_CASES,
@@ -1194,6 +1221,10 @@ export const useStore = create<StoreState>()(
               get().mergeUsers(backendUsers);
             }
             await get().syncPartRequests();
+            await get().syncCases();
+            await get().syncNotices();
+            await get().syncInventory();
+            await get().syncAppData();
           } catch (e) {
             console.error("initUsers error:", e);
           } finally {
@@ -1260,6 +1291,7 @@ export const useStore = create<StoreState>()(
           const loginTime = now();
           set((s) => ({
             currentUser: { ...user!, isOnline: true, lastLogin: loginTime },
+            sessionExpired: false,
             currentPage: "dashboard" as PageType,
             users: s.users.some((u) => u.id === user!.id)
               ? s.users.map((u) =>
@@ -1289,6 +1321,19 @@ export const useStore = create<StoreState>()(
           return true;
         },
 
+        setSessionExpired: (val) => set({ sessionExpired: val }),
+        markPartRequestsSeen: () => {
+          const count = get().partRequests.filter(
+            (r) => r.status === "pending",
+          ).length;
+          set({ seenPartRequestsCount: count });
+        },
+        markApprovalsSeen: () => {
+          const count = get().users.filter(
+            (u) => u.status === "pending",
+          ).length;
+          set({ seenApprovalsCount: count });
+        },
         logout: () => {
           const cu = get().currentUser;
           if (cu) {
@@ -1313,25 +1358,37 @@ export const useStore = create<StoreState>()(
             navVendorId: vendorId !== undefined ? vendorId : null,
           })),
 
-        addAdminNotice: (notice: Omit<AdminNotice, "id" | "createdAt">) =>
+        addAdminNotice: (notice: Omit<AdminNotice, "id" | "createdAt">) => {
           set((s) => ({
             adminNotices: [
               { ...notice, id: uid(), createdAt: now() },
               ...s.adminNotices,
             ],
-          })),
+          }));
+          get()
+            .saveNoticesToBackend()
+            .catch(() => {});
+        },
 
-        deleteAdminNotice: (id: string) =>
+        deleteAdminNotice: (id: string) => {
           set((s) => ({
             adminNotices: s.adminNotices.filter((n) => n.id !== id),
-          })),
+          }));
+          get()
+            .saveNoticesToBackend()
+            .catch(() => {});
+        },
 
-        updateAdminNotice: (id: string, updates: Partial<AdminNotice>) =>
+        updateAdminNotice: (id: string, updates: Partial<AdminNotice>) => {
           set((s) => ({
             adminNotices: s.adminNotices.map((n) =>
               n.id === id ? { ...n, ...updates } : n,
             ),
-          })),
+          }));
+          get()
+            .saveNoticesToBackend()
+            .catch(() => {});
+        },
 
         clearNavVendorId: () => set({ navVendorId: null }),
         setRejectionReason: (reason) => set({ rejectionReason: reason }),
@@ -1749,6 +1806,9 @@ export const useStore = create<StoreState>()(
             onRouteDate: "",
           };
           set((s) => ({ cases: [newCase, ...s.cases] }));
+          get()
+            .saveCasesToBackend()
+            .catch(() => {});
           get().addAuditEntry({
             caseId: newCase.id,
             userId: cu?.id ?? "",
@@ -1773,6 +1833,9 @@ export const useStore = create<StoreState>()(
               c.id === id ? { ...c, ...updates, updatedAt: now() } : c,
             ),
           }));
+          get()
+            .saveCasesToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(cu.id, cu.name, "Case Updated", `Updated case ${id}`);
         },
@@ -1781,6 +1844,9 @@ export const useStore = create<StoreState>()(
           const cu = get().currentUser;
           const c = get().cases.find((x) => x.id === id);
           set((s) => ({ cases: s.cases.filter((x) => x.id !== id) }));
+          get()
+            .saveCasesToBackend()
+            .catch(() => {});
           if (cu && c)
             logActivity(
               cu.id,
@@ -1793,6 +1859,9 @@ export const useStore = create<StoreState>()(
         deleteCases: (ids) => {
           const cu = get().currentUser;
           set((s) => ({ cases: s.cases.filter((x) => !ids.includes(x.id)) }));
+          get()
+            .saveCasesToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -1922,6 +1991,9 @@ export const useStore = create<StoreState>()(
                 : c,
             ),
           }));
+          get()
+            .saveCasesToBackend()
+            .catch(() => {});
         },
 
         changeStatus: (caseId, newStatus, details) => {
@@ -2554,6 +2626,7 @@ export const useStore = create<StoreState>()(
               newReq.message,
               newReq.productType,
               newReq.companyName,
+              (newReq as any).priority || "normal",
             ).catch((e) =>
               console.error("addPartRequest backend save error:", e),
             );
@@ -2644,6 +2717,36 @@ export const useStore = create<StoreState>()(
               `Part request ${id} rejected`,
             );
         },
+        cancelPartRequest: (id) => {
+          const cu = get().currentUser;
+          const cancelNow = new Date().toISOString();
+          set((s) => ({
+            partRequests: s.partRequests.map((r) =>
+              r.id === id
+                ? {
+                    ...r,
+                    status: "cancelled" as PartRequestStatus,
+                    cancelledBy: cu?.id ?? "",
+                    cancelledByName: cu?.name ?? "",
+                    cancelledAt: cancelNow,
+                  }
+                : r,
+            ),
+          }));
+          backendCancelPartRequest(
+            id,
+            cu?.id ?? "",
+            cu?.name ?? "",
+            cancelNow,
+          ).catch((e) => console.error("cancelPartRequest backend error:", e));
+          if (cu)
+            logActivity(
+              cu.id,
+              cu.name,
+              "Part Request Cancelled",
+              `Part request ${id} cancelled by user`,
+            );
+        },
         syncPartRequests: async () => {
           try {
             const backendReqs = await backendGetPartRequests();
@@ -2671,11 +2774,183 @@ export const useStore = create<StoreState>()(
                 message: r.message,
                 productType: r.productType,
                 companyName: r.companyName,
+                priority: r.priority || "normal",
+                cancelledBy: r.cancelledBy || "",
+                cancelledByName: r.cancelledByName || "",
+                cancelledAt: r.cancelledAt || "",
               }));
               set({ partRequests: mapped });
             }
           } catch (e) {
             console.error("syncPartRequests error:", e);
+          }
+        },
+        syncCases: async () => {
+          try {
+            const json = await backendGetCasesJson();
+            if (json && json !== "[]") {
+              const parsed = JSON.parse(json) as Case[];
+              if (parsed.length > 0) {
+                set({ cases: parsed });
+              }
+            }
+          } catch (e) {
+            console.error("syncCases error:", e);
+          }
+        },
+        saveCasesToBackend: async () => {
+          try {
+            const { cases } = get();
+            await backendSetCasesJson(JSON.stringify(cases));
+          } catch (e) {
+            console.error("saveCasesToBackend error:", e);
+          }
+        },
+        syncNotices: async () => {
+          try {
+            const json = await backendGetNoticesJson();
+            if (json && json !== "[]") {
+              const parsed = JSON.parse(json) as AdminNotice[];
+              if (parsed.length > 0) {
+                set({ adminNotices: parsed });
+              }
+            }
+          } catch (e) {
+            console.error("syncNotices error:", e);
+          }
+        },
+        saveNoticesToBackend: async () => {
+          try {
+            const { adminNotices } = get();
+            await backendSetNoticesJson(JSON.stringify(adminNotices));
+          } catch (e) {
+            console.error("saveNoticesToBackend error:", e);
+          }
+        },
+        syncInventory: async () => {
+          try {
+            const json = await backendGetInventoryJson();
+            if (!json || json === "{}" || json === "[]") return;
+            const parsed = JSON.parse(json);
+            if (parsed && typeof parsed === "object") {
+              const updates: Partial<ReturnType<typeof get>> = {};
+              if (parsed.parts && parsed.parts.length > 0)
+                updates.partItems = parsed.parts;
+              if (parsed.purchases && parsed.purchases.length > 0)
+                updates.purchaseEntries = parsed.purchases;
+              if (parsed.issuedParts && parsed.issuedParts.length > 0) {
+                // merge into partItems if separate
+              }
+              if (parsed.lifecycleEntries && parsed.lifecycleEntries.length > 0)
+                updates.partLifecycle = parsed.lifecycleEntries;
+              if (parsed.auditLogs && parsed.auditLogs.length > 0)
+                updates.storePilotAuditLogs = parsed.auditLogs;
+              if (
+                parsed.storeNotifications &&
+                parsed.storeNotifications.length > 0
+              )
+                updates.storeNotifications = parsed.storeNotifications;
+              if (Object.keys(updates).length > 0) set(updates as any);
+            }
+          } catch (e) {
+            console.error("syncInventory error:", e);
+          }
+        },
+        saveInventoryToBackend: async () => {
+          try {
+            const {
+              partItems,
+              purchaseEntries,
+              partLifecycle,
+              storePilotAuditLogs,
+              storeNotifications,
+            } = get();
+            const json = JSON.stringify({
+              parts: partItems,
+              purchases: purchaseEntries,
+              lifecycleEntries: partLifecycle,
+              auditLogs: storePilotAuditLogs,
+              storeNotifications,
+            });
+            await backendSetInventoryJson(json);
+          } catch (e) {
+            console.error("saveInventoryToBackend error:", e);
+          }
+        },
+        syncAppData: async () => {
+          try {
+            const json = await backendGetAppDataJson();
+            if (!json || json === "{}" || json === "[]") return;
+            const parsed = JSON.parse(json);
+            if (parsed && typeof parsed === "object") {
+              const updates: Partial<ReturnType<typeof get>> = {};
+              if (parsed.warehouses && parsed.warehouses.length > 0)
+                updates.warehouses = parsed.warehouses;
+              if (parsed.racks && parsed.racks.length > 0)
+                updates.racks = parsed.racks;
+              if (parsed.shelves && parsed.shelves.length > 0)
+                updates.shelves = parsed.shelves;
+              if (parsed.bins && parsed.bins.length > 0)
+                updates.bins = parsed.bins;
+              if (parsed.technicians && parsed.technicians.length > 0)
+                updates.technicians = parsed.technicians;
+              if (parsed.vendors && parsed.vendors.length > 0)
+                updates.vendors = parsed.vendors;
+              if (parsed.companies && parsed.companies.length > 0)
+                updates.stockCompanies = parsed.companies;
+              if (parsed.categories && parsed.categories.length > 0)
+                updates.stockCategories = parsed.categories;
+              if (parsed.partNames && parsed.partNames.length > 0)
+                updates.stockPartNames = parsed.partNames;
+              if (parsed.notifications && parsed.notifications.length > 0)
+                updates.notifications = parsed.notifications;
+              if (parsed.reminders && parsed.reminders.length > 0)
+                updates.reminders = parsed.reminders;
+              if (parsed.activityLog && parsed.activityLog.length > 0)
+                updates.activityLog = parsed.activityLog;
+              if (parsed.settings)
+                updates.settings = { ...get().settings, ...parsed.settings };
+              if (Object.keys(updates).length > 0) set(updates as any);
+            }
+          } catch (e) {
+            console.error("syncAppData error:", e);
+          }
+        },
+        saveAppDataToBackend: async () => {
+          try {
+            const {
+              warehouses,
+              racks,
+              shelves,
+              bins,
+              technicians,
+              vendors,
+              stockCompanies,
+              stockCategories,
+              stockPartNames,
+              notifications,
+              reminders,
+              activityLog,
+              settings,
+            } = get();
+            const json = JSON.stringify({
+              warehouses,
+              racks,
+              shelves,
+              bins,
+              technicians,
+              vendors,
+              companies: stockCompanies,
+              categories: stockCategories,
+              partNames: stockPartNames,
+              notifications,
+              reminders,
+              activityLog,
+              settings,
+            });
+            await backendSetAppDataJson(json);
+          } catch (e) {
+            console.error("saveAppDataToBackend error:", e);
           }
         },
         addPartImages: (partId, imageUrls) =>
@@ -2772,7 +3047,6 @@ export const useStore = create<StoreState>()(
       partialize: (state) => ({
         users: state.users,
         currentUser: state.currentUser,
-        cases: state.cases,
         auditLog: state.auditLog,
         activityLog: state.activityLog,
         reminders: state.reminders,
@@ -2791,11 +3065,12 @@ export const useStore = create<StoreState>()(
         partLifecycle: state.partLifecycle,
         partRequests: state.partRequests,
         storeNotifications: state.storeNotifications,
-        adminNotices: state.adminNotices,
         storePilotAuditLogs: state.storePilotAuditLogs,
         technicians: state.technicians,
         notificationsGeneratedDate: state.notificationsGeneratedDate,
         lastMidnightResetDate: state.lastMidnightResetDate,
+        seenPartRequestsCount: state.seenPartRequestsCount,
+        seenApprovalsCount: state.seenApprovalsCount,
       }),
     },
   ),
@@ -2819,7 +3094,9 @@ export const STATUS_TRANSITIONS: Record<string, string[]> = {
     "re_open",
   ],
   rescheduled: ["pending", "on_route", "cancelled"],
-  part_required: ["part_ordered", "cancelled"],
+  part_required: ["part_available", "part_ordered", "cancelled"],
+  part_available: ["part_issued", "cancelled"],
+  part_issued: ["on_route", "cancelled"],
   part_ordered: ["part_received", "cancelled"],
   part_received: ["on_route", "pending"],
   gas_charge_pending: ["gas_charge_done", "on_route"],

@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import {
@@ -235,6 +236,7 @@ export default function IssuedPartsPage() {
     for (const p of toIssue) {
       issuePartToTechnician(p.id, issueTechId, issueCaseId.trim());
     }
+    toast.success("Part issued to technician");
     setIssueModal(false);
   };
 

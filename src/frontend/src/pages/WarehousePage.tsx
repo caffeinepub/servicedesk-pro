@@ -18,6 +18,7 @@ import {
   Warehouse as WarehouseIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -1023,7 +1024,12 @@ export default function WarehousePage() {
   const saveWarehouse = () => {
     if (!whName.trim()) return;
     if (whEdit) updateWarehouse(whEdit.id, whName.trim(), whAddress.trim());
-    else addWarehouse(whName.trim(), whAddress.trim());
+    else {
+      addWarehouse(whName.trim(), whAddress.trim());
+      toast.success(
+        whEdit ? "Warehouse updated" : "Warehouse added successfully",
+      );
+    }
     setWhDialog(false);
   };
 
@@ -1043,7 +1049,10 @@ export default function WarehousePage() {
   const saveRack = () => {
     if (!rackName.trim()) return;
     if (rackEdit) updateRack(rackEdit.id, rackName.trim());
-    else addRackToWarehouse(rackName.trim(), rackWhId);
+    else {
+      addRackToWarehouse(rackName.trim(), rackWhId);
+      toast.success(rackEdit ? "Rack updated" : "Rack added successfully");
+    }
     setRackDialog(false);
   };
 
@@ -1067,7 +1076,10 @@ export default function WarehousePage() {
         name: shelfName.trim(),
         rackId: shelfRackId,
       });
-    else addShelf(shelfName.trim(), shelfRackId);
+    else {
+      addShelf(shelfName.trim(), shelfRackId);
+      toast.success(shelfEdit ? "Shelf updated" : "Shelf added successfully");
+    }
     setShelfDialog(false);
   };
 
@@ -1088,7 +1100,10 @@ export default function WarehousePage() {
     if (!binName.trim() || !binShelfId) return;
     if (binEdit)
       updateBin(binEdit.id, { name: binName.trim(), shelfId: binShelfId });
-    else addBin(binName.trim(), binShelfId);
+    else {
+      addBin(binName.trim(), binShelfId);
+      toast.success(binEdit ? "Bin updated" : "Bin added successfully");
+    }
     setBinDialog(false);
   };
 

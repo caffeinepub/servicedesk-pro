@@ -24,6 +24,14 @@ const STATUS_CONFIG: Record<CaseStatus, { label: string; className: string }> =
       label: "Part Required",
       className: "bg-red-100 text-red-800",
     },
+    part_available: {
+      label: "Part Available",
+      className: "bg-teal-100 text-teal-800",
+    },
+    part_issued: {
+      label: "Part Issued",
+      className: "bg-cyan-100 text-cyan-800",
+    },
     part_ordered: {
       label: "Part Ordered",
       className: "bg-orange-100 text-orange-800",

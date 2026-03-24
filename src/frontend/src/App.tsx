@@ -37,7 +37,13 @@ import { backendGetUsers } from "./services/userBackend";
 import { useStore } from "./store";
 
 export default function App() {
-  const { currentUser, currentPage, isInitializing, initUsers } = useStore();
+  const {
+    currentUser,
+    currentPage,
+    isInitializing,
+    initUsers,
+    sessionExpired,
+  } = useStore();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: initUsers is a stable zustand action, run once on mount
   useEffect(() => {
@@ -72,18 +78,26 @@ export default function App() {
     const interval = setInterval(check, 8000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
-  // Inactivity auto-logout: log out after 30 minutes of no user activity
+  // Session timeout: after 30 min of inactivity, mark session as expired.
+  // The user stays on the current page; on NEXT interaction they get redirected to login.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional inactivity timer
   useEffect(() => {
     if (!currentUser) return;
     const TIMEOUT_MS = 30 * 60 * 1000;
     let timer: ReturnType<typeof setTimeout>;
-    const resetTimer = () => {
+
+    const onActivity = () => {
+      if (useStore.getState().sessionExpired) {
+        // Session expired: redirect to login on next interaction
+        useStore.getState().logout();
+        return;
+      }
       clearTimeout(timer);
       timer = setTimeout(() => {
-        useStore.getState().logout();
+        useStore.getState().setSessionExpired(true);
       }, TIMEOUT_MS);
     };
+
     const events = [
       "mousemove",
       "mousedown",
@@ -93,11 +107,14 @@ export default function App() {
       "click",
     ];
     for (const e of events)
-      window.addEventListener(e, resetTimer, { passive: true });
-    resetTimer();
+      window.addEventListener(e, onActivity, { passive: true });
+    timer = setTimeout(() => {
+      useStore.getState().setSessionExpired(true);
+    }, TIMEOUT_MS);
+
     return () => {
       clearTimeout(timer);
-      for (const e of events) window.removeEventListener(e, resetTimer);
+      for (const e of events) window.removeEventListener(e, onActivity);
     };
   }, [currentUser?.id]);
 
@@ -123,65 +140,76 @@ export default function App() {
   }
 
   return (
-    <Layout>
-      {currentPage === "dashboard" && <DashboardPage />}
-      {currentPage === "cases" && <CasesPage />}
-      {currentPage === "new-case" && <NewCasePage />}
-      {currentPage === "case-detail" && <CaseDetailPage />}
-      {currentPage === "customer-history" && <CustomerHistoryPage />}
-      {currentPage === "parts" && <PartsPage />}
-      {currentPage === "technicians" && <TechniciansPage />}
-      {currentPage === "reports" && <ReportsPage />}
-      {currentPage === "settings" && <SettingsPage />}
-      {currentPage === "admin" && <AdminPage />}
-      {currentPage === "profile" && <ProfilePage />}
-      {currentPage === "inventory" && <InventoryPage />}
-      {currentPage === "purchase" && <PurchasePage />}
-      {currentPage === "part-detail" && <PartDetailPage />}
-      {currentPage === "issued-parts" && <IssuedPartsPage />}
-      {currentPage === "warehouse" && <WarehousePage />}
-      {currentPage === "masters" && <MastersPage />}
-      {currentPage === "part-requests" && <PartRequestsPage />}
-      {currentPage === "vendors" && <VendorsPage />}
-      {currentPage === "return-to-company" && <ReturnToCompanyPage />}
-      {currentPage === "lifecycle" && <LifecyclePage />}
-      {currentPage === "ai-engine" && <AIEnginePage />}
-      {currentPage === "notifications" && <NotificationsPage />}
-      {currentPage === "audit-logs" && <AuditLogsPage />}
-      {currentPage === "notices" && <AdminNoticesPage />}
-      {currentPage === "data-management" && <DataManagementPage />}
-      {currentPage === "existing-stock" && <ExistingStockPage />}
-      {currentPage === "existing-cases" && <ExistingCasesPage />}
-      {![
-        "dashboard",
-        "cases",
-        "new-case",
-        "case-detail",
-        "customer-history",
-        "parts",
-        "technicians",
-        "reports",
-        "settings",
-        "admin",
-        "profile",
-        "inventory",
-        "purchase",
-        "part-detail",
-        "issued-parts",
-        "warehouse",
-        "masters",
-        "part-requests",
-        "vendors",
-        "return-to-company",
-        "lifecycle",
-        "ai-engine",
-        "notifications",
-        "audit-logs",
-        "notices",
-        "data-management",
-        "existing-stock",
-        "existing-cases",
-      ].includes(currentPage) && <DashboardPage />}
-    </Layout>
+    <>
+      {sessionExpired && (
+        <button
+          type="button"
+          className="fixed top-0 left-0 right-0 z-[9999] bg-amber-500 text-white text-center py-2 text-sm font-medium cursor-pointer w-full"
+          onClick={() => useStore.getState().logout()}
+        >
+          ⚠️ Your session has expired. Click here to log in again.
+        </button>
+      )}
+      <Layout>
+        {currentPage === "dashboard" && <DashboardPage />}
+        {currentPage === "cases" && <CasesPage />}
+        {currentPage === "new-case" && <NewCasePage />}
+        {currentPage === "case-detail" && <CaseDetailPage />}
+        {currentPage === "customer-history" && <CustomerHistoryPage />}
+        {currentPage === "parts" && <PartsPage />}
+        {currentPage === "technicians" && <TechniciansPage />}
+        {currentPage === "reports" && <ReportsPage />}
+        {currentPage === "settings" && <SettingsPage />}
+        {currentPage === "admin" && <AdminPage />}
+        {currentPage === "profile" && <ProfilePage />}
+        {currentPage === "inventory" && <InventoryPage />}
+        {currentPage === "purchase" && <PurchasePage />}
+        {currentPage === "part-detail" && <PartDetailPage />}
+        {currentPage === "issued-parts" && <IssuedPartsPage />}
+        {currentPage === "warehouse" && <WarehousePage />}
+        {currentPage === "masters" && <MastersPage />}
+        {currentPage === "part-requests" && <PartRequestsPage />}
+        {currentPage === "vendors" && <VendorsPage />}
+        {currentPage === "return-to-company" && <ReturnToCompanyPage />}
+        {currentPage === "lifecycle" && <LifecyclePage />}
+        {currentPage === "ai-engine" && <AIEnginePage />}
+        {currentPage === "notifications" && <NotificationsPage />}
+        {currentPage === "audit-logs" && <AuditLogsPage />}
+        {currentPage === "notices" && <AdminNoticesPage />}
+        {currentPage === "data-management" && <DataManagementPage />}
+        {currentPage === "existing-stock" && <ExistingStockPage />}
+        {currentPage === "existing-cases" && <ExistingCasesPage />}
+        {![
+          "dashboard",
+          "cases",
+          "new-case",
+          "case-detail",
+          "customer-history",
+          "parts",
+          "technicians",
+          "reports",
+          "settings",
+          "admin",
+          "profile",
+          "inventory",
+          "purchase",
+          "part-detail",
+          "issued-parts",
+          "warehouse",
+          "masters",
+          "part-requests",
+          "vendors",
+          "return-to-company",
+          "lifecycle",
+          "ai-engine",
+          "notifications",
+          "audit-logs",
+          "notices",
+          "data-management",
+          "existing-stock",
+          "existing-cases",
+        ].includes(currentPage) && <DashboardPage />}
+      </Layout>
+    </>
   );
 }

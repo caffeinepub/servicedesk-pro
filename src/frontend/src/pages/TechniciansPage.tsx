@@ -1,5 +1,6 @@
 import { Pencil, Phone, PlusCircle, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import {
   Dialog,
@@ -57,8 +58,13 @@ export default function TechniciansPage() {
   };
 
   const save = () => {
-    if (editing) updateTechnician(editing.id, form);
-    else addTechnician(form);
+    if (editing) {
+      updateTechnician(editing.id, form);
+      toast.success("Technician updated");
+    } else {
+      addTechnician(form);
+      toast.success("Technician added successfully");
+    }
     setDialog(false);
   };
 

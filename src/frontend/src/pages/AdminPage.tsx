@@ -146,13 +146,16 @@ export default function AdminPage() {
     editUser,
     deleteUser,
     mergeUsers,
+    markApprovalsSeen,
   } = useStore();
 
   const isAdmin = currentUser?.role === "admin";
 
   // Live polling: update users list every 5 seconds to catch new registrations live
+  // biome-ignore lint/correctness/useExhaustiveDependencies: markApprovalsSeen is stable
   useEffect(() => {
     if (!isAdmin) return;
+    markApprovalsSeen();
     const fetchUsers = () => {
       backendGetUsers()
         .then((freshUsers) => {

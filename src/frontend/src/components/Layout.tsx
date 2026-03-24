@@ -978,7 +978,7 @@ function NavButton({
       )}
       {!collapsed && badge && badge > 0 ? (
         <span
-          className={`text-white text-xs font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center ${section === "ADMIN" ? "bg-violet-500" : section === "CASES" ? "bg-blue-500" : section === "INVENTORY" ? "bg-emerald-500" : "bg-slate-500"}`}
+          className={`text-white text-[10px] font-bold rounded-full px-1 py-0 min-w-[16px] text-center ${section === "ADMIN" ? "bg-violet-500" : section === "CASES" ? "bg-blue-500" : section === "INVENTORY" ? "bg-emerald-500" : "bg-slate-500"}`}
         >
           {badge}
         </span>
@@ -1213,11 +1213,22 @@ function SidebarContent({
     partRequests,
   } = useStore();
   const role = currentUser?.role ?? "backend_user";
+  const { seenPartRequestsCount, seenApprovalsCount } = useStore();
   const unread = notifications.filter((n) => !n.isRead).length;
-  const pendingApprovals = users.filter((u) => u.status === "pending").length;
-  const pendingPartRequests = partRequests.filter(
+  const totalPendingApprovals = users.filter(
+    (u) => u.status === "pending",
+  ).length;
+  const totalPendingPartRequests = partRequests.filter(
     (r) => r.status === "pending",
   ).length;
+  const pendingApprovals = Math.max(
+    0,
+    totalPendingApprovals - seenApprovalsCount,
+  );
+  const pendingPartRequests = Math.max(
+    0,
+    totalPendingPartRequests - seenPartRequestsCount,
+  );
 
   const initials = (currentUser?.name ?? "U")
     .split(" ")
@@ -1654,21 +1665,31 @@ export default function Layout({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
 
-  // Global live polling for admin: keep user list fresh so pending badge updates without reload
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mergeUsers is stable
+  // Global live polling: sync part requests and notices for all users; also sync user list for admin
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional polling
   useEffect(() => {
-    if (currentUser?.role !== "admin") return;
-    const poll = () => {
-      backendGetUsers()
-        .then((freshUsers) => {
-          if (freshUsers.length > 0) mergeUsers(freshUsers);
-        })
+    if (!currentUser) return;
+    const poll = async () => {
+      await useStore
+        .getState()
+        .syncPartRequests()
         .catch(() => {});
+      await useStore
+        .getState()
+        .syncNotices()
+        .catch(() => {});
+      if (currentUser.role === "admin") {
+        backendGetUsers()
+          .then((freshUsers) => {
+            if (freshUsers.length > 0) mergeUsers(freshUsers);
+          })
+          .catch(() => {});
+      }
     };
     poll();
-    const interval = setInterval(poll, 5000);
+    const interval = setInterval(poll, 8000);
     return () => clearInterval(interval);
-  }, [currentUser?.role]);
+  }, [currentUser?.id]);
   const unread = notifications.filter((n) => !n.isRead).length;
   const currentPageStr = useStore.getState().currentPage as string;
 
