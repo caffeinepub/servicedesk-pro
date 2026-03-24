@@ -11,6 +11,12 @@ import {
   backendRejectUser,
   backendUpdateLastLogin,
 } from "../services/userBackend";
+import {
+  backendCreatePartRequest,
+  backendGetPartRequests,
+  backendIssuePartRequest,
+  backendRejectPartRequest,
+} from "../services/userBackend";
 import type {
   ActivityLog,
   AdminNotice,
@@ -1066,6 +1072,7 @@ interface StoreState {
   ) => void;
   issuePartRequest: (id: string, technicianId: string) => void;
   rejectPartRequest: (id: string, reason: string) => void;
+  syncPartRequests: () => Promise<void>;
   addPartImages: (partId: string, imageUrls: string[]) => void;
   removePartImage: (partId: string, imageUrl: string) => void;
   updatePurchaseInvoiceImage: (purchaseId: string, imageUrl: string) => void;
@@ -1186,6 +1193,7 @@ export const useStore = create<StoreState>()(
             if (backendUsers.length > 0) {
               get().mergeUsers(backendUsers);
             }
+            await get().syncPartRequests();
           } catch (e) {
             console.error("initUsers error:", e);
           } finally {
@@ -2530,6 +2538,26 @@ export const useStore = create<StoreState>()(
               ...s.partRequests,
             ],
           }));
+          const newReq = get().partRequests[0];
+          if (newReq) {
+            backendCreatePartRequest(
+              newReq.id,
+              newReq.caseId,
+              newReq.caseDbId,
+              newReq.customerName,
+              newReq.partName,
+              newReq.partCode,
+              newReq.partPhotoUrl,
+              newReq.requestedBy,
+              newReq.requestedByName,
+              newReq.requestedAt,
+              newReq.message,
+              newReq.productType,
+              newReq.companyName,
+            ).catch((e) =>
+              console.error("addPartRequest backend save error:", e),
+            );
+          }
         },
 
         issuePartRequest: (id, technicianId) => {
@@ -2549,6 +2577,13 @@ export const useStore = create<StoreState>()(
                 : r,
             ),
           }));
+          backendIssuePartRequest(
+            id,
+            technicianId,
+            now(),
+            cu?.id ?? "",
+            cu?.name ?? "",
+          ).catch((e) => console.error("issuePartRequest backend error:", e));
           const req = get().partRequests.find((r) => r.id === id);
           if (req) {
             get().addNotification({
@@ -2584,6 +2619,13 @@ export const useStore = create<StoreState>()(
                 : r,
             ),
           }));
+          backendRejectPartRequest(
+            id,
+            reason,
+            now(),
+            cu?.id ?? "",
+            cu?.name ?? "",
+          ).catch((e) => console.error("rejectPartRequest backend error:", e));
           const req = get().partRequests.find((r) => r.id === id);
           if (req) {
             get().addNotification({
@@ -2601,6 +2643,40 @@ export const useStore = create<StoreState>()(
               "Part Request Rejected",
               `Part request ${id} rejected`,
             );
+        },
+        syncPartRequests: async () => {
+          try {
+            const backendReqs = await backendGetPartRequests();
+            if (backendReqs.length >= 0) {
+              const mapped = backendReqs.map((r) => ({
+                id: r.id,
+                caseId: r.caseId,
+                caseDbId: r.caseDbId,
+                customerName: r.customerName,
+                partName: r.partName,
+                partCode: r.partCode,
+                partPhotoUrl: r.partPhotoUrl,
+                requestedBy: r.requestedBy,
+                requestedByName: r.requestedByName,
+                requestedAt: r.requestedAt,
+                status: r.status as PartRequestStatus,
+                technicianId: r.technicianId,
+                issuedAt: r.issuedAt,
+                issuedBy: r.issuedBy,
+                issuedByName: r.issuedByName,
+                rejectedReason: r.rejectedReason,
+                rejectedAt: r.rejectedAt,
+                rejectedBy: r.rejectedBy,
+                rejectedByName: r.rejectedByName,
+                message: r.message,
+                productType: r.productType,
+                companyName: r.companyName,
+              }));
+              set({ partRequests: mapped });
+            }
+          } catch (e) {
+            console.error("syncPartRequests error:", e);
+          }
         },
         addPartImages: (partId, imageUrls) =>
           set((s) => ({

@@ -72,6 +72,34 @@ export default function App() {
     const interval = setInterval(check, 8000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
+  // Inactivity auto-logout: log out after 30 minutes of no user activity
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional inactivity timer
+  useEffect(() => {
+    if (!currentUser) return;
+    const TIMEOUT_MS = 30 * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout>;
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        useStore.getState().logout();
+      }, TIMEOUT_MS);
+    };
+    const events = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "click",
+    ];
+    for (const e of events)
+      window.addEventListener(e, resetTimer, { passive: true });
+    resetTimer();
+    return () => {
+      clearTimeout(timer);
+      for (const e of events) window.removeEventListener(e, resetTimer);
+    };
+  }, [currentUser?.id]);
 
   if (isInitializing) {
     return (

@@ -7,12 +7,13 @@ import {
   Inbox,
   MessageSquare,
   Package,
+  RefreshCw,
   Send,
   ShoppingCart,
   User,
   XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -45,6 +46,7 @@ export default function PartRequestsPage() {
     issuePartRequest,
     rejectPartRequest,
     navigate,
+    syncPartRequests,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("pending");
@@ -53,6 +55,24 @@ export default function PartRequestsPage() {
   const [selectedTech, setSelectedTech] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [imageModal, setImageModal] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
+  useEffect(() => {
+    syncPartRequests();
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await syncPartRequests();
+      toast.success("Requests refreshed");
+    } catch {
+      toast.error("Failed to refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const isPrivileged =
     currentUser?.role === "admin" || currentUser?.role === "supervisor";
@@ -143,11 +163,26 @@ export default function PartRequestsPage() {
             </p>
           </div>
         </div>
-        {pendingCount > 0 && (
-          <Badge className="bg-white text-blue-700 px-3 py-1 text-sm font-bold">
-            {pendingCount} Pending
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="gap-2 bg-white/20 border-white/30 text-white hover:bg-white/30"
+            data-ocid="part_requests.secondary_button"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+            />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </Button>
+          {pendingCount > 0 && (
+            <Badge className="bg-white text-blue-700 px-3 py-1 text-sm font-bold">
+              {pendingCount} Pending
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

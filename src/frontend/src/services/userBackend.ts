@@ -1,6 +1,7 @@
-import { createActorWithConfig } from "../config";
+import { Actor, HttpAgent } from "@icp-sdk/core/agent";
+import { loadConfig } from "../config";
 
-interface SdUser {
+export interface SdUser {
   id: string;
   name: string;
   email: string;
@@ -12,14 +13,55 @@ interface SdUser {
   lastLogin: string;
 }
 
-// Extended actor type for SD user management
-type ExtendedActor = {
+// IDL factory for SD user methods — must follow the ({ IDL }) => IDL.Service({}) pattern
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sdUserIdlFactory = ({ IDL }: any) => {
+  const SdUser = IDL.Record({
+    id: IDL.Text,
+    name: IDL.Text,
+    email: IDL.Text,
+    password: IDL.Text,
+    phone: IDL.Text,
+    role: IDL.Text,
+    status: IDL.Text,
+    createdAt: IDL.Text,
+    lastLogin: IDL.Text,
+  });
+  return IDL.Service({
+    initSeedUsers: IDL.Func([], [], []),
+    getSdUsers: IDL.Func([], [IDL.Vec(SdUser)], ["query"]),
+    loginSdUser: IDL.Func([IDL.Text, IDL.Text], [IDL.Opt(SdUser)], ["query"]),
+    createSdUser: IDL.Func(
+      [
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+      ],
+      [SdUser],
+      [],
+    ),
+    approveSdUser: IDL.Func([IDL.Text], [], []),
+    rejectSdUser: IDL.Func([IDL.Text], [], []),
+    editSdUser: IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [],
+      [],
+    ),
+    deleteSdUser: IDL.Func([IDL.Text], [], []),
+    updateSdUserLogin: IDL.Func([IDL.Text, IDL.Text], [], []),
+  });
+};
+
+type SdUserActor = {
   initSeedUsers(): Promise<void>;
   getSdUsers(): Promise<SdUser[]>;
-  loginSdUser(
-    email: string,
-    password: string,
-  ): Promise<{ __kind__: "Some"; value: SdUser } | { __kind__: "None" }>;
+  // ICP encodes Motoko ?T (Option) as [] | [T] at runtime
+  loginSdUser(email: string, password: string): Promise<[] | [SdUser]>;
   createSdUser(
     id: string,
     name: string,
@@ -44,9 +86,22 @@ type ExtendedActor = {
   updateSdUserLogin(userId: string, loginTime: string): Promise<void>;
 };
 
-export async function getBackendActor() {
-  const actor = await createActorWithConfig();
-  return actor as unknown as ExtendedActor;
+let cachedActor: SdUserActor | null = null;
+
+export async function getBackendActor(): Promise<SdUserActor> {
+  if (cachedActor) return cachedActor;
+  const config = await loadConfig();
+  const agent = new HttpAgent({ host: config.backend_host });
+  if (config.backend_host?.includes("localhost")) {
+    await agent.fetchRootKey().catch(() => {});
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const actor = Actor.createActor(sdUserIdlFactory as any, {
+    agent,
+    canisterId: config.backend_canister_id,
+  }) as unknown as SdUserActor;
+  cachedActor = actor;
+  return actor;
 }
 
 function mapSdUser(u: SdUser) {
@@ -88,9 +143,10 @@ export async function backendGetUsers() {
 export async function backendLoginUser(email: string, password: string) {
   try {
     const actor = await getBackendActor();
+    // ICP encodes Motoko ?T as [] | [T]
     const result = await actor.loginSdUser(email, password);
-    if (result.__kind__ === "Some") {
-      return mapSdUser(result.value);
+    if (Array.isArray(result) && result.length > 0 && result[0]) {
+      return mapSdUser(result[0]);
     }
     return null;
   } catch (e) {
@@ -102,7 +158,6 @@ export async function backendLoginUser(email: string, password: string) {
 /**
  * Creates a user in the backend canister.
  * THROWS on failure so callers can detect and handle errors.
- * Returns the created user on success.
  */
 export async function backendCreateUser(
   id: string,
@@ -180,5 +235,239 @@ export async function backendUpdateLastLogin(
     await actor.updateSdUserLogin(userId, time);
   } catch (e) {
     console.error("backendUpdateLastLogin error:", e);
+  }
+}
+
+// ─── Part Request Backend ────────────────────────────────────────────────────
+
+export interface SdPartRequest {
+  id: string;
+  caseId: string;
+  caseDbId: string;
+  customerName: string;
+  partName: string;
+  partCode: string;
+  partPhotoUrl: string;
+  requestedBy: string;
+  requestedByName: string;
+  requestedAt: string;
+  status: string;
+  technicianId: string;
+  issuedAt: string;
+  issuedBy: string;
+  issuedByName: string;
+  rejectedReason: string;
+  rejectedAt: string;
+  rejectedBy: string;
+  rejectedByName: string;
+  message: string;
+  productType: string;
+  companyName: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sdPartRequestIdlFactory = ({ IDL }: any) => {
+  const SdPartRequest = IDL.Record({
+    id: IDL.Text,
+    caseId: IDL.Text,
+    caseDbId: IDL.Text,
+    customerName: IDL.Text,
+    partName: IDL.Text,
+    partCode: IDL.Text,
+    partPhotoUrl: IDL.Text,
+    requestedBy: IDL.Text,
+    requestedByName: IDL.Text,
+    requestedAt: IDL.Text,
+    status: IDL.Text,
+    technicianId: IDL.Text,
+    issuedAt: IDL.Text,
+    issuedBy: IDL.Text,
+    issuedByName: IDL.Text,
+    rejectedReason: IDL.Text,
+    rejectedAt: IDL.Text,
+    rejectedBy: IDL.Text,
+    rejectedByName: IDL.Text,
+    message: IDL.Text,
+    productType: IDL.Text,
+    companyName: IDL.Text,
+  });
+  return IDL.Service({
+    getSdPartRequests: IDL.Func([], [IDL.Vec(SdPartRequest)], ["query"]),
+    createSdPartRequest: IDL.Func(
+      [
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+      ],
+      [SdPartRequest],
+      [],
+    ),
+    issueSdPartRequest: IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [],
+      [],
+    ),
+    rejectSdPartRequest: IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [],
+      [],
+    ),
+    deleteSdPartRequest: IDL.Func([IDL.Text], [], []),
+  });
+};
+
+type SdPartRequestActor = {
+  getSdPartRequests(): Promise<SdPartRequest[]>;
+  createSdPartRequest(
+    id: string,
+    caseId: string,
+    caseDbId: string,
+    customerName: string,
+    partName: string,
+    partCode: string,
+    partPhotoUrl: string,
+    requestedBy: string,
+    requestedByName: string,
+    requestedAt: string,
+    message: string,
+    productType: string,
+    companyName: string,
+  ): Promise<SdPartRequest>;
+  issueSdPartRequest(
+    id: string,
+    technicianId: string,
+    issuedAt: string,
+    issuedBy: string,
+    issuedByName: string,
+  ): Promise<void>;
+  rejectSdPartRequest(
+    id: string,
+    reason: string,
+    rejectedAt: string,
+    rejectedBy: string,
+    rejectedByName: string,
+  ): Promise<void>;
+  deleteSdPartRequest(id: string): Promise<void>;
+};
+
+let cachedPartReqActor: SdPartRequestActor | null = null;
+
+async function getPartReqActor(): Promise<SdPartRequestActor> {
+  if (cachedPartReqActor) return cachedPartReqActor;
+  const config = await loadConfig();
+  const agent = new HttpAgent({ host: config.backend_host });
+  if (config.backend_host?.includes("localhost")) {
+    await agent.fetchRootKey().catch(() => {});
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const actor = Actor.createActor(sdPartRequestIdlFactory as any, {
+    agent,
+    canisterId: config.backend_canister_id,
+  }) as unknown as SdPartRequestActor;
+  cachedPartReqActor = actor;
+  return actor;
+}
+
+export async function backendGetPartRequests(): Promise<SdPartRequest[]> {
+  try {
+    const actor = await getPartReqActor();
+    return await actor.getSdPartRequests();
+  } catch (e) {
+    console.error("backendGetPartRequests error:", e);
+    return [];
+  }
+}
+
+export async function backendCreatePartRequest(
+  id: string,
+  caseId: string,
+  caseDbId: string,
+  customerName: string,
+  partName: string,
+  partCode: string,
+  partPhotoUrl: string,
+  requestedBy: string,
+  requestedByName: string,
+  requestedAt: string,
+  message: string,
+  productType: string,
+  companyName: string,
+): Promise<SdPartRequest> {
+  const actor = await getPartReqActor();
+  return actor.createSdPartRequest(
+    id,
+    caseId,
+    caseDbId,
+    customerName,
+    partName,
+    partCode,
+    partPhotoUrl,
+    requestedBy,
+    requestedByName,
+    requestedAt,
+    message,
+    productType,
+    companyName,
+  );
+}
+
+export async function backendIssuePartRequest(
+  id: string,
+  technicianId: string,
+  issuedAt: string,
+  issuedBy: string,
+  issuedByName: string,
+): Promise<void> {
+  try {
+    const actor = await getPartReqActor();
+    await actor.issueSdPartRequest(
+      id,
+      technicianId,
+      issuedAt,
+      issuedBy,
+      issuedByName,
+    );
+  } catch (e) {
+    console.error("backendIssuePartRequest error:", e);
+  }
+}
+
+export async function backendRejectPartRequest(
+  id: string,
+  reason: string,
+  rejectedAt: string,
+  rejectedBy: string,
+  rejectedByName: string,
+): Promise<void> {
+  try {
+    const actor = await getPartReqActor();
+    await actor.rejectSdPartRequest(
+      id,
+      reason,
+      rejectedAt,
+      rejectedBy,
+      rejectedByName,
+    );
+  } catch (e) {
+    console.error("backendRejectPartRequest error:", e);
+  }
+}
+
+export async function backendDeletePartRequest(id: string): Promise<void> {
+  try {
+    const actor = await getPartReqActor();
+    await actor.deleteSdPartRequest(id);
+  } catch (e) {
+    console.error("backendDeletePartRequest error:", e);
   }
 }

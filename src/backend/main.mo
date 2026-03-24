@@ -155,4 +155,98 @@ actor {
       } else { u };
     });
   };
+
+  // ─── Part Requests ───────────────────────────────────────────────────────
+
+  public type SdPartRequest = {
+    id : Text;
+    caseId : Text;
+    caseDbId : Text;
+    customerName : Text;
+    partName : Text;
+    partCode : Text;
+    partPhotoUrl : Text;
+    requestedBy : Text;
+    requestedByName : Text;
+    requestedAt : Text;
+    status : Text;
+    technicianId : Text;
+    issuedAt : Text;
+    issuedBy : Text;
+    issuedByName : Text;
+    rejectedReason : Text;
+    rejectedAt : Text;
+    rejectedBy : Text;
+    rejectedByName : Text;
+    message : Text;
+    productType : Text;
+    companyName : Text;
+  };
+
+  var sdPartRequests : [SdPartRequest] = [];
+  var sdPartReqCounter : Nat = 0;
+
+  func nextPartReqId() : Text {
+    sdPartReqCounter += 1;
+    "pr" # Nat.toText(sdPartReqCounter);
+  };
+
+  // Get all part requests
+  public query func getSdPartRequests() : async [SdPartRequest] {
+    sdPartRequests;
+  };
+
+  // Create a part request
+  public func createSdPartRequest(
+    id : Text, caseId : Text, caseDbId : Text, customerName : Text,
+    partName : Text, partCode : Text, partPhotoUrl : Text,
+    requestedBy : Text, requestedByName : Text, requestedAt : Text,
+    message : Text, productType : Text, companyName : Text
+  ) : async SdPartRequest {
+    let newId = if (id == "") { nextPartReqId() } else { id };
+    let req : SdPartRequest = {
+      id = newId; caseId; caseDbId; customerName; partName; partCode; partPhotoUrl;
+      requestedBy; requestedByName; requestedAt; status = "pending";
+      technicianId = ""; issuedAt = ""; issuedBy = ""; issuedByName = "";
+      rejectedReason = ""; rejectedAt = ""; rejectedBy = ""; rejectedByName = "";
+      message; productType; companyName;
+    };
+    sdPartRequests := Array.append(sdPartRequests, [req]);
+    req;
+  };
+
+  // Issue a part request
+  public func issueSdPartRequest(id : Text, technicianId : Text, issuedAt : Text, issuedBy : Text, issuedByName : Text) : async () {
+    sdPartRequests := Array.map<SdPartRequest, SdPartRequest>(sdPartRequests, func(r) {
+      if (r.id == id) {
+        { id = r.id; caseId = r.caseId; caseDbId = r.caseDbId; customerName = r.customerName;
+          partName = r.partName; partCode = r.partCode; partPhotoUrl = r.partPhotoUrl;
+          requestedBy = r.requestedBy; requestedByName = r.requestedByName; requestedAt = r.requestedAt;
+          status = "issued"; technicianId; issuedAt; issuedBy; issuedByName;
+          rejectedReason = r.rejectedReason; rejectedAt = r.rejectedAt; rejectedBy = r.rejectedBy; rejectedByName = r.rejectedByName;
+          message = r.message; productType = r.productType; companyName = r.companyName;
+        };
+      } else { r };
+    });
+  };
+
+  // Reject a part request
+  public func rejectSdPartRequest(id : Text, reason : Text, rejectedAt : Text, rejectedBy : Text, rejectedByName : Text) : async () {
+    sdPartRequests := Array.map<SdPartRequest, SdPartRequest>(sdPartRequests, func(r) {
+      if (r.id == id) {
+        { id = r.id; caseId = r.caseId; caseDbId = r.caseDbId; customerName = r.customerName;
+          partName = r.partName; partCode = r.partCode; partPhotoUrl = r.partPhotoUrl;
+          requestedBy = r.requestedBy; requestedByName = r.requestedByName; requestedAt = r.requestedAt;
+          status = "rejected"; technicianId = r.technicianId; issuedAt = r.issuedAt; issuedBy = r.issuedBy; issuedByName = r.issuedByName;
+          rejectedReason = reason; rejectedAt; rejectedBy; rejectedByName;
+          message = r.message; productType = r.productType; companyName = r.companyName;
+        };
+      } else { r };
+    });
+  };
+
+  // Delete a part request
+  public func deleteSdPartRequest(id : Text) : async () {
+    sdPartRequests := Array.filter(sdPartRequests, func(r : SdPartRequest) : Bool { r.id != id });
+  };
 };

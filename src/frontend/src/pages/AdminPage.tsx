@@ -8,6 +8,7 @@ import {
   Mail,
   Pencil,
   Phone,
+  RefreshCw,
   Shield,
   Trash2,
   UserCheck,
@@ -182,6 +183,7 @@ export default function AdminPage() {
   // Activity log filters
   const [logSearch, setLogSearch] = useState("");
   const [logActionFilter, setLogActionFilter] = useState("all");
+  const [refreshingApprovals, setRefreshingApprovals] = useState(false);
 
   if (!isAdmin) {
     return (
@@ -190,6 +192,19 @@ export default function AdminPage() {
       </div>
     );
   }
+
+  const handleRefreshApprovals = async () => {
+    setRefreshingApprovals(true);
+    try {
+      const fresh = await backendGetUsers();
+      if (fresh.length > 0) mergeUsers(fresh);
+      toast.success("Approvals refreshed");
+    } catch {
+      toast.error("Failed to refresh");
+    } finally {
+      setRefreshingApprovals(false);
+    }
+  };
 
   const pending = users.filter((u) => u.status === "pending");
   const approved = users.filter((u) => u.status === "approved");
@@ -366,6 +381,21 @@ export default function AdminPage() {
 
         {/* Tab 1: Approvals */}
         <TabsContent value="approvals" className="space-y-4">
+          <div className="flex justify-end mb-3">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRefreshApprovals}
+              disabled={refreshingApprovals}
+              className="gap-2"
+              data-ocid="admin.secondary_button"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshingApprovals ? "animate-spin" : ""}`}
+              />
+              {refreshingApprovals ? "Refreshing..." : "Refresh"}
+            </Button>
+          </div>
           {pending.length === 0 ? (
             <div
               className="text-center py-12 text-gray-400 text-sm"
