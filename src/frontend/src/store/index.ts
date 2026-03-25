@@ -1704,9 +1704,7 @@ export const useStore = create<StoreState>()(
             if (freshUsers.length > 0) get().mergeUsers(freshUsers);
           } catch (_e) {}
           if (!backendSuccess) {
-            console.warn(
-              "User creation saved locally only - backend unavailable",
-            );
+            throw new Error("Backend save failed -- please try again");
           }
         },
 

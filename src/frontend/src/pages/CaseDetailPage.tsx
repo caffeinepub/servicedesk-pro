@@ -12,7 +12,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import StatusBadge from "../components/StatusBadge";
 import {
@@ -81,9 +81,15 @@ export default function CaseDetailPage() {
     resetStaleTechnician,
     addPartRequest,
     partRequests,
+    syncPartRequests,
   } = useStore();
 
   const caseData = cases.find((c) => c.id === selectedCaseId);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sync part requests on mount
+  useEffect(() => {
+    syncPartRequests();
+  }, []);
 
   const [newStatus, setNewStatus] = useState<CaseStatus | "">("");
   const [statusDetails, setStatusDetails] = useState("");
@@ -554,45 +560,37 @@ export default function CaseDetailPage() {
               </div>
             )}
             {/* Part issued info banner */}
-            {[
-              "part_issued",
-              "on_route",
-              "closed",
-              "adjustment_closed",
-              "replacement_done",
-              "gas_charge_done",
-            ].includes(caseData.status) &&
-              (() => {
-                const relatedReq = partRequests.find(
-                  (r) => r.caseDbId === caseData.id && r.status === "issued",
-                );
-                if (!relatedReq) return null;
-                const issuedTech = technicians.find(
-                  (t) => t.id === relatedReq.technicianId,
-                );
-                return (
-                  <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                    <p className="text-xs font-semibold text-green-700">
-                      Part Issued
-                    </p>
-                    <p className="text-xs text-green-600">
-                      Issued by <strong>{relatedReq.issuedByName}</strong> to{" "}
-                      <strong>
-                        {issuedTech?.name ?? relatedReq.technicianId}
-                      </strong>
-                      {relatedReq.issuedAt && (
-                        <>
-                          {" "}
-                          on{" "}
-                          {new Date(relatedReq.issuedAt).toLocaleDateString(
-                            "en-IN",
-                          )}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                );
-              })()}
+            {(() => {
+              const relatedReq = partRequests.find(
+                (r) => r.caseDbId === caseData.id && r.status === "issued",
+              );
+              if (!relatedReq) return null;
+              const issuedTech = technicians.find(
+                (t) => t.id === relatedReq.technicianId,
+              );
+              return (
+                <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-xs font-semibold text-green-700">
+                    Part Issued
+                  </p>
+                  <p className="text-xs text-green-600">
+                    Issued by <strong>{relatedReq.issuedByName}</strong> to{" "}
+                    <strong>
+                      {issuedTech?.name ?? relatedReq.technicianId}
+                    </strong>
+                    {relatedReq.issuedAt && (
+                      <>
+                        {" "}
+                        on{" "}
+                        {new Date(relatedReq.issuedAt).toLocaleDateString(
+                          "en-IN",
+                        )}
+                      </>
+                    )}
+                  </p>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
@@ -754,7 +752,13 @@ export default function CaseDetailPage() {
                       onClick={() => {
                         if (!partName && !caseData.partName) {
                           toast.error(
-                            "Please enter part name before requesting.",
+                            "Part Name is required when Part Required is selected.",
+                          );
+                          return;
+                        }
+                        if (!partCode && !caseData.partCode) {
+                          toast.error(
+                            "Part Code is required when Part Required is selected.",
                           );
                           return;
                         }

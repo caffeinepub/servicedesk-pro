@@ -85,10 +85,7 @@ type SdUserActor = {
   updateSdUserLogin(userId: string, loginTime: string): Promise<void>;
 };
 
-let cachedActor: SdUserActor | null = null;
-
 export async function getBackendActor(): Promise<SdUserActor> {
-  if (cachedActor) return cachedActor;
   const config = await loadConfig();
   const agent = new HttpAgent({ host: config.backend_host });
   if (config.backend_host?.includes("localhost")) {
@@ -99,7 +96,6 @@ export async function getBackendActor(): Promise<SdUserActor> {
     agent,
     canisterId: config.backend_canister_id,
   }) as unknown as SdUserActor;
-  cachedActor = actor;
   return actor;
 }
 
@@ -377,10 +373,7 @@ type SdPartRequestActor = {
   ): Promise<void>;
 };
 
-let cachedPartReqActor: SdPartRequestActor | null = null;
-
 async function getPartReqActor(): Promise<SdPartRequestActor> {
-  if (cachedPartReqActor) return cachedPartReqActor;
   const config = await loadConfig();
   const agent = new HttpAgent({ host: config.backend_host });
   if (config.backend_host?.includes("localhost")) {
@@ -391,7 +384,6 @@ async function getPartReqActor(): Promise<SdPartRequestActor> {
     agent,
     canisterId: config.backend_canister_id,
   }) as unknown as SdPartRequestActor;
-  cachedPartReqActor = actor;
   return actor;
 }
 
@@ -543,11 +535,8 @@ async function makeJsonBlobActor(
 }
 
 // ─── Cases JSON blob ─────────────────────────────────────────────────────────
-let cachedCasesActor: JsonBlobActor | null = null;
 async function getCasesActor() {
-  if (!cachedCasesActor)
-    cachedCasesActor = await makeJsonBlobActor("setSdCases", "getSdCasesJson");
-  return cachedCasesActor;
+  return makeJsonBlobActor("setSdCases", "getSdCasesJson");
 }
 export async function backendGetCasesJson(): Promise<string> {
   try {
@@ -566,14 +555,8 @@ export async function backendSetCasesJson(json: string): Promise<void> {
 }
 
 // ─── Notices JSON blob ─────────────────────────────────────────────────────────
-let cachedNoticesActor: JsonBlobActor | null = null;
 async function getNoticesActor() {
-  if (!cachedNoticesActor)
-    cachedNoticesActor = await makeJsonBlobActor(
-      "setSdNotices",
-      "getSdNoticesJson",
-    );
-  return cachedNoticesActor;
+  return makeJsonBlobActor("setSdNotices", "getSdNoticesJson");
 }
 export async function backendGetNoticesJson(): Promise<string> {
   try {
@@ -592,14 +575,8 @@ export async function backendSetNoticesJson(json: string): Promise<void> {
 }
 
 // ─── Inventory JSON blob ─────────────────────────────────────────────────────
-let cachedInventoryActor: JsonBlobActor | null = null;
 async function getInventoryActor() {
-  if (!cachedInventoryActor)
-    cachedInventoryActor = await makeJsonBlobActor(
-      "setSdInventory",
-      "getSdInventoryJson",
-    );
-  return cachedInventoryActor;
+  return makeJsonBlobActor("setSdInventory", "getSdInventoryJson");
 }
 export async function backendGetInventoryJson(): Promise<string> {
   try {
@@ -618,14 +595,8 @@ export async function backendSetInventoryJson(json: string): Promise<void> {
 }
 
 // ─── App Data JSON blob (warehouse, technicians, vendors, masters, etc.) ─────
-let cachedAppDataActor: JsonBlobActor | null = null;
 async function getAppDataActor() {
-  if (!cachedAppDataActor)
-    cachedAppDataActor = await makeJsonBlobActor(
-      "setSdAppData",
-      "getSdAppDataJson",
-    );
-  return cachedAppDataActor;
+  return makeJsonBlobActor("setSdAppData", "getSdAppDataJson");
 }
 export async function backendGetAppDataJson(): Promise<string> {
   try {

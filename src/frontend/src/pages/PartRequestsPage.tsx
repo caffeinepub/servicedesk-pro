@@ -7,6 +7,7 @@ import {
   Inbox,
   Package,
   RefreshCw,
+  Search,
   User,
   XCircle,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import {
   Select,
@@ -75,12 +77,21 @@ export default function PartRequestsPage() {
   const [imageModal, setImageModal] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterDate, setFilterDate] = useState("");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
   useEffect(() => {
     syncPartRequests();
     markPartRequestsSeen();
   }, []);
+
+  // Reset search/filter when tab changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reset on tab change
+  useEffect(() => {
+    setSearchQuery("");
+    setFilterDate("");
+  }, [activeTab]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -111,6 +122,24 @@ export default function PartRequestsPage() {
     if (!isPrivileged && r.requestedBy !== currentUser?.id) return false;
     if (activeTab === "all") return true;
     return r.status === activeTab;
+  });
+
+  const filtered = visible.filter((r) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matches =
+        r.caseId.toLowerCase().includes(q) ||
+        r.partName.toLowerCase().includes(q) ||
+        r.partCode.toLowerCase().includes(q) ||
+        r.customerName.toLowerCase().includes(q) ||
+        r.requestedByName.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    if (filterDate) {
+      const reqDate = r.requestedAt ? r.requestedAt.split("T")[0] : "";
+      if (reqDate !== filterDate) return false;
+    }
+    return true;
   });
 
   const pendingCount = partRequests.filter(
@@ -251,8 +280,41 @@ export default function PartRequestsPage() {
         ))}
       </div>
 
+      {/* Search / date filter bar */}
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by Case ID, Part, Customer..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-9 text-sm"
+            data-ocid="part_requests.search_input"
+          />
+        </div>
+        <Input
+          type="date"
+          value={filterDate}
+          onChange={(e) => setFilterDate(e.target.value)}
+          className="w-40 h-9 text-sm"
+          data-ocid="part_requests.input"
+        />
+        {(searchQuery || filterDate) && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSearchQuery("");
+              setFilterDate("");
+            }}
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+
       {/* Requests list */}
-      {visible.length === 0 ? (
+      {filtered.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]"
           data-ocid="part_requests.empty_state"
@@ -263,371 +325,379 @@ export default function PartRequestsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-3">
-          {visible.map((req, idx) => {
-            const tech = technicians.find((t) => t.id === req.technicianId);
-            const expanded = expandedIds.has(req.id);
-            const priority = req.priority || "normal";
-            return (
-              <Card
-                key={req.id}
-                className="border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden"
-                data-ocid={`part_requests.item.${idx + 1}`}
-              >
-                {/* Collapsed header — always visible */}
-                <button
-                  type="button"
-                  className="w-full text-left"
-                  onClick={() => toggleExpand(req.id)}
+        <div
+          className="overflow-y-auto"
+          style={{ maxHeight: "calc(100vh - 320px)" }}
+        >
+          <div className="grid gap-3">
+            {filtered.map((req, idx) => {
+              const tech = technicians.find((t) => t.id === req.technicianId);
+              const expanded = expandedIds.has(req.id);
+              const priority = req.priority || "normal";
+              return (
+                <Card
+                  key={req.id}
+                  className="border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden"
+                  data-ocid={`part_requests.item.${idx + 1}`}
                 >
-                  <div className="flex items-center justify-between px-4 py-3 hover:bg-[var(--bg-hover)] transition-colors">
-                    {/* Left: Case ID + status */}
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-blue-600 text-base font-mono">
-                        {req.caseId}
+                  {/* Collapsed header — always visible */}
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => toggleExpand(req.id)}
+                  >
+                    <div className="flex items-center justify-between px-4 py-3 hover:bg-[var(--bg-hover)] transition-colors">
+                      {/* Left: Case ID + status */}
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-blue-600 text-base font-mono">
+                          {req.caseId}
+                        </span>
+                        {statusBadge(req.status)}
+                      </div>
+                      {/* Center: Part Code */}
+                      <span className="text-sm font-medium text-[var(--text-secondary)] font-mono">
+                        {req.partCode || "—"}
                       </span>
-                      {statusBadge(req.status)}
+                      {/* Right: Priority + expand icon */}
+                      <div className="flex items-center gap-2">
+                        {priorityBadge(priority)}
+                        {expanded ? (
+                          <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                        )}
+                      </div>
                     </div>
-                    {/* Center: Part Code */}
-                    <span className="text-sm font-medium text-[var(--text-secondary)] font-mono">
-                      {req.partCode || "—"}
-                    </span>
-                    {/* Right: Priority + expand icon */}
-                    <div className="flex items-center gap-2">
-                      {priorityBadge(priority)}
-                      {expanded ? (
-                        <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
-                      )}
-                    </div>
-                  </div>
-                </button>
+                  </button>
 
-                {/* Expanded content */}
-                {expanded && (
-                  <CardContent className="px-4 pb-4 pt-0 border-t border-[var(--border)]">
-                    <div className="mt-3 space-y-3">
-                      {/* Privileged: greeting + table */}
-                      {isPrivileged && (
-                        <div className="space-y-2">
-                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-3 py-2">
-                            <p className="text-xs font-semibold text-blue-800">
-                              Hello {getGreeting()},{" "}
-                              <span className="text-indigo-700">
-                                {currentUser?.name}
-                              </span>{" "}
-                              ji,
-                            </p>
-                            <p className="text-[11px] text-blue-600 mt-0.5">
-                              A new part request has been submitted for your
-                              attention.
-                            </p>
-                          </div>
-                          <div className="overflow-hidden rounded-lg border border-gray-200">
-                            <table className="w-full text-xs">
-                              <tbody className="divide-y divide-gray-100">
-                                <tr className="bg-gray-50">
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500 w-1/3">
-                                    Requested By
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-800 font-medium flex items-center gap-1">
-                                    <User className="h-3 w-3 text-indigo-500" />
-                                    {req.requestedByName}
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Case ID
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-800 font-mono">
-                                    <button
-                                      type="button"
-                                      className="text-blue-600 hover:underline font-mono"
-                                      onClick={() =>
-                                        navigate("case-detail", req.caseDbId)
-                                      }
-                                    >
-                                      {req.caseId}
-                                    </button>
-                                  </td>
-                                </tr>
-                                <tr className="bg-gray-50">
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Customer
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-800">
-                                    {req.customerName}
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Product Type
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-800">
-                                    {req.productType || "—"}
-                                  </td>
-                                </tr>
-                                <tr className="bg-gray-50">
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Company
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-800">
-                                    {req.companyName || "—"}
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Part Name
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-800 font-medium">
-                                    {req.partName || "—"}
-                                  </td>
-                                </tr>
-                                <tr className="bg-gray-50">
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Part Code
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-800 font-mono">
-                                    {req.partCode || "—"}
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Priority
-                                  </td>
-                                  <td className="px-3 py-1.5">
-                                    {priorityBadge(req.priority)}
-                                  </td>
-                                </tr>
-                                {req.partPhotoUrl && (
+                  {/* Expanded content */}
+                  {expanded && (
+                    <CardContent className="px-4 pb-4 pt-0 border-t border-[var(--border)]">
+                      <div className="mt-3 space-y-3">
+                        {/* Privileged: greeting + table */}
+                        {isPrivileged && (
+                          <div className="space-y-2">
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-3 py-2">
+                              <p className="text-xs font-semibold text-blue-800">
+                                Hello {getGreeting()},{" "}
+                                <span className="text-indigo-700">
+                                  {currentUser?.name}
+                                </span>{" "}
+                                ji,
+                              </p>
+                              <p className="text-[11px] text-blue-600 mt-0.5">
+                                A new part request has been submitted for your
+                                attention.
+                              </p>
+                            </div>
+                            <div className="overflow-hidden rounded-lg border border-gray-200">
+                              <table className="w-full text-xs">
+                                <tbody className="divide-y divide-gray-100">
                                   <tr className="bg-gray-50">
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Part Photo
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500 w-1/3">
+                                      Requested By
                                     </td>
-                                    <td className="px-3 py-1.5">
+                                    <td className="px-3 py-1.5 text-gray-800 font-medium flex items-center gap-1">
+                                      <User className="h-3 w-3 text-indigo-500" />
+                                      {req.requestedByName}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Case ID
+                                    </td>
+                                    <td className="px-3 py-1.5 text-gray-800 font-mono">
                                       <button
                                         type="button"
+                                        className="text-blue-600 hover:underline font-mono"
                                         onClick={() =>
-                                          setImageModal(req.partPhotoUrl!)
+                                          navigate("case-detail", req.caseDbId)
                                         }
-                                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
                                       >
-                                        <Package className="h-3 w-3" /> View
-                                        Photo
+                                        {req.caseId}
                                       </button>
                                     </td>
                                   </tr>
-                                )}
-                                <tr className="bg-gray-50">
-                                  <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                    Requested At
-                                  </td>
-                                  <td className="px-3 py-1.5 text-gray-600">
-                                    {req.requestedAt
-                                      ? new Date(
-                                          req.requestedAt,
-                                        ).toLocaleString("en-IN", {
-                                          dateStyle: "medium",
-                                          timeStyle: "short",
-                                        })
-                                      : "—"}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
+                                  <tr className="bg-gray-50">
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Customer
+                                    </td>
+                                    <td className="px-3 py-1.5 text-gray-800">
+                                      {req.customerName}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Product Type
+                                    </td>
+                                    <td className="px-3 py-1.5 text-gray-800">
+                                      {req.productType || "—"}
+                                    </td>
+                                  </tr>
+                                  <tr className="bg-gray-50">
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Company
+                                    </td>
+                                    <td className="px-3 py-1.5 text-gray-800">
+                                      {req.companyName || "—"}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Part Name
+                                    </td>
+                                    <td className="px-3 py-1.5 text-gray-800 font-medium">
+                                      {req.partName || "—"}
+                                    </td>
+                                  </tr>
+                                  <tr className="bg-gray-50">
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Part Code
+                                    </td>
+                                    <td className="px-3 py-1.5 text-gray-800 font-mono">
+                                      {req.partCode || "—"}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Priority
+                                    </td>
+                                    <td className="px-3 py-1.5">
+                                      {priorityBadge(req.priority)}
+                                    </td>
+                                  </tr>
+                                  {req.partPhotoUrl && (
+                                    <tr className="bg-gray-50">
+                                      <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                        Part Photo
+                                      </td>
+                                      <td className="px-3 py-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setImageModal(req.partPhotoUrl!)
+                                          }
+                                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
+                                        >
+                                          <Package className="h-3 w-3" /> View
+                                          Photo
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  )}
+                                  <tr className="bg-gray-50">
+                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                      Requested At
+                                    </td>
+                                    <td className="px-3 py-1.5 text-gray-600">
+                                      {req.requestedAt
+                                        ? new Date(
+                                            req.requestedAt,
+                                          ).toLocaleString("en-IN", {
+                                            dateStyle: "medium",
+                                            timeStyle: "short",
+                                          })
+                                        : "—"}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Backend user: own request details */}
-                      {!isPrivileged && (
-                        <div className="space-y-1 text-sm">
-                          <div className="flex flex-wrap gap-3">
-                            <span className="text-[var(--text-muted)]">
-                              Part:{" "}
-                              <strong className="text-[var(--text-primary)]">
-                                {req.partName || "—"}
-                              </strong>
-                            </span>
-                            {req.partCode && (
+                        {/* Backend user: own request details */}
+                        {!isPrivileged && (
+                          <div className="space-y-1 text-sm">
+                            <div className="flex flex-wrap gap-3">
                               <span className="text-[var(--text-muted)]">
-                                Code:{" "}
-                                <strong className="font-mono text-[var(--text-primary)]">
-                                  {req.partCode}
+                                Part:{" "}
+                                <strong className="text-[var(--text-primary)]">
+                                  {req.partName || "—"}
                                 </strong>
                               </span>
+                              {req.partCode && (
+                                <span className="text-[var(--text-muted)]">
+                                  Code:{" "}
+                                  <strong className="font-mono text-[var(--text-primary)]">
+                                    {req.partCode}
+                                  </strong>
+                                </span>
+                              )}
+                              <span className="text-[var(--text-muted)]">
+                                Requested:{" "}
+                                {new Date(req.requestedAt).toLocaleString(
+                                  "en-IN",
+                                  { dateStyle: "medium", timeStyle: "short" },
+                                )}
+                              </span>
+                            </div>
+                            {req.partPhotoUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setImageModal(req.partPhotoUrl!)}
+                              >
+                                <img
+                                  src={req.partPhotoUrl}
+                                  alt="Part"
+                                  className="h-16 w-16 object-cover rounded border hover:opacity-80"
+                                />
+                              </button>
                             )}
-                            <span className="text-[var(--text-muted)]">
-                              Requested:{" "}
-                              {new Date(req.requestedAt).toLocaleString(
-                                "en-IN",
-                                { dateStyle: "medium", timeStyle: "short" },
-                              )}
-                            </span>
                           </div>
-                          {req.partPhotoUrl && (
-                            <button
-                              type="button"
-                              onClick={() => setImageModal(req.partPhotoUrl!)}
-                            >
-                              <img
-                                src={req.partPhotoUrl}
-                                alt="Part"
-                                className="h-16 w-16 object-cover rounded border hover:opacity-80"
-                              />
-                            </button>
-                          )}
-                        </div>
-                      )}
+                        )}
 
-                      {/* Status info for all */}
-                      {req.status === "issued" && (
-                        <div className="text-xs bg-green-50 text-green-700 px-3 py-2 rounded-md flex items-center gap-1.5">
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          Issued to{" "}
-                          <strong>{tech?.name ?? req.technicianId}</strong> by{" "}
-                          <strong>{req.issuedByName}</strong>
-                          {req.issuedAt && (
-                            <>
-                              {" "}
-                              &bull;{" "}
-                              {new Date(req.issuedAt).toLocaleDateString(
-                                "en-IN",
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                      {req.status === "rejected" && (
-                        <div className="text-xs bg-red-50 text-red-700 px-3 py-2 rounded-md">
-                          <span className="font-medium">Rejected</span>
-                          {req.rejectedByName && (
-                            <>
-                              {" "}
-                              by <strong>{req.rejectedByName}</strong>
-                            </>
-                          )}
-                          : {req.rejectedReason}
-                        </div>
-                      )}
-                      {req.status === "cancelled" && (
-                        <div className="text-xs bg-gray-50 text-gray-600 px-3 py-2 rounded-md">
-                          <span className="font-medium">Cancelled</span>
-                          {(req as any).cancelledByName && (
-                            <>
-                              {" "}
-                              by <strong>{(req as any).cancelledByName}</strong>
-                            </>
-                          )}
-                          {(req as any).cancelledAt && (
-                            <>
-                              {" "}
-                              &bull;{" "}
-                              {new Date(
-                                (req as any).cancelledAt,
-                              ).toLocaleDateString("en-IN")}
-                            </>
-                          )}
-                        </div>
-                      )}
+                        {/* Status info for all */}
+                        {req.status === "issued" && (
+                          <div className="text-xs bg-green-50 text-green-700 px-3 py-2 rounded-md flex items-center gap-1.5">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Issued to{" "}
+                            <strong>{tech?.name ?? req.technicianId}</strong> by{" "}
+                            <strong>{req.issuedByName}</strong>
+                            {req.issuedAt && (
+                              <>
+                                {" "}
+                                &bull;{" "}
+                                {new Date(req.issuedAt).toLocaleDateString(
+                                  "en-IN",
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {req.status === "rejected" && (
+                          <div className="text-xs bg-red-50 text-red-700 px-3 py-2 rounded-md">
+                            <span className="font-medium">Rejected</span>
+                            {req.rejectedByName && (
+                              <>
+                                {" "}
+                                by <strong>{req.rejectedByName}</strong>
+                              </>
+                            )}
+                            : {req.rejectedReason}
+                          </div>
+                        )}
+                        {req.status === "cancelled" && (
+                          <div className="text-xs bg-gray-50 text-gray-600 px-3 py-2 rounded-md">
+                            <span className="font-medium">Cancelled</span>
+                            {(req as any).cancelledByName && (
+                              <>
+                                {" "}
+                                by{" "}
+                                <strong>{(req as any).cancelledByName}</strong>
+                              </>
+                            )}
+                            {(req as any).cancelledAt && (
+                              <>
+                                {" "}
+                                &bull;{" "}
+                                {new Date(
+                                  (req as any).cancelledAt,
+                                ).toLocaleDateString("en-IN")}
+                              </>
+                            )}
+                          </div>
+                        )}
 
-                      {/* Action buttons */}
-                      <div className="flex gap-2 flex-wrap">
-                        {/* Backend user: cancel own pending */}
-                        {!isPrivileged &&
-                          req.status === "pending" &&
-                          req.requestedBy === currentUser?.id && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-red-600 border-red-200 hover:bg-red-50"
-                              onClick={() => {
-                                cancelPartRequest(req.id);
-                                toast.success("Part request cancelled");
-                              }}
-                              data-ocid="part_requests.cancel_button"
-                            >
-                              <Ban className="h-3 w-3 mr-1" /> Cancel Request
-                            </Button>
-                          )}
-
-                        {/* Supervisor actions: issue + reject */}
-                        {currentUser?.role === "supervisor" &&
-                          req.status === "pending" && (
-                            <>
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-xs"
-                                onClick={() => {
-                                  setIssueModal(req);
-                                  setSelectedTech("");
-                                }}
-                              >
-                                <CheckCircle className="h-3.5 w-3.5 mr-1" />{" "}
-                                Issue Part
-                              </Button>
+                        {/* Action buttons */}
+                        <div className="flex gap-2 flex-wrap">
+                          {/* Backend user: cancel own pending */}
+                          {!isPrivileged &&
+                            req.status === "pending" &&
+                            req.requestedBy === currentUser?.id && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-red-200 text-red-600 hover:bg-red-50 h-8 px-3 text-xs"
-                                onClick={() => {
-                                  setRejectModal(req);
-                                  setRejectReason("");
-                                }}
-                              >
-                                <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
-                              </Button>
-                            </>
-                          )}
-
-                        {/* Admin actions: issue + reject + cancel */}
-                        {currentUser?.role === "admin" &&
-                          req.status === "pending" && (
-                            <>
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-xs"
-                                onClick={() => {
-                                  setIssueModal(req);
-                                  setSelectedTech("");
-                                }}
-                              >
-                                <CheckCircle className="h-3.5 w-3.5 mr-1" />{" "}
-                                Issue Part
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-red-200 text-red-600 hover:bg-red-50 h-8 px-3 text-xs"
-                                onClick={() => {
-                                  setRejectModal(req);
-                                  setRejectReason("");
-                                }}
-                              >
-                                <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-gray-300 text-gray-600 hover:bg-gray-50 h-8 px-3 text-xs"
+                                className="text-red-600 border-red-200 hover:bg-red-50"
                                 onClick={() => {
                                   cancelPartRequest(req.id);
                                   toast.success("Part request cancelled");
                                 }}
-                                data-ocid="part_requests.delete_button"
+                                data-ocid="part_requests.cancel_button"
                               >
-                                <Ban className="h-3.5 w-3.5 mr-1" /> Cancel
+                                <Ban className="h-3 w-3 mr-1" /> Cancel Request
                               </Button>
-                            </>
-                          )}
+                            )}
+
+                          {/* Supervisor actions: issue + reject */}
+                          {currentUser?.role === "supervisor" &&
+                            req.status === "pending" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-xs"
+                                  onClick={() => {
+                                    setIssueModal(req);
+                                    setSelectedTech("");
+                                  }}
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />{" "}
+                                  Issue Part
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-red-200 text-red-600 hover:bg-red-50 h-8 px-3 text-xs"
+                                  onClick={() => {
+                                    setRejectModal(req);
+                                    setRejectReason("");
+                                  }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5 mr-1" />{" "}
+                                  Reject
+                                </Button>
+                              </>
+                            )}
+
+                          {/* Admin actions: issue + reject + cancel */}
+                          {currentUser?.role === "admin" &&
+                            req.status === "pending" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-xs"
+                                  onClick={() => {
+                                    setIssueModal(req);
+                                    setSelectedTech("");
+                                  }}
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />{" "}
+                                  Issue Part
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-red-200 text-red-600 hover:bg-red-50 h-8 px-3 text-xs"
+                                  onClick={() => {
+                                    setRejectModal(req);
+                                    setRejectReason("");
+                                  }}
+                                >
+                                  <XCircle className="h-3.5 w-3.5 mr-1" />{" "}
+                                  Reject
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-gray-300 text-gray-600 hover:bg-gray-50 h-8 px-3 text-xs"
+                                  onClick={() => {
+                                    cancelPartRequest(req.id);
+                                    toast.success("Part request cancelled");
+                                  }}
+                                  data-ocid="part_requests.delete_button"
+                                >
+                                  <Ban className="h-3.5 w-3.5 mr-1" /> Cancel
+                                </Button>
+                              </>
+                            )}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            );
-          })}
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 

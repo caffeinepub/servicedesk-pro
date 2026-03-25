@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import Layout from "./components/Layout";
+import { Toaster } from "./components/ui/sonner";
 import AIEnginePage from "./pages/AIEnginePage";
 import AdminNoticesPage from "./pages/AdminNoticesPage";
 import AdminPage from "./pages/AdminPage";
@@ -210,6 +211,7 @@ export default function App() {
           "existing-cases",
         ].includes(currentPage) && <DashboardPage />}
       </Layout>
+      <Toaster position="top-right" />
     </>
   );
 }
