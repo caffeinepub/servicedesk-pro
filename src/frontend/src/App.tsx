@@ -79,6 +79,25 @@ export default function App() {
     const interval = setInterval(check, 8000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
+
+  // Live sync polling: sync all data every 8 seconds when logged in
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional polling
+  useEffect(() => {
+    if (!currentUser) return;
+    const poll = async () => {
+      const store = useStore.getState();
+      await Promise.allSettled([
+        store.syncCases(),
+        store.syncPartRequests(),
+        store.syncNotices(),
+        store.syncInventory(),
+        store.syncAppData(),
+      ]);
+    };
+    poll();
+    const interval = setInterval(poll, 8000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
   // Session timeout: after 30 min of inactivity, mark session as expired.
   // The user stays on the current page; on NEXT interaction they get redirected to login.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional inactivity timer

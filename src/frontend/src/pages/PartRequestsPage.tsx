@@ -124,23 +124,28 @@ export default function PartRequestsPage() {
     return r.status === activeTab;
   });
 
-  const filtered = visible.filter((r) => {
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matches =
-        r.caseId.toLowerCase().includes(q) ||
-        r.partName.toLowerCase().includes(q) ||
-        r.partCode.toLowerCase().includes(q) ||
-        r.customerName.toLowerCase().includes(q) ||
-        r.requestedByName.toLowerCase().includes(q);
-      if (!matches) return false;
-    }
-    if (filterDate) {
-      const reqDate = r.requestedAt ? r.requestedAt.split("T")[0] : "";
-      if (reqDate !== filterDate) return false;
-    }
-    return true;
-  });
+  const filtered = visible
+    .filter((r) => {
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matches =
+          r.caseId.toLowerCase().includes(q) ||
+          r.partName.toLowerCase().includes(q) ||
+          r.partCode.toLowerCase().includes(q) ||
+          r.customerName.toLowerCase().includes(q) ||
+          r.requestedByName.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      if (filterDate) {
+        const reqDate = r.requestedAt ? r.requestedAt.split("T")[0] : "";
+        if (reqDate !== filterDate) return false;
+      }
+      return true;
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime(),
+    );
 
   const pendingCount = partRequests.filter(
     (r) =>

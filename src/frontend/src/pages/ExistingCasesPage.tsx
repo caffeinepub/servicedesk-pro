@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ClipboardPlus,
   FileText,
+  Image,
   Minus,
   Phone,
   Plus,
@@ -55,6 +56,7 @@ const CASE_STATUSES: { value: CaseStatus; label: string }[] = [
 
 interface CaseEntry {
   id: string;
+  caseId: string;
   customerName: string;
   phone: string;
   altPhone: string;
@@ -65,11 +67,14 @@ interface CaseEntry {
   status: CaseStatus | "";
   remarks: string;
   createdDate: string;
+  closedDate: string;
+  partImages: string[];
 }
 
 function newCaseEntry(): CaseEntry {
   return {
     id: Math.random().toString(36).slice(2),
+    caseId: "",
     customerName: "",
     phone: "",
     altPhone: "",
@@ -80,6 +85,8 @@ function newCaseEntry(): CaseEntry {
     status: "",
     remarks: "",
     createdDate: new Date().toISOString().split("T")[0],
+    closedDate: "",
+    partImages: [],
   };
 }
 
@@ -134,7 +141,7 @@ export default function ExistingCasesPage() {
   const handleSave = () => {
     if (!validate()) return;
     for (const e of entries) {
-      addCase({
+      const savedCase = addCase({
         customerName: e.customerName,
         phone: e.phone,
         altPhone: e.altPhone,
@@ -154,8 +161,18 @@ export default function ExistingCasesPage() {
         nextActionDate: "",
         remarks: e.remarks,
         additionalNotes: "",
-        caseId: "",
+        caseId: e.caseId || "",
       });
+      // Add part images as photos
+      if (savedCase && e.partImages.length > 0) {
+        for (let i = 0; i < e.partImages.length; i++) {
+          useStore.getState().addPhotoToCase(savedCase.id, {
+            url: e.partImages[i],
+            type: "part" as any,
+            name: `Part Image ${i + 1}`,
+          });
+        }
+      }
     }
     setSavedCount(entries.length);
     setSaved(true);
@@ -268,6 +285,23 @@ export default function ExistingCasesPage() {
             </div>
 
             <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Case ID */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <FileText className="h-3.5 w-3.5 text-blue-600" /> Case ID{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (Optional)
+                  </span>
+                </Label>
+                <Input
+                  placeholder="e.g. MD-2024-001"
+                  value={entry.caseId}
+                  onChange={(e) =>
+                    updateEntry(entry.id, "caseId", e.target.value)
+                  }
+                />
+              </div>
+
               {/* Customer Name */}
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
@@ -466,6 +500,90 @@ export default function ExistingCasesPage() {
                   }
                   className="resize-none h-20"
                 />
+              </div>
+
+              {/* Closed Date - only show for closed statuses */}
+              {[
+                "closed",
+                "adjustment_closed",
+                "replacement_done",
+                "gas_charge_done",
+              ].includes(entry.status) && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Closed Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={entry.closedDate}
+                    onChange={(e) =>
+                      updateEntry(entry.id, "closedDate", e.target.value)
+                    }
+                  />
+                </div>
+              )}
+
+              {/* Part Images - optional, multiple */}
+              <div className="space-y-1 md:col-span-2">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <Image className="h-3.5 w-3.5 text-blue-600" /> Part Images{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (Optional)
+                  </span>
+                </Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  id={`part-images-${entry.id}`}
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    const urls = await Promise.all(
+                      files.map(
+                        (f) =>
+                          new Promise<string>((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = (ev) =>
+                              resolve(ev.target?.result as string);
+                            reader.readAsDataURL(f);
+                          }),
+                      ),
+                    );
+                    setEntries((prev) =>
+                      prev.map((ent) =>
+                        ent.id === entry.id
+                          ? { ...ent, partImages: [...ent.partImages, ...urls] }
+                          : ent,
+                      ),
+                    );
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    document.getElementById(`part-images-${entry.id}`)?.click()
+                  }
+                  className="flex items-center gap-2 text-xs border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <Image className="h-3 w-3 text-gray-400" />
+                  {entry.partImages.length > 0
+                    ? `${entry.partImages.length} image${entry.partImages.length > 1 ? "s" : ""} selected`
+                    : "Upload Part Images (Optional, Multiple)"}
+                </button>
+                {entry.partImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {entry.partImages.map((url, idx) => (
+                      <img
+                        key={url.slice(-20)}
+                        src={url}
+                        alt={`Part ${idx + 1}`}
+                        className="h-16 w-16 object-cover rounded border"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

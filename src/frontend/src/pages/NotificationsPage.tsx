@@ -215,7 +215,34 @@ export default function NotificationsPage() {
     setClearAllOpen(false);
   };
 
-  const filtered = notifications.filter((n) => {
+  const visibleNotifications =
+    currentUser?.role === "admin"
+      ? notifications
+      : currentUser?.role === "supervisor"
+        ? notifications.filter((n) =>
+            [
+              "part_issued",
+              "part_returned",
+              "low_stock",
+              "part_request",
+            ].includes(n.type),
+          )
+        : notifications.filter(
+            (n) =>
+              [
+                "follow_up",
+                "overdue",
+                "part_pending",
+                "general",
+                "stale_case",
+                "part_issued",
+              ].includes(n.type) &&
+              (n.userId === currentUser?.id ||
+                n.userId === "" ||
+                n.userId === "all"),
+          );
+
+  const filtered = visibleNotifications.filter((n) => {
     const style = TYPE_STYLES[n.type] ?? TYPE_STYLES.general;
     if (filter === "unread") {
       if (n.isRead) return false;

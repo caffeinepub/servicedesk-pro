@@ -1,47 +1,41 @@
 # Servicedesk-Pro
 
 ## Current State
-The app is a full service centre management system with StorePilot inventory integration. Version 63 is live. Key issues remain:
-- Registration requests not appearing in admin approval tab (backendCreateUser silently swallowed errors; Motoko loginSdUser did case-sensitive email check)
-- Admin-created users unable to login (same root cause)
-- Badge counts for approvals only show on ADMIN group header when collapsed; no Part Requests counts on groups/sub-groups
-- Favicon already linked but might not be rendering properly
+- Full backend with Motoko canister storing users, part requests, cases, notices, inventory, app data as stable vars
+- Live user-delete polling in App.tsx (every 8s), but NO live polling for cases/notices/partRequests/inventory
+- Role-based sidebar but notifications are shown to ALL roles equally (no filtering)
+- Part code+part name are mandatory ONLY before sending part request, but not enforced on status update itself
+- ExistingCasesPage: no Case ID field, no Part Image upload, no Closed Date
+- CaseDetailPage: 'Closed' status has single photo upload, not multiple
+- PartRequestsPage: list not sorted by most recent first
+- No automatic notifications created when: supervisor issues part (for backend user) or backend user requests part (for supervisor)
 
 ## Requested Changes (Diff)
 
 ### Add
-- `pendingPartRequests` prop to `CollapsibleSection` component
-- Badge counts (number) on INVENTORY group header (collapsed + expanded) when there are pending part requests
-- Badge counts on Operations sub-group header when there are pending part requests
-- Badge counts on Part Requests nav items inside groups (for supervisor)
-- Badge count on Administration sub-group header when there are pending approvals
-- Show pendingApprovals badge on ADMIN group header ALWAYS (not just when collapsed)
+- Global live polling in App.tsx every 8s: syncCases, syncPartRequests, syncNotices, syncInventory, syncAppData
+- Role-based notification filtering in NotificationsPage (admin=all, supervisor=store-only, backend_user=case+their-part-request)
+- Auto-create in-app notification for supervisor when backend user sends a part request
+- Auto-create in-app notification for backend user when supervisor issues their part request
+- Case ID field (manual text input) in ExistingCasesPage
+- Part Image upload (multiple, optional) in ExistingCasesPage
+- Closed Date field in ExistingCasesPage (only shows when status='closed')
+- Multiple image upload on CaseDetailPage when status='closed' is selected
 
 ### Modify
-- `store/index.ts` `registerUser`: wrap backendCreateUser in try/catch, retry once on failure, add aggressive polling trigger
-- `store/index.ts` `createUser`: same robustness improvements
-- `store/index.ts` `approveUser`: after approving, force immediate re-fetch and merge
-- `store/index.ts` login: after step 3, also try case-insensitive match on raw fresh backend users
-- `Layout.tsx` `CollapsibleSection`: add `pendingPartRequests` prop, wire badges to INVENTORY group + Operations sub-group + Part Requests nav items; show approvals badge on Administration sub-group; always show ADMIN badge regardless of groupOpen
-- `Layout.tsx` pass `pendingPartRequests` to INVENTORY CollapsibleSection renders (admin and supervisor)
-- `AdminPage.tsx` polling: after mount fetch, also trigger every 3 seconds (not just 5s)
-- `index.html`: ensure favicon is properly set
+- App.tsx: add polling interval for all data types (cases, notices, partRequests, inventory, appData)
+- NotificationsPage: filter notifications list based on currentUser.role
+- PartRequestsPage: sort all tab lists by requestedAt descending (most recent first)
+- CaseDetailPage: enforce part code + part name mandatory both for status save AND part request; also allow multiple closing photos
+- ExistingCasesPage: add new fields (caseId, partImages, closedDate)
 
 ### Remove
-- Old test seed users (Rahul Verma, supervisor@servicedesk.com) from initSeedUsers — already done in Motoko
+- Nothing
 
 ## Implementation Plan
-1. Fix `store/index.ts`:
-   - `registerUser` and `createUser`: after backendCreateUser fails, retry after 1s delay; if both fail, keep local and show warning in console
-   - Add `triggerAdminPoll` helper that does immediate backendGetUsers fetch + mergeUsers
-   - Call `triggerAdminPoll` after every user creation/registration
-   - Fix `approveUser` to immediately re-fetch after approval so approved users can login right away
-2. Fix `Layout.tsx`:
-   - Add `pendingPartRequests?: number` to CollapsibleSection props
-   - In collapsed sidebar: show orange badge on INVENTORY icon if pendingPartRequests > 0
-   - In group header: show badge for ADMIN (pendingApprovals) always (not just !groupOpen); show badge for INVENTORY (pendingPartRequests)
-   - In sub-group headers: show violet badge on 'Administration' sub-group if pendingApprovals > 0; show orange badge on 'Operations' sub-group if pendingPartRequests > 0
-   - In nav items: add part-requests badge using pendingPartRequests
-   - Pass pendingPartRequests to all INVENTORY CollapsibleSection renders
-3. Fix `AdminPage.tsx`: shorten poll interval to 3s for faster live updates
-4. Ensure favicon is set in index.html (already done)
+1. App.tsx: add useEffect with setInterval polling all backend sync functions every 8 seconds (in addition to existing user-delete check)
+2. PartRequestsPage: sort each tab's list by requestedAt descending
+3. PartRequestsPage / store: when a part request is created, add a notification for supervisors/admins; when issued, add notification for the requesting backend user
+4. NotificationsPage: add role-based filter - supervisor sees only store-type notifications (issued, returned, low_stock, part_request types), backend_user sees only case/reminder types + notifications tagged with their userId
+5. CaseDetailPage: ensure part code + part name validation blocks status save (not just part request), add multiple photo upload support for 'closed' status
+6. ExistingCasesPage: add caseId text field, partImages multi-upload (optional), closedDate date picker (conditional on status=closed), update the CaseEntry type and addCase logic

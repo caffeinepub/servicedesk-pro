@@ -103,8 +103,8 @@ export default function CaseDetailPage() {
   const [poNumber, setPoNumber] = useState("");
   const [orderDate, setOrderDate] = useState("");
   const [feedbackText, setFeedbackText] = useState("");
-  const [closingPhotoFile, setClosingPhotoFile] = useState<File | null>(null);
-  const [closingPhotoUrl, setClosingPhotoUrl] = useState("");
+  const [closingPhotoFiles, setClosingPhotoFiles] = useState<File[]>([]);
+  const [closingPhotoUrls, setClosingPhotoUrls] = useState<string[]>([]);
   const [reminderDate, setReminderDate] = useState("");
   const [reminderNote, setReminderNote] = useState("");
   const [remarks, setRemarks] = useState(caseData?.remarks ?? "");
@@ -172,14 +172,29 @@ export default function CaseDetailPage() {
     setPartPhotoUrl(url);
   };
 
-  const handleClosingPhotoSelect = async (file: File) => {
-    setClosingPhotoFile(file);
-    const url = await fileToDataUrl(file);
-    setClosingPhotoUrl(url);
+  const handleClosingPhotoSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const newFiles = Array.from(files);
+    const newUrls = await Promise.all(newFiles.map(fileToDataUrl));
+    setClosingPhotoFiles((prev) => [...prev, ...newFiles]);
+    setClosingPhotoUrls((prev) => [...prev, ...newUrls]);
   };
 
   const handleStatusChange = async () => {
     if (!newStatus) return;
+    // Mandatory part code/name validation for part_required
+    if (newStatus === "part_required") {
+      const effectivePartName = partName || caseData.partName;
+      const effectivePartCode = partCode || caseData.partCode;
+      if (!effectivePartName) {
+        toast.error("Part Name is required when Part Required is selected.");
+        return;
+      }
+      if (!effectivePartCode) {
+        toast.error("Part Code is required when Part Required is selected.");
+        return;
+      }
+    }
     setSaving(true);
     const updates: Record<string, string> = {};
     let details = statusDetails;
@@ -212,9 +227,9 @@ export default function CaseDetailPage() {
     changeStatus(caseData.id, newStatus, details);
     toast.success(`Case status updated to ${newStatus.replace(/_/g, " ")}`);
 
-    // Add closing photo if present
+    // Add closing photos if present
     if (
-      closingPhotoUrl &&
+      closingPhotoUrls.length > 0 &&
       [
         "closed",
         "adjustment_closed",
@@ -222,14 +237,18 @@ export default function CaseDetailPage() {
         "gas_charge_done",
       ].includes(newStatus)
     ) {
-      addPhotoToCase(caseData.id, {
-        url: closingPhotoUrl,
-        type: "after",
-        name: closingPhotoFile?.name ?? "After work photo",
-      });
+      for (let i = 0; i < closingPhotoUrls.length; i++) {
+        addPhotoToCase(caseData.id, {
+          url: closingPhotoUrls[i],
+          type: "after",
+          name: closingPhotoFiles[i]?.name ?? `After work photo ${i + 1}`,
+        });
+      }
     }
 
     // Reset form
+    setClosingPhotoFiles([]);
+    setClosingPhotoUrls([]);
     setNewStatus("");
     setStatusDetails("");
     setNextAction("");
@@ -242,8 +261,8 @@ export default function CaseDetailPage() {
     setPoNumber("");
     setOrderDate("");
     setFeedbackText("");
-    setClosingPhotoFile(null);
-    setClosingPhotoUrl("");
+    setClosingPhotoFiles([]);
+    setClosingPhotoUrls([]);
     await new Promise((r) => setTimeout(r, 300));
     setSaving(false);
   };
@@ -838,10 +857,11 @@ export default function CaseDetailPage() {
                         ref={closingPhotoRef}
                         type="file"
                         accept="image/*"
+                        multiple
                         className="hidden"
                         onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) handleClosingPhotoSelect(f);
+                          handleClosingPhotoSelect(e.target.files);
+                          e.target.value = "";
                         }}
                       />
                       <button
@@ -851,16 +871,21 @@ export default function CaseDetailPage() {
                         data-ocid="case_detail.dropzone"
                       >
                         <Image className="h-3 w-3 text-gray-400" />
-                        {closingPhotoFile
-                          ? closingPhotoFile.name
-                          : "Upload closing photo (optional)"}
+                        {closingPhotoFiles.length > 0
+                          ? `${closingPhotoFiles.length} photo${closingPhotoFiles.length > 1 ? "s" : ""} selected`
+                          : "Upload closing photos (optional, multiple)"}
                       </button>
-                      {closingPhotoUrl && (
-                        <img
-                          src={closingPhotoUrl}
-                          alt="Closing preview"
-                          className="h-20 w-20 object-cover rounded border"
-                        />
+                      {closingPhotoUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {closingPhotoUrls.map((url, idx) => (
+                            <img
+                              key={url.slice(-20)}
+                              src={url}
+                              alt={`Closing preview ${idx + 1}`}
+                              className="h-20 w-20 object-cover rounded border"
+                            />
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
