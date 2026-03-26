@@ -1218,7 +1218,7 @@ export const useStore = create<StoreState>()(
             await backendInitSeedUsers();
             const backendUsers = await backendGetUsers();
             if (backendUsers.length > 0) {
-              get().mergeUsers(backendUsers);
+              get().setUsers(backendUsers);
             }
             await get().syncPartRequests();
             await get().syncCases();
@@ -1885,6 +1885,9 @@ export const useStore = create<StoreState>()(
               { ...t, id: uid(), createdAt: now() },
             ],
           }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -1901,6 +1904,9 @@ export const useStore = create<StoreState>()(
               t.id === id ? { ...t, ...updates } : t,
             ),
           }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -1915,6 +1921,9 @@ export const useStore = create<StoreState>()(
           set((s) => ({
             technicians: s.technicians.filter((t) => t.id !== id),
           }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2095,6 +2104,9 @@ export const useStore = create<StoreState>()(
           set((s) => ({
             vendors: [...s.vendors, { ...v, id: uid(), createdAt: now() }],
           }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2103,14 +2115,22 @@ export const useStore = create<StoreState>()(
               `Added vendor: ${v.name}`,
             );
         },
-        updateVendor: (id, updates) =>
+        updateVendor: (id, updates) => {
           set((s) => ({
             vendors: s.vendors.map((v) =>
               v.id === id ? { ...v, ...updates } : v,
             ),
-          })),
-        deleteVendor: (id) =>
-          set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) })),
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteVendor: (id) => {
+          set((s) => ({ vendors: s.vendors.filter((v) => v.id !== id) }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
 
         // ── Store notification actions ────────────────────────────────────────────
         addStoreNotification: (n) =>
@@ -2148,6 +2168,9 @@ export const useStore = create<StoreState>()(
               { id: uid(), name, createdAt: now() },
             ],
           }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2156,16 +2179,24 @@ export const useStore = create<StoreState>()(
               `Added company: ${name}`,
             );
         },
-        updateStockCompany: (id, name) =>
+        updateStockCompany: (id, name) => {
           set((s) => ({
             stockCompanies: s.stockCompanies.map((c) =>
               c.id === id ? { ...c, name } : c,
             ),
-          })),
-        deleteStockCompany: (id) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteStockCompany: (id) => {
           set((s) => ({
             stockCompanies: s.stockCompanies.filter((c) => c.id !== id),
-          })),
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
 
         addStockCategory: (name) => {
           const cu = get().currentUser;
@@ -2175,6 +2206,9 @@ export const useStore = create<StoreState>()(
               { id: uid(), name, createdAt: now() },
             ],
           }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2183,16 +2217,24 @@ export const useStore = create<StoreState>()(
               `Added category: ${name}`,
             );
         },
-        updateStockCategory: (id, name) =>
+        updateStockCategory: (id, name) => {
           set((s) => ({
             stockCategories: s.stockCategories.map((c) =>
               c.id === id ? { ...c, name } : c,
             ),
-          })),
-        deleteStockCategory: (id) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteStockCategory: (id) => {
           set((s) => ({
             stockCategories: s.stockCategories.filter((c) => c.id !== id),
-          })),
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
 
         addStockPartName: (name) => {
           const cu = get().currentUser;
@@ -2202,6 +2244,9 @@ export const useStore = create<StoreState>()(
               { id: uid(), name, createdAt: now() },
             ],
           }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2210,40 +2255,64 @@ export const useStore = create<StoreState>()(
               `Added part name: ${name}`,
             );
         },
-        updateStockPartName: (id, name) =>
+        updateStockPartName: (id, name) => {
           set((s) => ({
             stockPartNames: s.stockPartNames.map((p) =>
               p.id === id ? { ...p, name } : p,
             ),
-          })),
-        deleteStockPartName: (id) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteStockPartName: (id) => {
           set((s) => ({
             stockPartNames: s.stockPartNames.filter((p) => p.id !== id),
-          })),
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
 
-        addWarehouse: (name, address) =>
+        addWarehouse: (name, address) => {
           set((s) => ({
             warehouses: [
               ...s.warehouses,
               { id: uid(), name, address, createdAt: now() },
             ],
-          })),
-        updateWarehouse: (id, name, address) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        updateWarehouse: (id, name, address) => {
           set((s) => ({
             warehouses: s.warehouses.map((w) =>
               w.id === id ? { ...w, name, address } : w,
             ),
-          })),
-        deleteWarehouse: (id) =>
-          set((s) => ({ warehouses: s.warehouses.filter((w) => w.id !== id) })),
-        addRackToWarehouse: (name, warehouseId) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteWarehouse: (id) => {
+          set((s) => ({ warehouses: s.warehouses.filter((w) => w.id !== id) }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        addRackToWarehouse: (name, warehouseId) => {
           set((s) => ({
             racks: [
               ...s.racks,
               { id: uid(), name, warehouseId, createdAt: now() },
             ],
-          })),
-        addRack: (name) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        addRack: (name) => {
           set((s) => ({
             racks: [
               ...s.racks,
@@ -2254,12 +2323,20 @@ export const useStore = create<StoreState>()(
                 createdAt: now(),
               },
             ],
-          })),
-        updateRack: (id, name) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        updateRack: (id, name) => {
           set((s) => ({
             racks: s.racks.map((r) => (r.id === id ? { ...r, name } : r)),
-          })),
-        deleteRack: (id) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteRack: (id) => {
           set((s) => {
             const childShelves = s.shelves
               .filter((sh) => sh.rackId === id)
@@ -2281,22 +2358,34 @@ export const useStore = create<StoreState>()(
                 return p;
               }) as PartInventoryItem[],
             };
-          }),
+          });
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
 
-        addShelf: (name, rackId) =>
+        addShelf: (name, rackId) => {
           set((s) => ({
             shelves: [
               ...s.shelves,
               { id: uid(), name, rackId, createdAt: now() },
             ],
-          })),
-        updateShelf: (id, updates) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        updateShelf: (id, updates) => {
           set((s) => ({
             shelves: s.shelves.map((sh) =>
               sh.id === id ? { ...sh, ...updates } : sh,
             ),
-          })),
-        deleteShelf: (id) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteShelf: (id) => {
           set((s) => {
             const childBins = s.bins
               .filter((b) => b.shelfId === id)
@@ -2312,23 +2401,39 @@ export const useStore = create<StoreState>()(
                 return p;
               }) as PartInventoryItem[],
             };
-          }),
+          });
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
 
-        addBin: (name, shelfId) =>
+        addBin: (name, shelfId) => {
           set((s) => ({
             bins: [...s.bins, { id: uid(), name, shelfId, createdAt: now() }],
-          })),
-        updateBin: (id, updates) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        updateBin: (id, updates) => {
           set((s) => ({
             bins: s.bins.map((b) => (b.id === id ? { ...b, ...updates } : b)),
-          })),
-        deleteBin: (id) =>
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
+        deleteBin: (id) => {
           set((s) => ({
             bins: s.bins.filter((b) => b.id !== id),
             partItems: s.partItems.map((p) =>
               p.binId === id ? { ...p, rackId: "", shelfId: "", binId: "" } : p,
             ) as PartInventoryItem[],
-          })),
+          }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
+        },
 
         addPurchaseEntry: (entry, partCodes) => {
           const cu = get().currentUser;
@@ -2378,6 +2483,9 @@ export const useStore = create<StoreState>()(
             partItems: [...s.partItems, ...items],
             partLifecycle: [...s.partLifecycle, ...lifecycles],
           }));
+          get()
+            .saveInventoryToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2406,6 +2514,9 @@ export const useStore = create<StoreState>()(
               },
             ],
           }));
+          get()
+            .saveInventoryToBackend()
+            .catch(() => {});
         },
 
         issuePartToTechnician: (partId, technicianId, caseId) => {
@@ -2449,6 +2560,9 @@ export const useStore = create<StoreState>()(
               relatedPartCode: part.partCode,
             });
           }
+          get()
+            .saveInventoryToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2480,6 +2594,9 @@ export const useStore = create<StoreState>()(
               },
             ],
           }));
+          get()
+            .saveInventoryToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2497,7 +2614,7 @@ export const useStore = create<StoreState>()(
               p.id === partId
                 ? {
                     ...p,
-                    status: "in_stock" as PartItemStatus,
+                    status: "returned_to_store" as PartItemStatus,
                     technicianId: "",
                     caseId: "",
                     issueDate: "",
@@ -2531,6 +2648,9 @@ export const useStore = create<StoreState>()(
               relatedPartCode: part.partCode,
             });
           }
+          get()
+            .saveInventoryToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2569,6 +2689,9 @@ export const useStore = create<StoreState>()(
               },
             ],
           }));
+          get()
+            .saveInventoryToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,
@@ -2655,6 +2778,51 @@ export const useStore = create<StoreState>()(
             cu?.id ?? "",
             cu?.name ?? "",
           ).catch((e) => console.error("issuePartRequest backend error:", e));
+          // Also create a PartInventoryItem so it shows in Inventory > Issued Parts
+          const issuedReq = get().partRequests.find((r) => r.id === id);
+          if (issuedReq) {
+            const company = get().stockCompanies.find(
+              (c) =>
+                c.name.toLowerCase() ===
+                (issuedReq.companyName ?? "").toLowerCase(),
+            );
+            const partNameEntry = get().stockPartNames.find(
+              (pn) =>
+                pn.name.toLowerCase() === issuedReq.partName.toLowerCase(),
+            );
+            const newPartItem: PartInventoryItem = {
+              id: uid(),
+              partCode: issuedReq.partCode || issuedReq.partName,
+              purchaseId: `req-${issuedReq.id}`,
+              companyId: company?.id ?? "",
+              categoryId: "",
+              partNameId: partNameEntry?.id ?? "",
+              rackId: "",
+              shelfId: "",
+              binId: "",
+              imageUrl: issuedReq.partPhotoUrl || "",
+              status: "issued" as PartItemStatus,
+              technicianId,
+              caseId: issuedReq.caseId,
+              issueDate: now(),
+              issuedBy: cu?.name ?? "",
+              installedAt: "",
+              returnedToStoreAt: "",
+              returnRemarks: "",
+              returnedToCompanyAt: "",
+              returnToCompanyReason: "",
+              returnToCompanyRemarks: "",
+              returnedToCompanyBy: "",
+              createdAt: now(),
+              overridePartName: issuedReq.partName,
+              overrideCompanyName: issuedReq.companyName ?? "",
+              partRequestId: issuedReq.id,
+            };
+            set((s) => ({ partItems: [...s.partItems, newPartItem] }));
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
+          }
           const req = get().partRequests.find((r) => r.id === id);
           if (req) {
             get().addNotification({
@@ -3030,6 +3198,9 @@ export const useStore = create<StoreState>()(
             partItems: [...s.partItems, ...items],
             partLifecycle: [...s.partLifecycle, ...lifecycles],
           }));
+          get()
+            .saveInventoryToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,

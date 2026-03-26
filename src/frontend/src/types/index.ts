@@ -269,6 +269,9 @@ export interface PartInventoryItem {
   createdAt: string;
   imageUrl?: string;
   partImageUrls?: string[];
+  overridePartName?: string;
+  overrideCompanyName?: string;
+  partRequestId?: string;
 }
 
 export interface Vendor {

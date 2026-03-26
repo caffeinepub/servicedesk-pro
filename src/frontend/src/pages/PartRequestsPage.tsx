@@ -35,7 +35,7 @@ import { Textarea } from "../components/ui/textarea";
 import { useStore } from "../store";
 import type { PartRequest } from "../types";
 
-type FilterTab = "all" | "pending" | "issued" | "rejected" | "cancelled";
+type FilterTab = "all" | "pending" | "rejected" | "cancelled";
 
 const PRIORITY_COLORS: Record<string, string> = {
   low: "bg-slate-100 text-slate-600 border-slate-200",
@@ -221,7 +221,6 @@ export default function PartRequestsPage() {
       label: `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}`,
       icon: Clock,
     },
-    { key: "issued", label: "Issued", icon: CheckCircle },
     { key: "rejected", label: "Rejected", icon: XCircle },
     { key: "cancelled", label: "Cancelled", icon: Ban },
     { key: "all", label: "All", icon: Inbox },

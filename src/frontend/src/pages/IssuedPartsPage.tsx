@@ -103,6 +103,14 @@ export default function IssuedPartsPage() {
     stockCategories.find((c) => c.id === categoryId)?.name ?? "";
   const getPartName = (partNameId: string) =>
     stockPartNames.find((p) => p.id === partNameId)?.name ?? "";
+  const getCompanyDisplay = (p: (typeof partItems)[number]) =>
+    stockCompanies.find((c) => c.id === p.companyId)?.name ||
+    (p as any).overrideCompanyName ||
+    "";
+  const getPartNameDisplay = (p: (typeof partItems)[number]) =>
+    stockPartNames.find((pn) => pn.id === p.partNameId)?.name ||
+    (p as any).overridePartName ||
+    "";
   const getLocation = (p: (typeof partItems)[number]) => {
     const rack = racks.find((r) => r.id === p.rackId);
     const shelf = shelves.find((s) => s.id === p.shelfId);
@@ -349,10 +357,10 @@ export default function IssuedPartsPage() {
                   </button>
                 </td>
                 <td className="px-4 py-2 text-slate-700">
-                  {getCompany(p.companyId)}
+                  {getCompanyDisplay(p)}
                 </td>
                 <td className="px-4 py-2 text-slate-700">
-                  {getPartName(p.partNameId)}
+                  {getPartNameDisplay(p)}
                 </td>
                 <td className="px-4 py-2 text-slate-700">
                   {p.technicianId ? getTechName(p.technicianId) : "-"}
