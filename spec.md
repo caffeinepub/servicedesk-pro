@@ -1,32 +1,30 @@
 # Servicedesk-Pro
 
 ## Current State
-Version 70 is live. Cross-device sync is partially working for new users but broken for existing users and all inventory/technician/warehouse mutations. Several structural bugs exist around issued parts flow.
+- Sidebar uses CollapsibleSection with groups and sub-groups for ALL roles (admin, supervisor, backend_user)
+- Notification unread badge uses raw count of ALL notifications regardless of role
+- Store uses `persist` middleware saving to localStorage, causing cross-device sync failures because on app load, localStorage data overrides backend data
+- Technicians, vendors, warehouse racks/shelves/bins, categories, companies, part names, and other AppData are saved to backend via saveAppDataToBackend but on load, localStorage may serve stale/old data instead of fresh backend data
 
 ## Requested Changes (Diff)
 
 ### Add
-- When `issuePartRequest` is called (supervisor issues a part request), also create a `PartInventoryItem` in `partItems` with status `issued` so the issued part appears in Inventory > Operations > Issued Parts
-- Add optional `overridePartName` and `overrideCompanyName` fields to `PartInventoryItem` type for part-request-sourced items
-- `saveAppDataToBackend()` call after every warehouse/rack/shelf/bin/technician/vendor/stockCompany/stockCategory/stockPartName mutation
-- `saveInventoryToBackend()` call after every partItem/purchaseEntry mutation
+- Flat sidebar for supervisor and backend_user: no groups, no sub-groups — direct NavButton items in order
+- Role-filtered unread count for notification badge in sidebar
 
 ### Modify
-- `initUsers` in store: change `mergeUsers(backendUsers)` to `setUsers(backendUsers)` so backend is always authoritative, not merged with stale localStorage
-- `returnPartToStore`: change resulting status from `in_stock` to `returned_to_store` so the Returned to Store tab in IssuedPartsPage actually shows data
-- `IssuedPartsPage` display helpers: fall back to `overridePartName`/`overrideCompanyName` when IDs don't resolve
-- `PartRequestsPage`: remove the Issued tab entirely (user wants all issued parts to show only in Inventory > Operations > Issued Parts)
+- Supervisor sidebar: flat list showing Dashboard (standalone top), then directly: Warehouse, Inventory, Purchase Entry, Issued Parts, Return to Company, Part Requests, Reports — no groups/sub-groups
+- Backend user sidebar: flat list showing Dashboard (standalone top), then directly: All Cases, New Case, Customer History, Parts Tracking, Part Requests, Reports — no groups/sub-groups
+- Admin sidebar: keep exactly as-is (groups + sub-groups with collapse/expand)
+- Notification badge `unread` count: filter by role before computing — supervisor sees only inventory/store notifications, backend user sees only their own case+part notifications, admin sees all
+- Remove localStorage `persist` middleware from the store, OR ensure that on every app init and poll, backend data FULLY REPLACES local state (not merges). The backend is the source of truth. On initUsers, replace entirely. On initInventory/initCases/initNotices/initAppData, always fetch from backend and replace local state.
+- In polling (every 8 seconds), always replace local state with fresh backend data for: users, partRequests, cases, notices, appData (technicians, vendors, warehouse, inventory etc.)
 
 ### Remove
-- Issued tab from PartRequestsPage tabs array and tab display
+- Nothing — all existing features and pages stay intact
 
 ## Implementation Plan
-1. Read and update `src/frontend/src/types/index.ts` - add `overridePartName?: string; overrideCompanyName?: string; partRequestId?: string;` to `PartInventoryItem`
-2. Update `src/frontend/src/store/index.ts`:
-   a. `initUsers`: use `setUsers` not `mergeUsers` when backend returns users
-   b. Add `get().saveAppDataToBackend().catch(() => {})` after every set() in: addTechnician, updateTechnician, deleteTechnician, addVendor, updateVendor, deleteVendor, addStockCompany, updateStockCompany, deleteStockCompany, addStockCategory, updateStockCategory, deleteStockCategory, addStockPartName, updateStockPartName, deleteStockPartName, addWarehouse, updateWarehouse, deleteWarehouse, addRackToWarehouse, addRack, updateRack, deleteRack, addShelf, updateShelf, deleteShelf, addBin, updateBin, deleteBin
-   c. Add `get().saveInventoryToBackend().catch(() => {})` after every set() in: addPurchaseEntry, assignPartLocation, issuePartToTechnician, markPartInstalled, returnPartToStore, returnPartToCompany, addExistingStock
-   d. Change `returnPartToStore` status from `in_stock` to `returned_to_store`
-   e. In `issuePartRequest`: after updating partRequests, also create a PartInventoryItem with status `issued` and call saveInventoryToBackend
-3. Update `src/frontend/src/pages/PartRequestsPage.tsx`: remove Issued tab from tab definitions and filter logic
-4. Update `src/frontend/src/pages/IssuedPartsPage.tsx`: use overridePartName/overrideCompanyName as fallbacks in display helpers
+1. In Layout.tsx: Add flat sidebar rendering for supervisor and backend_user roles using simple NavButton lists (no CollapsibleSection)
+2. In Layout.tsx SidebarContent: compute role-filtered `unreadForRole` count based on currentUser.role and pass that to the Notifications NavButton badge
+3. In store/index.ts: In `initUsers`, `initCases`, `initInventory`, `initNotices`, `initAppData`, and all polling functions — use `set()` with backend data replacing local state entirely (not merging with localStorage)
+4. In store/index.ts: Remove the `persist` middleware completely or ensure persist `partialize` only saves UI preferences (currentPage, collapsed state) — NOT application data

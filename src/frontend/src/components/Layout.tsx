@@ -140,7 +140,7 @@ const SECTION_COLORS = {
 
 // ── Nav sections definition ─────────────────────────────────────────────────
 // CASES for backend_user (includes Part Requests + Insights/Reports)
-const CASES_SECTIONS_BACKEND_USER: SectionDef = {
+const _CASES_SECTIONS_BACKEND_USER: SectionDef = {
   key: "CASES",
   label: "Cases",
   icon: FolderOpen,
@@ -230,7 +230,7 @@ const INVENTORY_SECTIONS_ADMIN: SectionDef = {
 };
 
 // INVENTORY for supervisor (with Part Requests in Operations, with Insights/Reports sub-group)
-const INVENTORY_SECTIONS_SUPERVISOR: SectionDef = {
+const _INVENTORY_SECTIONS_SUPERVISOR: SectionDef = {
   key: "INVENTORY",
   label: "Inventory",
   icon: Package,
@@ -1214,7 +1214,34 @@ function SidebarContent({
   } = useStore();
   const role = currentUser?.role ?? "backend_user";
   const { seenPartRequestsCount, seenApprovalsCount } = useStore();
-  const unread = notifications.filter((n) => !n.isRead).length;
+  const unread = (() => {
+    if (role === "admin") return notifications.filter((n) => !n.isRead).length;
+    if (role === "supervisor")
+      return notifications.filter(
+        (n) =>
+          !n.isRead &&
+          [
+            "part_issued",
+            "part_returned",
+            "low_stock",
+            "part_request",
+          ].includes(n.type),
+      ).length;
+    // backend_user: own case/part notifications
+    return notifications.filter(
+      (n) =>
+        !n.isRead &&
+        [
+          "follow_up",
+          "overdue",
+          "part_pending",
+          "general",
+          "stale_case",
+          "part_issued",
+        ].includes(n.type) &&
+        (n.userId === currentUser?.id || n.userId === "" || n.userId === "all"),
+    ).length;
+  })();
   const totalPendingApprovals = users.filter(
     (u) => u.status === "pending",
   ).length;
@@ -1350,14 +1377,60 @@ function SidebarContent({
           />
         )}
         {role === "backend_user" && (
-          <CollapsibleSection
-            sectionDef={CASES_SECTIONS_BACKEND_USER}
-            collapsed={collapsed}
-            currentPage={currentPage}
-            onNavigate={onNavigate}
-            role={role}
-            unread={unread}
-          />
+          <div className="mb-2">
+            {!collapsed && (
+              <div className="px-3 py-1.5 mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">
+                  Cases
+                </span>
+              </div>
+            )}
+            {collapsed && (
+              <div className="px-2 py-1">
+                <div className="border-t border-blue-500/30" />
+              </div>
+            )}
+            <div className={collapsed ? "px-2" : "px-1"}>
+              {[
+                { icon: FileText, label: "All Cases", page: "cases" as const },
+                {
+                  icon: Briefcase,
+                  label: "New Case",
+                  page: "new-case" as const,
+                },
+                {
+                  icon: Users,
+                  label: "Customer History",
+                  page: "customer-history" as const,
+                },
+                {
+                  icon: Wrench,
+                  label: "Parts Tracking",
+                  page: "parts" as const,
+                },
+                {
+                  icon: ClipboardList,
+                  label: "Part Requests",
+                  page: "part-requests" as const,
+                },
+                { icon: BarChart3, label: "Reports", page: "reports" as const },
+              ].map((item) => (
+                <NavButton
+                  key={item.page}
+                  item={item}
+                  collapsed={collapsed}
+                  currentPage={currentPage}
+                  section="CASES"
+                  onNavigate={onNavigate}
+                  badge={
+                    item.page === "part-requests" && pendingPartRequests > 0
+                      ? pendingPartRequests
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </div>
         )}
 
         {/* INVENTORY section */}
@@ -1373,15 +1446,69 @@ function SidebarContent({
           />
         )}
         {role === "supervisor" && (
-          <CollapsibleSection
-            sectionDef={INVENTORY_SECTIONS_SUPERVISOR}
-            collapsed={collapsed}
-            currentPage={currentPage}
-            onNavigate={onNavigate}
-            role={role}
-            unread={unread}
-            pendingPartRequests={pendingPartRequests}
-          />
+          <div className="mb-2">
+            {!collapsed && (
+              <div className="px-3 py-1.5 mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                  Inventory
+                </span>
+              </div>
+            )}
+            {collapsed && (
+              <div className="px-2 py-1">
+                <div className="border-t border-emerald-500/30" />
+              </div>
+            )}
+            <div className={collapsed ? "px-2" : "px-1"}>
+              {[
+                {
+                  icon: Warehouse,
+                  label: "Warehouse",
+                  page: "warehouse" as const,
+                },
+                {
+                  icon: Package,
+                  label: "Inventory",
+                  page: "inventory" as const,
+                },
+                {
+                  icon: ShoppingCart,
+                  label: "Purchase Entry",
+                  page: "purchase" as const,
+                },
+                {
+                  icon: ArrowRightCircle,
+                  label: "Issued Parts",
+                  page: "issued-parts" as const,
+                },
+                {
+                  icon: RotateCcw,
+                  label: "Return to Company",
+                  page: "return-to-company" as const,
+                },
+                {
+                  icon: ClipboardList,
+                  label: "Part Requests",
+                  page: "part-requests" as const,
+                },
+                { icon: BarChart2, label: "Reports", page: "reports" as const },
+              ].map((item) => (
+                <NavButton
+                  key={item.page}
+                  item={item}
+                  collapsed={collapsed}
+                  currentPage={currentPage}
+                  section="INVENTORY"
+                  onNavigate={onNavigate}
+                  badge={
+                    item.page === "part-requests" && pendingPartRequests > 0
+                      ? pendingPartRequests
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </div>
         )}
 
         {/* ADMIN section */}
@@ -1662,6 +1789,34 @@ function SectionPill({ page }: { page: string }) {
 // ── Main Layout ───────────────────────────────────────────────────────────────
 export default function Layout({ children }: { children: ReactNode }) {
   const { currentUser, notifications, navigate, mergeUsers } = useStore();
+  const role = currentUser?.role ?? "backend_user";
+  const unread = (() => {
+    if (role === "admin") return notifications.filter((n) => !n.isRead).length;
+    if (role === "supervisor")
+      return notifications.filter(
+        (n) =>
+          !n.isRead &&
+          [
+            "part_issued",
+            "part_returned",
+            "low_stock",
+            "part_request",
+          ].includes(n.type),
+      ).length;
+    return notifications.filter(
+      (n) =>
+        !n.isRead &&
+        [
+          "follow_up",
+          "overdue",
+          "part_pending",
+          "general",
+          "stale_case",
+          "part_issued",
+        ].includes(n.type) &&
+        (n.userId === currentUser?.id || n.userId === "" || n.userId === "all"),
+    ).length;
+  })();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -1690,7 +1845,6 @@ export default function Layout({ children }: { children: ReactNode }) {
     const interval = setInterval(poll, 8000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
-  const unread = notifications.filter((n) => !n.isRead).length;
   const currentPageStr = useStore.getState().currentPage as string;
 
   if (isMobile) {
