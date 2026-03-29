@@ -78,7 +78,7 @@ const SEED_USERS: User[] = [
   },
 ];
 
-const SEED_TECHNICIANS: Technician[] = [
+const _SEED_TECHNICIANS: Technician[] = [
   {
     id: "t1",
     name: "Ramesh Kumar",
@@ -120,7 +120,7 @@ const SEED_TECHNICIANS: Technician[] = [
 const d = (daysAgo: number) =>
   new Date(Date.now() - daysAgo * 86400000).toISOString();
 
-const SEED_CASES: Case[] = [
+const _SEED_CASES: Case[] = [
   {
     id: "c1",
     caseId: "MD-2024-001",
@@ -305,21 +305,21 @@ const SEED_CASES: Case[] = [
 
 // ── StorePilot seed data ─────────────────────────────────────────────────────
 
-const SEED_STOCK_COMPANIES: StockCompany[] = [
+const _SEED_STOCK_COMPANIES: StockCompany[] = [
   { id: "sc1", name: "Midea", createdAt: now() },
   { id: "sc2", name: "Toshiba", createdAt: now() },
   { id: "sc3", name: "Godrej", createdAt: now() },
   { id: "sc4", name: "Sansui", createdAt: now() },
 ];
 
-const SEED_STOCK_CATEGORIES: StockCategory[] = [
+const _SEED_STOCK_CATEGORIES: StockCategory[] = [
   { id: "scat1", name: "AC", createdAt: now() },
   { id: "scat2", name: "TV", createdAt: now() },
   { id: "scat3", name: "Washing Machine", createdAt: now() },
   { id: "scat4", name: "Refrigerator", createdAt: now() },
 ];
 
-const SEED_STOCK_PART_NAMES: StockPartName[] = [
+const _SEED_STOCK_PART_NAMES: StockPartName[] = [
   { id: "spn1", name: "Compressor", createdAt: now() },
   { id: "spn2", name: "Power Board", createdAt: now() },
   { id: "spn3", name: "Display Panel", createdAt: now() },
@@ -328,7 +328,7 @@ const SEED_STOCK_PART_NAMES: StockPartName[] = [
   { id: "spn6", name: "Thermostat", createdAt: now() },
 ];
 
-const SEED_WAREHOUSES: Warehouse[] = [
+const _SEED_WAREHOUSES: Warehouse[] = [
   {
     id: "wh1",
     name: "Main Warehouse",
@@ -337,24 +337,24 @@ const SEED_WAREHOUSES: Warehouse[] = [
   },
 ];
 
-const SEED_RACKS: WarehouseRack[] = [
+const _SEED_RACKS: WarehouseRack[] = [
   { id: "rack1", name: "Rack A", warehouseId: "wh1", createdAt: now() },
   { id: "rack2", name: "Rack B", warehouseId: "wh1", createdAt: now() },
 ];
 
-const SEED_SHELVES: WarehouseShelf[] = [
+const _SEED_SHELVES: WarehouseShelf[] = [
   { id: "shelf1", name: "Shelf A1", rackId: "rack1", createdAt: now() },
   { id: "shelf2", name: "Shelf A2", rackId: "rack1", createdAt: now() },
   { id: "shelf3", name: "Shelf B1", rackId: "rack2", createdAt: now() },
 ];
 
-const SEED_BINS: WarehouseBin[] = [
+const _SEED_BINS: WarehouseBin[] = [
   { id: "bin1", name: "Bin A1-1", shelfId: "shelf1", createdAt: now() },
   { id: "bin2", name: "Bin A1-2", shelfId: "shelf1", createdAt: now() },
   { id: "bin3", name: "Bin B1-1", shelfId: "shelf3", createdAt: now() },
 ];
 
-const SEED_VENDORS: Vendor[] = [
+const _SEED_VENDORS: Vendor[] = [
   {
     id: "v1",
     name: "Star Electronics",
@@ -381,7 +381,7 @@ const SEED_VENDORS: Vendor[] = [
   },
 ];
 
-const SEED_PURCHASES: PurchaseEntry[] = [
+const _SEED_PURCHASES: PurchaseEntry[] = [
   {
     id: "pur1",
     vendorName: "Star Electronics",
@@ -426,7 +426,7 @@ const SEED_PURCHASES: PurchaseEntry[] = [
   },
 ];
 
-const SEED_PART_ITEMS: PartInventoryItem[] = [
+const _SEED_PART_ITEMS: PartInventoryItem[] = [
   {
     id: "pi1",
     partCode: "MIDAC-COMP-001",
@@ -597,7 +597,7 @@ const SEED_PART_ITEMS: PartInventoryItem[] = [
   },
 ];
 
-const SEED_LIFECYCLE: PartLifecycleEntry[] = [
+const _SEED_LIFECYCLE: PartLifecycleEntry[] = [
   {
     id: "lc1",
     partId: "pi1",
@@ -690,7 +690,7 @@ const SEED_LIFECYCLE: PartLifecycleEntry[] = [
   },
 ];
 
-const SEED_STORE_NOTIFICATIONS: StoreNotification[] = [
+const _SEED_STORE_NOTIFICATIONS: StoreNotification[] = [
   {
     id: "sn1",
     title: "Part Issued",
@@ -724,7 +724,7 @@ const SEED_STORE_NOTIFICATIONS: StoreNotification[] = [
 ];
 
 // ── Seed Admin Notices ───────────────────────────────────────────────────────
-const SEED_ADMIN_NOTICES: AdminNotice[] = [
+const _SEED_ADMIN_NOTICES: AdminNotice[] = [
   {
     id: "notice1",
     title: "System Maintenance",
@@ -741,7 +741,7 @@ const SEED_ADMIN_NOTICES: AdminNotice[] = [
 ];
 
 // ── Seed StorePilot Audit Logs ───────────────────────────────────────────────
-const SEED_STOREPILOT_AUDIT_LOGS: StorePilotAuditLog[] = [
+const _SEED_STOREPILOT_AUDIT_LOGS: StorePilotAuditLog[] = [
   {
     id: "sal1",
     action: "CREATE",
@@ -1149,8 +1149,8 @@ export const useStore = create<StoreState>()(
         selectedPartId: null,
         navVendorId: null,
         previousPage: null,
-        adminNotices: SEED_ADMIN_NOTICES,
-        storePilotAuditLogs: SEED_STOREPILOT_AUDIT_LOGS,
+        adminNotices: [],
+        storePilotAuditLogs: [],
         notificationsGeneratedDate: "",
         lastMidnightResetDate: "",
         rejectionReason: "",
@@ -1158,8 +1158,8 @@ export const useStore = create<StoreState>()(
         seenPartRequestsCount: 0,
         seenApprovalsCount: 0,
         users: SEED_USERS,
-        technicians: SEED_TECHNICIANS,
-        cases: SEED_CASES,
+        technicians: [],
+        cases: [],
         auditLog: [],
         activityLog: [],
         reminders: [],
@@ -1176,19 +1176,19 @@ export const useStore = create<StoreState>()(
             "Microwave",
           ],
         },
-        stockCompanies: SEED_STOCK_COMPANIES,
-        stockCategories: SEED_STOCK_CATEGORIES,
-        stockPartNames: SEED_STOCK_PART_NAMES,
-        warehouses: SEED_WAREHOUSES,
-        racks: SEED_RACKS,
-        shelves: SEED_SHELVES,
-        bins: SEED_BINS,
-        vendors: SEED_VENDORS,
-        purchaseEntries: SEED_PURCHASES,
-        partItems: SEED_PART_ITEMS,
-        partLifecycle: SEED_LIFECYCLE,
+        stockCompanies: [],
+        stockCategories: [],
+        stockPartNames: [],
+        warehouses: [],
+        racks: [],
+        shelves: [],
+        bins: [],
+        vendors: [],
+        purchaseEntries: [],
+        partItems: [],
+        partLifecycle: [],
         partRequests: [],
-        storeNotifications: SEED_STORE_NOTIFICATIONS,
+        storeNotifications: [],
 
         setInitializing: (val) => set({ isInitializing: val }),
         mergeUsers: (backendUsers) => {
@@ -1794,7 +1794,9 @@ export const useStore = create<StoreState>()(
           const newCase: Case = {
             ...c,
             id: uid(),
-            caseId: `MD-${new Date().getFullYear()}-${caseNum}`,
+            caseId: c.caseId?.trim()
+              ? c.caseId.trim()
+              : `MD-${new Date().getFullYear()}-${caseNum}`,
             photos: [],
             createdAt: now(),
             updatedAt: now(),
@@ -1980,6 +1982,9 @@ export const useStore = create<StoreState>()(
         updateSettings: (s) => {
           const cu = get().currentUser;
           set((state) => ({ settings: { ...state.settings, ...s } }));
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
           if (cu)
             logActivity(
               cu.id,

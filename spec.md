@@ -1,30 +1,36 @@
 # Servicedesk-Pro
 
 ## Current State
-- Sidebar uses CollapsibleSection with groups and sub-groups for ALL roles (admin, supervisor, backend_user)
-- Notification unread badge uses raw count of ALL notifications regardless of role
-- Store uses `persist` middleware saving to localStorage, causing cross-device sync failures because on app load, localStorage data overrides backend data
-- Technicians, vendors, warehouse racks/shelves/bins, categories, companies, part names, and other AppData are saved to backend via saveAppDataToBackend but on load, localStorage may serve stale/old data instead of fresh backend data
+- Full-stack ICP app with Motoko backend and React/Zustand frontend
+- Backend stores users, part requests, cases, notices, inventory as stable vars or JSON blobs
+- App polls every 8 seconds for live sync across devices
+- Seed data (SEED_CASES, SEED_TECHNICIANS, SEED_PART_ITEMS, etc.) populates initial state, cluttering the app with fake data
+- `addCase` always overrides user-provided caseId with auto-generated `MD-YYYY-NNN`
+- `updateSettings` does not call `saveAppDataToBackend()`, so product types added in settings never persist
+- Notifications are a mix of seeded fake data and real generated ones, causing incorrect unread counts
+- ExistingCasesPage lacks Part Code field (for Part Required status) and PO Number field (for Part Ordered status)
 
 ## Requested Changes (Diff)
 
 ### Add
-- Flat sidebar for supervisor and backend_user: no groups, no sub-groups — direct NavButton items in order
-- Role-filtered unread count for notification badge in sidebar
+- ExistingCasesPage: Part Code field (visible only when status = "part_required")
+- ExistingCasesPage: PO Number field (visible only when status = "part_ordered")
+- Notification generation: real notifications from actual cases/part requests, role-filtered
 
 ### Modify
-- Supervisor sidebar: flat list showing Dashboard (standalone top), then directly: Warehouse, Inventory, Purchase Entry, Issued Parts, Return to Company, Part Requests, Reports — no groups/sub-groups
-- Backend user sidebar: flat list showing Dashboard (standalone top), then directly: All Cases, New Case, Customer History, Parts Tracking, Part Requests, Reports — no groups/sub-groups
-- Admin sidebar: keep exactly as-is (groups + sub-groups with collapse/expand)
-- Notification badge `unread` count: filter by role before computing — supervisor sees only inventory/store notifications, backend user sees only their own case+part notifications, admin sees all
-- Remove localStorage `persist` middleware from the store, OR ensure that on every app init and poll, backend data FULLY REPLACES local state (not merges). The backend is the source of truth. On initUsers, replace entirely. On initInventory/initCases/initNotices/initAppData, always fetch from backend and replace local state.
-- In polling (every 8 seconds), always replace local state with fresh backend data for: users, partRequests, cases, notices, appData (technicians, vendors, warehouse, inventory etc.)
+- `addCase`: if caseId is provided by user, use it as-is; only auto-generate if empty
+- `updateSettings`: add `saveAppDataToBackend()` call after updating state
+- Remove all seed data arrays (SEED_CASES, SEED_TECHNICIANS, SEED_PART_ITEMS, SEED_PURCHASES, SEED_STORE_NOTIFICATIONS, SEED_LIFECYCLE, SEED_VENDORS, SEED_PART_REQUESTS, SEED_ADMIN_NOTICES) — replace with empty arrays
+- Notification unread count in Layout: only count notifications that are actually in the notifications array (no fake counts)
+- syncAppData: also sync settings always (not just when `parsed.settings` exists)
 
 ### Remove
-- Nothing — all existing features and pages stay intact
+- All hardcoded seed data except SEED_USERS (admin only)
 
 ## Implementation Plan
-1. In Layout.tsx: Add flat sidebar rendering for supervisor and backend_user roles using simple NavButton lists (no CollapsibleSection)
-2. In Layout.tsx SidebarContent: compute role-filtered `unreadForRole` count based on currentUser.role and pass that to the Notifications NavButton badge
-3. In store/index.ts: In `initUsers`, `initCases`, `initInventory`, `initNotices`, `initAppData`, and all polling functions — use `set()` with backend data replacing local state entirely (not merging with localStorage)
-4. In store/index.ts: Remove the `persist` middleware completely or ensure persist `partialize` only saves UI preferences (currentPage, collapsed state) — NOT application data
+1. Remove all seed arrays from store/index.ts, keep only SEED_USERS
+2. Fix addCase to preserve user-provided caseId
+3. Fix updateSettings to persist to backend
+4. Fix ExistingCasesPage to add Part Code + PO Number conditional fields
+5. Ensure notification counts only reflect real unread notifications (already correct, just fixing source data)
+6. Validate frontend builds

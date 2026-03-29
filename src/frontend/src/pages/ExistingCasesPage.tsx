@@ -69,6 +69,8 @@ interface CaseEntry {
   createdDate: string;
   closedDate: string;
   partImages: string[];
+  partCode: string;
+  poNumber: string;
 }
 
 function newCaseEntry(): CaseEntry {
@@ -87,6 +89,8 @@ function newCaseEntry(): CaseEntry {
     createdDate: new Date().toISOString().split("T")[0],
     closedDate: "",
     partImages: [],
+    partCode: "",
+    poNumber: "",
   };
 }
 
@@ -152,10 +156,10 @@ export default function ExistingCasesPage() {
         status: e.status as CaseStatus,
         technicianId: "",
         technicianFeedback: "",
-        partCode: "",
+        partCode: e.partCode,
         partName: "",
         partPhotoUrl: "",
-        poNumber: "",
+        poNumber: e.poNumber,
         orderDate: "",
         receivedDate: "",
         nextActionDate: "",
@@ -501,6 +505,38 @@ export default function ExistingCasesPage() {
                   className="resize-none h-20"
                 />
               </div>
+
+              {/* Part Code - only show for part_required status */}
+              {entry.status === "part_required" && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Part Code
+                  </Label>
+                  <Input
+                    placeholder="Enter part code"
+                    value={entry.partCode}
+                    onChange={(e) =>
+                      updateEntry(entry.id, "partCode", e.target.value)
+                    }
+                  />
+                </div>
+              )}
+
+              {/* PO Number - only show for part_ordered status */}
+              {entry.status === "part_ordered" && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-foreground">
+                    PO Number
+                  </Label>
+                  <Input
+                    placeholder="Enter PO number"
+                    value={entry.poNumber}
+                    onChange={(e) =>
+                      updateEntry(entry.id, "poNumber", e.target.value)
+                    }
+                  />
+                </div>
+              )}
 
               {/* Closed Date - only show for closed statuses */}
               {[
