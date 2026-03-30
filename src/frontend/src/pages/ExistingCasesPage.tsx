@@ -70,7 +70,9 @@ interface CaseEntry {
   closedDate: string;
   partImages: string[];
   partCode: string;
+  partCodes: Array<{ id: string; value: string }>;
   poNumber: string;
+  poNumbers: Array<{ id: string; value: string }>;
 }
 
 function newCaseEntry(): CaseEntry {
@@ -90,7 +92,9 @@ function newCaseEntry(): CaseEntry {
     closedDate: "",
     partImages: [],
     partCode: "",
+    partCodes: [{ id: Math.random().toString(36).slice(2), value: "" }],
     poNumber: "",
+    poNumbers: [{ id: Math.random().toString(36).slice(2), value: "" }],
   };
 }
 
@@ -156,10 +160,13 @@ export default function ExistingCasesPage() {
         status: e.status as CaseStatus,
         technicianId: "",
         technicianFeedback: "",
-        partCode: e.partCode,
+        partCode:
+          e.partCodes.map((p) => p.value).filter(Boolean)[0] || e.partCode,
         partName: "",
         partPhotoUrl: "",
-        poNumber: e.poNumber,
+        poNumber:
+          e.poNumbers.map((p) => p.value).filter(Boolean)[0] || e.poNumber,
+        poNumbers: e.poNumbers.map((p) => p.value).filter(Boolean),
         orderDate: "",
         receivedDate: "",
         nextActionDate: "",
@@ -506,35 +513,172 @@ export default function ExistingCasesPage() {
                 />
               </div>
 
-              {/* Part Code - only show for part_required status */}
+              {/* Part Codes - only show for part_required status */}
               {entry.status === "part_required" && (
-                <div className="space-y-1">
+                <div className="space-y-2 md:col-span-2 lg:col-span-3">
                   <Label className="text-xs font-semibold text-foreground">
-                    Part Code
+                    Part Codes
                   </Label>
-                  <Input
-                    placeholder="Enter part code"
-                    value={entry.partCode}
-                    onChange={(e) =>
-                      updateEntry(entry.id, "partCode", e.target.value)
+                  {entry.partCodes.map((pc) => (
+                    <div key={pc.id} className="flex gap-2 items-center">
+                      <Input
+                        placeholder="Part Code"
+                        value={pc.value}
+                        onChange={(e) => {
+                          setEntries((prev) =>
+                            prev.map((en) =>
+                              en.id === entry.id
+                                ? {
+                                    ...en,
+                                    partCodes: en.partCodes.map((p) =>
+                                      p.id === pc.id
+                                        ? { ...p, value: e.target.value }
+                                        : p,
+                                    ),
+                                    partCode: en.partCodes[0]?.value || "",
+                                  }
+                                : en,
+                            ),
+                          );
+                        }}
+                        className="flex-1"
+                      />
+                      {entry.partCodes.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEntries((prev) =>
+                              prev.map((en) =>
+                                en.id === entry.id
+                                  ? {
+                                      ...en,
+                                      partCodes: en.partCodes.filter(
+                                        (p) => p.id !== pc.id,
+                                      ),
+                                      partCode:
+                                        en.partCodes.filter(
+                                          (p) => p.id !== pc.id,
+                                        )[0]?.value || "",
+                                    }
+                                  : en,
+                              ),
+                            )
+                          }
+                          className="text-red-400 hover:text-red-600"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEntries((prev) =>
+                        prev.map((en) =>
+                          en.id === entry.id
+                            ? {
+                                ...en,
+                                partCodes: [
+                                  ...en.partCodes,
+                                  {
+                                    id: Math.random().toString(36).slice(2),
+                                    value: "",
+                                  },
+                                ],
+                              }
+                            : en,
+                        ),
+                      )
                     }
-                  />
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    <Plus className="h-3 w-3" /> Add Part Code
+                  </button>
                 </div>
               )}
 
-              {/* PO Number - only show for part_ordered status */}
               {entry.status === "part_ordered" && (
-                <div className="space-y-1">
+                <div className="space-y-2 md:col-span-2 lg:col-span-3">
                   <Label className="text-xs font-semibold text-foreground">
-                    PO Number
+                    PO Numbers
                   </Label>
-                  <Input
-                    placeholder="Enter PO number"
-                    value={entry.poNumber}
-                    onChange={(e) =>
-                      updateEntry(entry.id, "poNumber", e.target.value)
+                  {entry.poNumbers.map((po) => (
+                    <div key={po.id} className="flex gap-2 items-center">
+                      <Input
+                        placeholder="PO Number"
+                        value={po.value}
+                        onChange={(e) => {
+                          setEntries((prev) =>
+                            prev.map((en) =>
+                              en.id === entry.id
+                                ? {
+                                    ...en,
+                                    poNumbers: en.poNumbers.map((p) =>
+                                      p.id === po.id
+                                        ? { ...p, value: e.target.value }
+                                        : p,
+                                    ),
+                                    poNumber: en.poNumbers[0]?.value || "",
+                                  }
+                                : en,
+                            ),
+                          );
+                        }}
+                        className="flex-1"
+                      />
+                      {entry.poNumbers.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEntries((prev) =>
+                              prev.map((en) =>
+                                en.id === entry.id
+                                  ? {
+                                      ...en,
+                                      poNumbers: en.poNumbers.filter(
+                                        (p) => p.id !== po.id,
+                                      ),
+                                      poNumber:
+                                        en.poNumbers.filter(
+                                          (p) => p.id !== po.id,
+                                        )[0]?.value || "",
+                                    }
+                                  : en,
+                              ),
+                            )
+                          }
+                          className="text-red-400 hover:text-red-600"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEntries((prev) =>
+                        prev.map((en) =>
+                          en.id === entry.id
+                            ? {
+                                ...en,
+                                poNumbers: [
+                                  ...en.poNumbers,
+                                  {
+                                    id: Math.random().toString(36).slice(2),
+                                    value: "",
+                                  },
+                                ],
+                              }
+                            : en,
+                        ),
+                      )
                     }
-                  />
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    <Plus className="h-3 w-3" /> Add PO Number
+                  </button>
                 </div>
               )}
 

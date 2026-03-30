@@ -55,6 +55,7 @@ export default function PartRequestsPage() {
   const {
     partRequests,
     technicians,
+    partItems,
     currentUser,
     issuePartRequest,
     rejectPartRequest,
@@ -63,6 +64,64 @@ export default function PartRequestsPage() {
     syncPartRequests,
     markPartRequestsSeen,
   } = useStore();
+
+  // Stock availability helper
+  const getStockStatus = (
+    partCode: string,
+  ): { label: string; color: string; inStock: boolean } => {
+    if (!partCode?.trim())
+      return { label: "—", color: "text-gray-400", inStock: false };
+    const inStockItems = partItems.filter(
+      (p) =>
+        p.partCode.toLowerCase() === partCode.toLowerCase() &&
+        p.status === "in_stock",
+    );
+    if (inStockItems.length > 0) {
+      const detail =
+        currentUser?.role === "backend_user"
+          ? "✓ In Stock"
+          : `In Stock (${inStockItems.length} unit${inStockItems.length !== 1 ? "s" : ""})`;
+      return {
+        label: detail,
+        color: "text-green-600 bg-green-50 border-green-200",
+        inStock: true,
+      };
+    }
+    // For supervisor/admin: show more detail
+    if (currentUser?.role !== "backend_user") {
+      const withTech = partItems.find(
+        (p) =>
+          p.partCode.toLowerCase() === partCode.toLowerCase() &&
+          p.status === "issued",
+      );
+      if (withTech) {
+        const techName =
+          technicians.find((t) => t.id === withTech.technicianId)?.name ??
+          "technician";
+        return {
+          label: `With Technician: ${techName}`,
+          color: "text-amber-600 bg-amber-50 border-amber-200",
+          inStock: false,
+        };
+      }
+      const installed = partItems.find(
+        (p) =>
+          p.partCode.toLowerCase() === partCode.toLowerCase() &&
+          p.status === "installed",
+      );
+      if (installed)
+        return {
+          label: "Installed",
+          color: "text-blue-600 bg-blue-50 border-blue-200",
+          inStock: false,
+        };
+    }
+    return {
+      label: "✗ Not in Stock",
+      color: "text-red-600 bg-red-50 border-red-200",
+      inStock: false,
+    };
+  };
 
   const getGreeting = () => {
     const h = new Date().getHours();
@@ -462,7 +521,59 @@ export default function PartRequestsPage() {
                                       {req.partCode || "—"}
                                     </td>
                                   </tr>
-                                  <tr>
+                                  {/* Stock availability row - always show for privileged, also for backend_user */}
+                                  {req.partCode && (
+                                    <tr>
+                                      <td className="px-3 py-1.5 font-semibold text-gray-500">
+                                        Stock Status
+                                      </td>
+                                      <td className="px-3 py-1.5">
+                                        {req.parts && req.parts.length > 0 ? (
+                                          <div className="space-y-1">
+                                            {req.parts.map((part) => {
+                                              const st = getStockStatus(
+                                                part.partCode,
+                                              );
+                                              return (
+                                                <div
+                                                  key={part.id}
+                                                  className="flex items-center gap-2 text-xs"
+                                                >
+                                                  <span className="font-mono text-gray-600">
+                                                    {part.partCode}
+                                                  </span>
+                                                  <span
+                                                    className={`px-1.5 py-0.5 rounded border text-xs ${st.color}`}
+                                                  >
+                                                    {st.label}
+                                                  </span>
+                                                  {part.status === "issued" && (
+                                                    <span className="text-green-600 text-xs">
+                                                      ✓ Issued
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        ) : (
+                                          (() => {
+                                            const st = getStockStatus(
+                                              req.partCode,
+                                            );
+                                            return (
+                                              <span
+                                                className={`text-xs px-2 py-0.5 rounded border ${st.color}`}
+                                              >
+                                                {st.label}
+                                              </span>
+                                            );
+                                          })()
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )}
+                                  <tr className="bg-gray-50">
                                     <td className="px-3 py-1.5 font-semibold text-gray-500">
                                       Priority
                                     </td>

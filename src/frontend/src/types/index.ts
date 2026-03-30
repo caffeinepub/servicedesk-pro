@@ -130,6 +130,7 @@ export interface Case {
   partName: string;
   partPhotoUrl: string;
   poNumber: string;
+  poNumbers?: string[];
   orderDate: string;
   receivedDate: string;
   nextActionDate: string;
@@ -324,6 +325,19 @@ export interface StoreNotification {
   reminderAt?: string;
 }
 
+// ── Part Request Item (individual part within a multi-part request) ─────────
+export interface PartRequestItem {
+  id: string;
+  partCode: string;
+  partName: string;
+  partPhotoUrl: string;
+  status: "pending" | "issued" | "rejected";
+  issuedAt?: string;
+  issuedBy?: string;
+  issuedByName?: string;
+  technicianId?: string;
+}
+
 // ── Part Request Types ────────────────────────────────────────────────────────
 
 export type PartRequestStatus = "pending" | "issued" | "rejected" | "cancelled";
@@ -355,6 +369,7 @@ export interface PartRequest {
   cancelledBy?: string;
   cancelledByName?: string;
   cancelledAt?: string;
+  parts?: PartRequestItem[];
 }
 
 // ── Admin Notices ────────────────────────────────────────────────────────────

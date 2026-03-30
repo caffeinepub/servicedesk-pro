@@ -613,3 +613,25 @@ export async function backendSetAppDataJson(json: string): Promise<void> {
     console.error("backendSetAppDataJson error:", e);
   }
 }
+
+// ─── Part Requests JSON blob ──────────────────────────────────────────────────
+async function getPartRequestsJsonActor() {
+  return makeJsonBlobActor("setSdPartRequestsJson", "getSdPartRequestsJson");
+}
+export async function backendGetPartRequestsJson(): Promise<string> {
+  try {
+    return (await (
+      await getPartRequestsJsonActor()
+    ).getSdPartRequestsJson()) as string;
+  } catch (e) {
+    console.error("backendGetPartRequestsJson error:", e);
+    return "[]";
+  }
+}
+export async function backendSetPartRequestsJson(json: string): Promise<void> {
+  try {
+    await (await getPartRequestsJsonActor()).setSdPartRequestsJson(json);
+  } catch (e) {
+    console.error("backendSetPartRequestsJson error:", e);
+  }
+}

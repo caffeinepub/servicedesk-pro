@@ -19,12 +19,14 @@ import {
   backendGetInventoryJson,
   backendGetNoticesJson,
   backendGetPartRequests,
+  backendGetPartRequestsJson,
   backendIssuePartRequest,
   backendRejectPartRequest,
   backendSetAppDataJson,
   backendSetCasesJson,
   backendSetInventoryJson,
   backendSetNoticesJson,
+  backendSetPartRequestsJson,
 } from "../services/userBackend";
 import type {
   ActivityLog,
@@ -39,6 +41,7 @@ import type {
   PartItemStatus,
   PartLifecycleEntry,
   PartRequest,
+  PartRequestItem,
   PartRequestStatus,
   PhotoType,
   PurchaseEntry,
@@ -1085,7 +1088,11 @@ interface StoreState {
       | "message"
     >,
   ) => void;
-  issuePartRequest: (id: string, technicianId: string) => void;
+  issuePartRequest: (
+    id: string,
+    technicianId: string,
+    partItemId?: string,
+  ) => void;
   rejectPartRequest: (id: string, reason: string) => void;
   cancelPartRequest: (id: string) => void;
   syncPartRequests: () => Promise<void>;
@@ -2620,10 +2627,7 @@ export const useStore = create<StoreState>()(
                 ? {
                     ...p,
                     status: "returned_to_store" as PartItemStatus,
-                    technicianId: "",
-                    caseId: "",
-                    issueDate: "",
-                    issuedBy: "",
+                    // Preserve original issuance details for display in Returned to Store tab
                     returnedToStoreAt: returnedAt,
                     returnRemarks: remarks,
                   }
@@ -2715,74 +2719,137 @@ export const useStore = create<StoreState>()(
               : hour < 17
                 ? "Good Afternoon"
                 : "Good Evening";
-          const message = `Hello ${greeting} ${req.requestedByName} ji, I am requesting a part for Case ${req.caseId} — Customer: ${req.customerName} | Product: ${req.productType || "N/A"} | Part: ${req.partName}${req.partCode ? ` (${req.partCode})` : ""} | Company: ${req.companyName || "N/A"}`;
+          const cu = get().currentUser;
+          // Build message with multi-part support
+          const partsList = (req as any).parts as PartRequestItem[] | undefined;
+          const partsSummary =
+            partsList && partsList.length > 0
+              ? partsList.map((p) => `${p.partName} (${p.partCode})`).join(", ")
+              : `${req.partName}${req.partCode ? ` (${req.partCode})` : ""}`;
+          const message = `Hello ${greeting} ${req.requestedByName} ji, I am requesting a part for Case ${req.caseId} — Customer: ${req.customerName} | Product: ${req.productType || "N/A"} | Parts: ${partsSummary} | Company: ${req.companyName || "N/A"}`;
+          const newReq: PartRequest = {
+            ...req,
+            id: uid(),
+            requestedAt: now(),
+            status: "pending" as PartRequestStatus,
+            technicianId: "",
+            issuedAt: "",
+            issuedBy: "",
+            issuedByName: "",
+            rejectedReason: "",
+            rejectedAt: "",
+            rejectedBy: "",
+            rejectedByName: "",
+            message,
+            parts: partsList && partsList.length > 0 ? partsList : undefined,
+          };
+          // Set partCode/partName from first part for backwards compat
+          if (partsList && partsList.length > 0) {
+            newReq.partCode = partsList[0].partCode;
+            newReq.partName = partsList[0].partName;
+            newReq.partPhotoUrl = partsList[0].partPhotoUrl || req.partPhotoUrl;
+          }
           set((s) => ({
-            partRequests: [
-              {
-                ...req,
-                id: uid(),
-                requestedAt: now(),
-                status: "pending" as PartRequestStatus,
-                technicianId: "",
-                issuedAt: "",
-                issuedBy: "",
-                issuedByName: "",
-                rejectedReason: "",
-                rejectedAt: "",
-                rejectedBy: "",
-                rejectedByName: "",
-                message,
-              },
-              ...s.partRequests,
-            ],
+            partRequests: [newReq, ...s.partRequests],
           }));
-          const newReq = get().partRequests[0];
-          if (newReq) {
-            backendCreatePartRequest(
-              newReq.id,
-              newReq.caseId,
-              newReq.caseDbId,
-              newReq.customerName,
-              newReq.partName,
-              newReq.partCode,
-              newReq.partPhotoUrl,
-              newReq.requestedBy,
-              newReq.requestedByName,
-              newReq.requestedAt,
-              newReq.message,
-              newReq.productType,
-              newReq.companyName,
-              (newReq as any).priority || "normal",
-            ).catch((e) =>
-              console.error("addPartRequest backend save error:", e),
-            );
+          // Save all part requests to backend via JSON blob
+          const allReqs = get().partRequests;
+          backendSetPartRequestsJson(JSON.stringify(allReqs)).catch((e) =>
+            console.error("addPartRequest backend save error:", e),
+          );
+          // Also log audit
+          if (cu) {
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "PartRequest",
+                  recordId: newReq.id,
+                  details: `Part request created for case ${newReq.caseId} by ${cu.name}`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                  partCodes: partsList
+                    ? partsList.map((p) => p.partCode)
+                    : [newReq.partCode],
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
-        issuePartRequest: (id, technicianId) => {
+        issuePartRequest: (id, technicianId, partItemId?: string) => {
           const cu = get().currentUser;
           const tech = get().technicians.find((t) => t.id === technicianId);
+          const issuedAt = now();
           set((s) => ({
-            partRequests: s.partRequests.map((r) =>
-              r.id === id
-                ? {
-                    ...r,
-                    status: "issued" as PartRequestStatus,
-                    technicianId,
-                    issuedAt: now(),
-                    issuedBy: cu?.id ?? "",
-                    issuedByName: cu?.name ?? "",
-                  }
-                : r,
-            ),
+            partRequests: s.partRequests.map((r) => {
+              if (r.id !== id) return r;
+              if (partItemId && r.parts && r.parts.length > 0) {
+                // Partial issue: update specific part item
+                const updatedParts = r.parts.map((p) =>
+                  p.id === partItemId
+                    ? {
+                        ...p,
+                        status: "issued" as const,
+                        issuedAt,
+                        issuedBy: cu?.id ?? "",
+                        issuedByName: cu?.name ?? "",
+                        technicianId,
+                      }
+                    : p,
+                );
+                const allIssued = updatedParts.every(
+                  (p) => p.status === "issued" || p.status === "rejected",
+                );
+                return {
+                  ...r,
+                  parts: updatedParts,
+                  status: allIssued
+                    ? ("issued" as PartRequestStatus)
+                    : r.status,
+                  technicianId: allIssued ? technicianId : r.technicianId,
+                  issuedAt: allIssued ? issuedAt : r.issuedAt,
+                  issuedBy: allIssued ? (cu?.id ?? "") : r.issuedBy,
+                  issuedByName: allIssued ? (cu?.name ?? "") : r.issuedByName,
+                };
+              }
+              // Issue all (no partItemId)
+              const updatedParts = r.parts?.map((p) => ({
+                ...p,
+                status: "issued" as const,
+                issuedAt,
+                issuedBy: cu?.id ?? "",
+                issuedByName: cu?.name ?? "",
+                technicianId,
+              }));
+              return {
+                ...r,
+                parts: updatedParts,
+                status: "issued" as PartRequestStatus,
+                technicianId,
+                issuedAt,
+                issuedBy: cu?.id ?? "",
+                issuedByName: cu?.name ?? "",
+              };
+            }),
           }));
+          // Save to backend via JSON blob
+          const allReqs = get().partRequests;
+          backendSetPartRequestsJson(JSON.stringify(allReqs)).catch((e) =>
+            console.error("issuePartRequest backend error:", e),
+          );
+          // Also call structured method for compatibility
           backendIssuePartRequest(
             id,
             technicianId,
-            now(),
+            issuedAt,
             cu?.id ?? "",
             cu?.name ?? "",
-          ).catch((e) => console.error("issuePartRequest backend error:", e));
+          ).catch(() => {});
           // Also create a PartInventoryItem so it shows in Inventory > Issued Parts
           const issuedReq = get().partRequests.find((r) => r.id === id);
           if (issuedReq) {
@@ -2869,7 +2936,12 @@ export const useStore = create<StoreState>()(
             now(),
             cu?.id ?? "",
             cu?.name ?? "",
-          ).catch((e) => console.error("rejectPartRequest backend error:", e));
+          ).catch(() => {});
+          // Save all to JSON blob
+          const allReqsR = get().partRequests;
+          backendSetPartRequestsJson(JSON.stringify(allReqsR)).catch((e) =>
+            console.error("rejectPartRequest backend error:", e),
+          );
           const req = get().partRequests.find((r) => r.id === id);
           if (req) {
             get().addNotification({
@@ -2909,7 +2981,12 @@ export const useStore = create<StoreState>()(
             cu?.id ?? "",
             cu?.name ?? "",
             cancelNow,
-          ).catch((e) => console.error("cancelPartRequest backend error:", e));
+          ).catch(() => {});
+          // Save all to JSON blob
+          const allReqsC = get().partRequests;
+          backendSetPartRequestsJson(JSON.stringify(allReqsC)).catch((e) =>
+            console.error("cancelPartRequest backend error:", e),
+          );
           if (cu)
             logActivity(
               cu.id,
@@ -2920,9 +2997,23 @@ export const useStore = create<StoreState>()(
         },
         syncPartRequests: async () => {
           try {
+            // Try JSON blob first (preferred)
+            const json = await backendGetPartRequestsJson();
+            if (json && json !== "[]" && json !== "") {
+              try {
+                const parsed = JSON.parse(json) as PartRequest[];
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  set({ partRequests: parsed });
+                  return;
+                }
+              } catch {
+                // fall through to structured method
+              }
+            }
+            // Fallback: structured method (migration path)
             const backendReqs = await backendGetPartRequests();
-            if (backendReqs.length >= 0) {
-              const mapped = backendReqs.map((r) => ({
+            if (backendReqs.length > 0) {
+              const mapped: PartRequest[] = backendReqs.map((r) => ({
                 id: r.id,
                 caseId: r.caseId,
                 caseDbId: r.caseDbId,
@@ -2951,6 +3042,10 @@ export const useStore = create<StoreState>()(
                 cancelledAt: r.cancelledAt || "",
               }));
               set({ partRequests: mapped });
+              // Migrate to JSON blob
+              backendSetPartRequestsJson(JSON.stringify(mapped)).catch(
+                () => {},
+              );
             }
           } catch (e) {
             console.error("syncPartRequests error:", e);

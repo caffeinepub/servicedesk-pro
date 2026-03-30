@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronUp,
@@ -8,9 +9,12 @@ import {
   Image,
   MapPin,
   MessageSquare,
+  Pencil,
   Phone,
+  Plus,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -66,6 +70,7 @@ export default function CaseDetailPage() {
   const {
     cases,
     technicians,
+    partItems,
     auditLog,
     reminders,
     selectedCaseId,
@@ -95,12 +100,28 @@ export default function CaseDetailPage() {
   const [statusDetails, setStatusDetails] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [techId, setTechId] = useState("");
-  const [partName, setPartName] = useState("");
-  const [partCode, setPartCode] = useState("");
+  const [partEntries, setPartEntries] = useState<
+    Array<{
+      id: string;
+      partCode: string;
+      partName: string;
+      partPhotoUrl: string;
+      partPhotoFile: File | null;
+      stockStatus?: string;
+    }>
+  >([
+    {
+      id: Math.random().toString(36).slice(2),
+      partCode: "",
+      partName: "",
+      partPhotoUrl: "",
+      partPhotoFile: null,
+    },
+  ]);
   const [partPriority, setPartPriority] = useState("normal");
-  const [partPhotoUrl, setPartPhotoUrl] = useState("");
-  const [partPhotoFile, setPartPhotoFile] = useState<File | null>(null);
-  const [poNumber, setPoNumber] = useState("");
+  const [poNumbers, setPoNumbers] = useState<
+    Array<{ id: string; value: string }>
+  >([{ id: Math.random().toString(36).slice(2), value: "" }]);
   const [orderDate, setOrderDate] = useState("");
   const [feedbackText, setFeedbackText] = useState("");
   const [closingPhotoFiles, setClosingPhotoFiles] = useState<File[]>([]);
@@ -112,8 +133,10 @@ export default function CaseDetailPage() {
   const [saving, setSaving] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  const partPhotoRef = useRef<HTMLInputElement>(null);
   const closingPhotoRef = useRef<HTMLInputElement>(null);
+
+  const [editingCaseId, setEditingCaseId] = useState(false);
+  const [newCaseIdValue, setNewCaseIdValue] = useState("");
 
   if (!caseData) {
     return (
@@ -166,10 +189,69 @@ export default function CaseDetailPage() {
   );
   const age = getAgeing(caseData.createdAt);
 
-  const handlePartPhotoSelect = async (file: File) => {
-    setPartPhotoFile(file);
+  const handlePartPhotoSelect = async (entryId: string, file: File) => {
     const url = await fileToDataUrl(file);
-    setPartPhotoUrl(url);
+    setPartEntries((prev) =>
+      prev.map((e) =>
+        e.id === entryId ? { ...e, partPhotoFile: file, partPhotoUrl: url } : e,
+      ),
+    );
+  };
+
+  const getPartStockStatus = (
+    partCode: string,
+  ): { label: string; color: string } => {
+    if (!partCode.trim()) return { label: "", color: "" };
+    const matching = partItems.filter(
+      (p) =>
+        p.partCode.toLowerCase() === partCode.toLowerCase() &&
+        p.status === "in_stock",
+    );
+    const isAdmin = currentUser?.role === "admin";
+    const isSupervisor = currentUser?.role === "supervisor";
+    if (matching.length > 0) {
+      if (isAdmin || isSupervisor) {
+        return {
+          label: `In Stock (${matching.length} unit${matching.length !== 1 ? "s" : ""})`,
+          color: "text-green-600 bg-green-50 border-green-200",
+        };
+      }
+      return {
+        label: "✓ In Stock",
+        color: "text-green-600 bg-green-50 border-green-200",
+      };
+    }
+    // Check with technician or installed (only for admin/supervisor)
+    if (isAdmin || isSupervisor) {
+      const withTech = partItems.find(
+        (p) =>
+          p.partCode.toLowerCase() === partCode.toLowerCase() &&
+          p.status === "issued",
+      );
+      if (withTech) {
+        const techName =
+          technicians.find((t) => t.id === withTech.technicianId)?.name ??
+          "technician";
+        return {
+          label: `With Technician: ${techName}`,
+          color: "text-amber-600 bg-amber-50 border-amber-200",
+        };
+      }
+      const installed = partItems.find(
+        (p) =>
+          p.partCode.toLowerCase() === partCode.toLowerCase() &&
+          p.status === "installed",
+      );
+      if (installed)
+        return {
+          label: "Installed",
+          color: "text-blue-600 bg-blue-50 border-blue-200",
+        };
+    }
+    return {
+      label: "✗ Not in Stock",
+      color: "text-red-600 bg-red-50 border-red-200",
+    };
   };
 
   const handleClosingPhotoSelect = async (files: FileList | null) => {
@@ -184,14 +266,11 @@ export default function CaseDetailPage() {
     if (!newStatus) return;
     // Mandatory part code/name validation for part_required
     if (newStatus === "part_required") {
-      const effectivePartName = partName || caseData.partName;
-      const effectivePartCode = partCode || caseData.partCode;
-      if (!effectivePartName) {
-        toast.error("Part Name is required when Part Required is selected.");
-        return;
-      }
-      if (!effectivePartCode) {
-        toast.error("Part Code is required when Part Required is selected.");
+      const hasValidEntry = partEntries.some(
+        (e) => e.partCode.trim() && e.partName.trim(),
+      );
+      if (!hasValidEntry) {
+        toast.error("At least one Part Name and Part Code are required.");
         return;
       }
     }
@@ -211,15 +290,24 @@ export default function CaseDetailPage() {
       details += ` Assigned to: ${tech?.name ?? techId}`;
     }
     if (newStatus === "part_required") {
-      if (partName) updates.partName = partName;
-      if (partCode) updates.partCode = partCode;
-      if (partPhotoUrl) updates.partPhotoUrl = partPhotoUrl;
-      details += ` Part: ${partName} (${partCode})`;
+      const firstPart = partEntries[0];
+      if (firstPart?.partName) updates.partName = firstPart.partName;
+      if (firstPart?.partCode) updates.partCode = firstPart.partCode;
+      if (firstPart?.partPhotoUrl)
+        updates.partPhotoUrl = firstPart.partPhotoUrl;
+      details += ` Parts: ${partEntries
+        .filter((e) => e.partCode)
+        .map((e) => `${e.partName} (${e.partCode})`)
+        .join(", ")}`;
     }
     if (newStatus === "part_ordered") {
-      if (poNumber) updates.poNumber = poNumber;
+      const validPOs = poNumbers.map((p) => p.value).filter(Boolean);
+      if (validPOs.length > 0) {
+        updates.poNumber = validPOs[0];
+        (updates as any).poNumbers = validPOs;
+      }
       if (orderDate) updates.orderDate = orderDate;
-      if (poNumber) details += ` PO: ${poNumber}`;
+      if (validPOs.length > 0) details += ` PO: ${validPOs.join(", ")}`;
     }
     if (feedbackText) updates.technicianFeedback = feedbackText;
 
@@ -253,12 +341,17 @@ export default function CaseDetailPage() {
     setStatusDetails("");
     setNextAction("");
     setTechId("");
-    setPartName("");
-    setPartCode("");
+    setPartEntries([
+      {
+        id: Math.random().toString(36).slice(2),
+        partCode: "",
+        partName: "",
+        partPhotoUrl: "",
+        partPhotoFile: null,
+      },
+    ]);
     setPartPriority("normal");
-    setPartPhotoUrl("");
-    setPartPhotoFile(null);
-    setPoNumber("");
+    setPoNumbers([{ id: Math.random().toString(36).slice(2), value: "" }]);
     setOrderDate("");
     setFeedbackText("");
     setClosingPhotoFiles([]);
@@ -295,9 +388,10 @@ export default function CaseDetailPage() {
 
   const waPartQuery = () => {
     const supervisorName = settings.supervisorName ?? "Mishra";
-    const hasPhoto = !!(caseData.partPhotoUrl || partPhotoUrl);
+    const firstPart = partEntries[0];
+    const hasPhoto = !!(caseData.partPhotoUrl || firstPart?.partPhotoUrl);
     const msg = encodeURIComponent(
-      `Hello ${supervisorName} ji,\nCase ID: ${caseData.caseId}\nCustomer: ${caseData.customerName}\nProduct: ${caseData.product} ${caseData.productType}\nRequired Part: ${caseData.partName || partName}\nPart Code: ${caseData.partCode || partCode}\n${hasPhoto ? "Part photo available.\n" : ""}Please confirm availability.`,
+      `Hello ${supervisorName} ji,\nCase ID: ${caseData.caseId}\nCustomer: ${caseData.customerName}\nProduct: ${caseData.product} ${caseData.productType}\nRequired Part: ${caseData.partName || firstPart?.partName || ""}\nPart Code: ${caseData.partCode || firstPart?.partCode || ""}\n${hasPhoto ? "Part photo available.\n" : ""}Please confirm availability.`,
     );
     return `https://wa.me/${settings.supervisorWhatsApp}?text=${msg}`;
   };
@@ -525,8 +619,70 @@ export default function CaseDetailPage() {
             <CardTitle className="text-sm">Case Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
+            {/* Editable Case ID (admin only) */}
+            <div className="flex gap-2">
+              <span className="text-gray-500 min-w-[100px] shrink-0">
+                Case ID:
+              </span>
+              <div className="flex items-center gap-1 flex-1">
+                {editingCaseId && isAdmin ? (
+                  <>
+                    <input
+                      type="text"
+                      value={newCaseIdValue}
+                      onChange={(e) => setNewCaseIdValue(e.target.value)}
+                      className="text-sm font-medium border rounded px-2 py-0.5 flex-1"
+                      data-ocid="case_detail.input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newCaseIdValue.trim()) {
+                          updateCase(caseData.id, {
+                            caseId: newCaseIdValue.trim(),
+                          });
+                          toast.success("Case ID updated");
+                        }
+                        setEditingCaseId(false);
+                      }}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCaseId(false);
+                        setNewCaseIdValue(caseData.caseId);
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-gray-900 font-medium">
+                      {caseData.caseId}
+                    </span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCaseId(true);
+                          setNewCaseIdValue(caseData.caseId);
+                        }}
+                        className="text-gray-400 hover:text-blue-600 ml-1"
+                        title="Edit Case ID"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
             {[
-              ["Case ID", caseData.caseId],
               ["Customer", caseData.customerName],
               ["Phone", caseData.phone],
               ["Alt Phone", caseData.altPhone || "—"],
@@ -680,63 +836,141 @@ export default function CaseDetailPage() {
                   </div>
                 )}
 
-                {/* Part Required — enter part details + photo */}
+                {/* Part Required — multi-part entry */}
                 {newStatus === "part_required" && (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Part Name</Label>
-                        <Input
-                          placeholder="e.g. Compressor"
-                          value={partName}
-                          onChange={(e) => setPartName(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Part Code</Label>
-                        <Input
-                          placeholder="e.g. COMP-350"
-                          value={partCode}
-                          onChange={(e) => setPartCode(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    {/* Part Photo */}
-                    <div className="space-y-1">
-                      <Label className="text-xs">
-                        Part Photo (for WhatsApp)
-                      </Label>
-                      <input
-                        ref={partPhotoRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) handlePartPhotoSelect(f);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => partPhotoRef.current?.click()}
-                        className="flex items-center gap-2 text-xs border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:bg-gray-50"
-                        data-ocid="case_detail.upload_button"
+                  <div className="space-y-3">
+                    {partEntries.map((entry, idx) => (
+                      <div
+                        key={entry.id}
+                        className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50"
                       >
-                        <Upload className="h-3 w-3 text-gray-400" />
-                        {partPhotoFile
-                          ? partPhotoFile.name
-                          : "Upload part photo (optional)"}
-                      </button>
-                      {partPhotoUrl && (
-                        <div className="relative inline-block">
-                          <img
-                            src={partPhotoUrl}
-                            alt="Part preview"
-                            className="h-20 w-20 object-cover rounded border"
-                          />
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-gray-600">
+                            Part {idx + 1}
+                          </span>
+                          {partEntries.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPartEntries((prev) =>
+                                  prev.filter((e) => e.id !== entry.id),
+                                )
+                              }
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
-                      )}
-                    </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Part Name *</Label>
+                            <Input
+                              placeholder="e.g. Compressor"
+                              value={entry.partName}
+                              onChange={(e) =>
+                                setPartEntries((prev) =>
+                                  prev.map((p) =>
+                                    p.id === entry.id
+                                      ? { ...p, partName: e.target.value }
+                                      : p,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Part Code *</Label>
+                            <Input
+                              placeholder="e.g. COMP-350"
+                              value={entry.partCode}
+                              onChange={(e) =>
+                                setPartEntries((prev) =>
+                                  prev.map((p) =>
+                                    p.id === entry.id
+                                      ? {
+                                          ...p,
+                                          partCode: e.target.value,
+                                          stockStatus: undefined,
+                                        }
+                                      : p,
+                                  ),
+                                )
+                              }
+                              onBlur={(e) => {
+                                const status = getPartStockStatus(
+                                  e.target.value,
+                                );
+                                setPartEntries((prev) =>
+                                  prev.map((p) =>
+                                    p.id === entry.id
+                                      ? { ...p, stockStatus: status.label }
+                                      : p,
+                                  ),
+                                );
+                              }}
+                            />
+                            {entry.partCode &&
+                              (() => {
+                                const st = getPartStockStatus(entry.partCode);
+                                return st.label ? (
+                                  <span
+                                    className={`text-xs px-2 py-0.5 rounded border ${st.color}`}
+                                  >
+                                    {st.label}
+                                  </span>
+                                ) : null;
+                              })()}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">
+                            Part Photo (optional)
+                          </Label>
+                          <label className="flex items-center gap-2 text-xs border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:bg-gray-100 cursor-pointer">
+                            <Upload className="h-3 w-3 text-gray-400" />
+                            {entry.partPhotoFile
+                              ? entry.partPhotoFile.name
+                              : "Upload part photo"}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handlePartPhotoSelect(entry.id, f);
+                              }}
+                            />
+                          </label>
+                          {entry.partPhotoUrl && (
+                            <img
+                              src={entry.partPhotoUrl}
+                              alt="Part"
+                              className="h-16 w-16 object-cover rounded border"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPartEntries((prev) => [
+                          ...prev,
+                          {
+                            id: Math.random().toString(36).slice(2),
+                            partCode: "",
+                            partName: "",
+                            partPhotoUrl: "",
+                            partPhotoFile: null,
+                          },
+                        ])
+                      }
+                      className="flex items-center gap-2 text-xs text-blue-600 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-50 w-full justify-center"
+                      data-ocid="case_detail.button"
+                    >
+                      <Plus className="h-3 w-3" /> Add Another Part
+                    </button>
                     {/* Priority Dropdown */}
                     <div className="space-y-1">
                       <label
@@ -769,15 +1003,12 @@ export default function CaseDetailPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!partName && !caseData.partName) {
+                        const validParts = partEntries.filter(
+                          (e) => e.partCode.trim() && e.partName.trim(),
+                        );
+                        if (validParts.length === 0) {
                           toast.error(
-                            "Part Name is required when Part Required is selected.",
-                          );
-                          return;
-                        }
-                        if (!partCode && !caseData.partCode) {
-                          toast.error(
-                            "Part Code is required when Part Required is selected.",
+                            "At least one Part Name and Part Code are required.",
                           );
                           return;
                         }
@@ -785,9 +1016,10 @@ export default function CaseDetailPage() {
                           caseId: caseData.caseId,
                           caseDbId: caseData.id,
                           customerName: caseData.customerName,
-                          partName: partName || caseData.partName,
-                          partCode: partCode || caseData.partCode,
-                          partPhotoUrl: partPhotoUrl || caseData.partPhotoUrl,
+                          partName: validParts[0].partName,
+                          partCode: validParts[0].partCode,
+                          partPhotoUrl:
+                            validParts[0].partPhotoUrl || caseData.partPhotoUrl,
                           requestedBy: currentUser?.id ?? "",
                           requestedByName: currentUser?.name ?? "",
                           productType:
@@ -799,39 +1031,87 @@ export default function CaseDetailPage() {
                             (caseData as any).company ||
                             "",
                           priority: partPriority,
+                          parts: validParts.map((e) => ({
+                            id: Math.random().toString(36).slice(2),
+                            partCode: e.partCode,
+                            partName: e.partName,
+                            partPhotoUrl: e.partPhotoUrl,
+                            status: "pending" as const,
+                          })),
                         } as any);
                         toast.success("Part requested successfully");
                       }}
                       className="flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-100 w-full justify-center"
+                      data-ocid="case_detail.primary_button"
                     >
                       <span>📦</span> Request Part from Supervisor
                     </button>
                   </div>
                 )}
 
-                {/* Part Ordered — enter PO number (optional) */}
+                {/* Part Ordered — multi-PO entry */}
                 {newStatus === "part_ordered" && (
                   <div className="space-y-2">
                     <p className="text-xs text-gray-500 bg-blue-50 px-3 py-2 rounded-lg">
-                      Enter PO details if available (both optional)
+                      Enter PO details (optional)
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs">PO Number (optional)</Label>
-                        <Input
-                          placeholder="e.g. PO-2024-001"
-                          value={poNumber}
-                          onChange={(e) => setPoNumber(e.target.value)}
-                        />
+                    {poNumbers.map((po, idx) => (
+                      <div key={po.id} className="flex gap-2 items-center">
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs">
+                            PO Number {idx + 1} (optional)
+                          </Label>
+                          <Input
+                            placeholder="e.g. PO-2024-001"
+                            value={po.value}
+                            onChange={(e) =>
+                              setPoNumbers((prev) =>
+                                prev.map((p) =>
+                                  p.id === po.id
+                                    ? { ...p, value: e.target.value }
+                                    : p,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                        {poNumbers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPoNumbers((prev) =>
+                                prev.filter((p) => p.id !== po.id),
+                              )
+                            }
+                            className="mt-5 text-red-400 hover:text-red-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Order Date (optional)</Label>
-                        <Input
-                          type="date"
-                          value={orderDate}
-                          onChange={(e) => setOrderDate(e.target.value)}
-                        />
-                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPoNumbers((prev) => [
+                          ...prev,
+                          {
+                            id: Math.random().toString(36).slice(2),
+                            value: "",
+                          },
+                        ])
+                      }
+                      className="flex items-center gap-2 text-xs text-blue-600 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-50 w-full justify-center"
+                    >
+                      <Plus className="h-3 w-3" /> Add PO Number
+                    </button>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Order Date (optional)</Label>
+                      <Input
+                        type="date"
+                        value={orderDate}
+                        onChange={(e) => setOrderDate(e.target.value)}
+                      />
                     </div>
                   </div>
                 )}

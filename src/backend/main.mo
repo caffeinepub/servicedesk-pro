@@ -316,4 +316,12 @@ actor {
     sdAppDataJson := jsonBlob;
   };
   public query func getSdAppDataJson() : async Text { sdAppDataJson };
+
+  stable var sdPartRequestsJson : Text = "[]";
+
+  public func setSdPartRequestsJson(jsonBlob : Text) : async () {
+    sdPartRequestsJson := jsonBlob;
+  };
+  public query func getSdPartRequestsJson() : async Text { sdPartRequestsJson };
+
 };
