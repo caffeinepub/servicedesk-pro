@@ -1224,14 +1224,30 @@ export const useStore = create<StoreState>()(
           try {
             await backendInitSeedUsers();
             const backendUsers = await backendGetUsers();
+            // Always replace with backend data - never merge with stale localStorage users
+            // This ensures cross-device consistency
             if (backendUsers.length > 0) {
-              get().setUsers(backendUsers);
+              // Preserve current user's session data if they are in the backend list
+              const cu = get().currentUser;
+              const updatedUsers = backendUsers.map((bu) => {
+                if (
+                  cu &&
+                  (bu.id === cu.id ||
+                    bu.email.toLowerCase() === cu.email.toLowerCase())
+                ) {
+                  return { ...bu, isOnline: true };
+                }
+                return bu;
+              });
+              set({ users: updatedUsers });
             }
-            await get().syncPartRequests();
-            await get().syncCases();
-            await get().syncNotices();
-            await get().syncInventory();
-            await get().syncAppData();
+            await Promise.allSettled([
+              get().syncPartRequests(),
+              get().syncCases(),
+              get().syncNotices(),
+              get().syncInventory(),
+              get().syncAppData(),
+            ]);
           } catch (e) {
             console.error("initUsers error:", e);
           } finally {
@@ -1650,10 +1666,21 @@ export const useStore = create<StoreState>()(
               );
             }
           }
-          // Always re-fetch from backend regardless of success/failure
+          // Always re-fetch from backend to ensure cross-device consistency
           try {
             const freshUsers = await backendGetUsers();
-            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+            if (freshUsers.length > 0) {
+              // Don't replace the current user session, just update the users list
+              set((s) => {
+                const merged = freshUsers.map((bu) => {
+                  const local = s.users.find((l) => l.id === bu.id);
+                  return local
+                    ? { ...bu, rejectionReason: local.rejectionReason }
+                    : bu;
+                });
+                return { users: merged };
+              });
+            }
           } catch (_e) {}
           if (!backendSuccess) {
             console.warn(
@@ -1682,10 +1709,23 @@ export const useStore = create<StoreState>()(
           } catch (e) {
             console.error("approveUser backend error:", e);
           }
-          // Always re-fetch so admin sees the updated status immediately
+          // Always re-fetch and replace so all devices see the updated status
           try {
             const freshUsers = await backendGetUsers();
-            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+            if (freshUsers.length > 0) {
+              const cu2 = get().currentUser;
+              const updatedUsers = freshUsers.map((u) => {
+                if (
+                  cu2 &&
+                  (u.id === cu2.id ||
+                    u.email.toLowerCase() === cu2.email.toLowerCase())
+                ) {
+                  return { ...u, isOnline: true };
+                }
+                return u;
+              });
+              set({ users: updatedUsers });
+            }
           } catch (_e) {}
         },
 
@@ -1706,6 +1746,10 @@ export const useStore = create<StoreState>()(
               `Rejected user ${userId}. Reason: ${reason}`,
             );
           backendRejectUser(userId).catch(() => {});
+          // Persist rejection reason to backend appData so other devices can see it
+          get()
+            .saveAppDataToBackend()
+            .catch(() => {});
         },
 
         updateUserRole: (userId, role) => {
@@ -1777,7 +1821,20 @@ export const useStore = create<StoreState>()(
           }
           try {
             const freshUsers = await backendGetUsers();
-            if (freshUsers.length > 0) get().mergeUsers(freshUsers);
+            if (freshUsers.length > 0) {
+              const cu2 = get().currentUser;
+              const updatedUsers = freshUsers.map((u) => {
+                if (
+                  cu2 &&
+                  (u.id === cu2.id ||
+                    u.email.toLowerCase() === cu2.email.toLowerCase())
+                ) {
+                  return { ...u, isOnline: true };
+                }
+                return u;
+              });
+              set({ users: updatedUsers });
+            }
           } catch (_e) {}
           if (!backendSuccess) {
             throw new Error("Backend save failed -- please try again");
@@ -3344,10 +3401,10 @@ export const useStore = create<StoreState>()(
           try {
             // Try JSON blob first (preferred)
             const json = await backendGetPartRequestsJson();
-            if (json && json !== "[]" && json !== "") {
+            if (json && json !== "{}") {
               try {
-                const parsed = JSON.parse(json) as PartRequest[];
-                if (Array.isArray(parsed) && parsed.length > 0) {
+                const parsed = JSON.parse(json);
+                if (Array.isArray(parsed)) {
                   set({ partRequests: parsed });
                   return;
                 }
@@ -3399,10 +3456,14 @@ export const useStore = create<StoreState>()(
         syncCases: async () => {
           try {
             const json = await backendGetCasesJson();
-            if (json && json !== "[]") {
-              const parsed = JSON.parse(json) as Case[];
-              if (parsed.length > 0) {
-                set({ cases: parsed });
+            if (json && json !== "{}") {
+              try {
+                const parsed = JSON.parse(json);
+                if (Array.isArray(parsed)) {
+                  set({ cases: parsed });
+                }
+              } catch {
+                /* ignore parse errors */
               }
             }
           } catch (e) {
@@ -3420,10 +3481,14 @@ export const useStore = create<StoreState>()(
         syncNotices: async () => {
           try {
             const json = await backendGetNoticesJson();
-            if (json && json !== "[]") {
-              const parsed = JSON.parse(json) as AdminNotice[];
-              if (parsed.length > 0) {
-                set({ adminNotices: parsed });
+            if (json && json !== "{}") {
+              try {
+                const parsed = JSON.parse(json);
+                if (Array.isArray(parsed)) {
+                  set({ adminNotices: parsed });
+                }
+              } catch {
+                /* ignore parse errors */
               }
             }
           } catch (e) {
@@ -3441,27 +3506,30 @@ export const useStore = create<StoreState>()(
         syncInventory: async () => {
           try {
             const json = await backendGetInventoryJson();
-            if (!json || json === "{}" || json === "[]") return;
-            const parsed = JSON.parse(json);
-            if (parsed && typeof parsed === "object") {
-              const updates: Partial<ReturnType<typeof get>> = {};
-              if (parsed.parts && parsed.parts.length > 0)
-                updates.partItems = parsed.parts;
-              if (parsed.purchases && parsed.purchases.length > 0)
-                updates.purchaseEntries = parsed.purchases;
-              if (parsed.issuedParts && parsed.issuedParts.length > 0) {
-                // merge into partItems if separate
-              }
-              if (parsed.lifecycleEntries && parsed.lifecycleEntries.length > 0)
-                updates.partLifecycle = parsed.lifecycleEntries;
-              if (parsed.auditLogs && parsed.auditLogs.length > 0)
-                updates.storePilotAuditLogs = parsed.auditLogs;
+            // Only skip if backend has never been written to (truly empty)
+            if (!json || json === "{}") return;
+            try {
+              const parsed = JSON.parse(json);
               if (
-                parsed.storeNotifications &&
-                parsed.storeNotifications.length > 0
-              )
-                updates.storeNotifications = parsed.storeNotifications;
-              if (Object.keys(updates).length > 0) set(updates as any);
+                parsed &&
+                typeof parsed === "object" &&
+                !Array.isArray(parsed)
+              ) {
+                // Always apply backend data - including empty arrays (for deletions to propagate)
+                const updates: Partial<ReturnType<typeof get>> = {};
+                if ("parts" in parsed) updates.partItems = parsed.parts ?? [];
+                if ("purchases" in parsed)
+                  updates.purchaseEntries = parsed.purchases ?? [];
+                if ("lifecycleEntries" in parsed)
+                  updates.partLifecycle = parsed.lifecycleEntries ?? [];
+                if ("auditLogs" in parsed)
+                  updates.storePilotAuditLogs = parsed.auditLogs ?? [];
+                if ("storeNotifications" in parsed)
+                  updates.storeNotifications = parsed.storeNotifications ?? [];
+                if (Object.keys(updates).length > 0) set(updates as any);
+              }
+            } catch {
+              /* ignore parse errors */
             }
           } catch (e) {
             console.error("syncInventory error:", e);
@@ -3491,37 +3559,60 @@ export const useStore = create<StoreState>()(
         syncAppData: async () => {
           try {
             const json = await backendGetAppDataJson();
-            if (!json || json === "{}" || json === "[]") return;
-            const parsed = JSON.parse(json);
-            if (parsed && typeof parsed === "object") {
-              const updates: Partial<ReturnType<typeof get>> = {};
-              if (parsed.warehouses && parsed.warehouses.length > 0)
-                updates.warehouses = parsed.warehouses;
-              if (parsed.racks && parsed.racks.length > 0)
-                updates.racks = parsed.racks;
-              if (parsed.shelves && parsed.shelves.length > 0)
-                updates.shelves = parsed.shelves;
-              if (parsed.bins && parsed.bins.length > 0)
-                updates.bins = parsed.bins;
-              if (parsed.technicians && parsed.technicians.length > 0)
-                updates.technicians = parsed.technicians;
-              if (parsed.vendors && parsed.vendors.length > 0)
-                updates.vendors = parsed.vendors;
-              if (parsed.companies && parsed.companies.length > 0)
-                updates.stockCompanies = parsed.companies;
-              if (parsed.categories && parsed.categories.length > 0)
-                updates.stockCategories = parsed.categories;
-              if (parsed.partNames && parsed.partNames.length > 0)
-                updates.stockPartNames = parsed.partNames;
-              if (parsed.notifications && parsed.notifications.length > 0)
-                updates.notifications = parsed.notifications;
-              if (parsed.reminders && parsed.reminders.length > 0)
-                updates.reminders = parsed.reminders;
-              if (parsed.activityLog && parsed.activityLog.length > 0)
-                updates.activityLog = parsed.activityLog;
-              if (parsed.settings)
-                updates.settings = { ...get().settings, ...parsed.settings };
-              if (Object.keys(updates).length > 0) set(updates as any);
+            // Only skip if backend has never been written to (truly empty)
+            if (!json || json === "{}") return;
+            try {
+              const parsed = JSON.parse(json);
+              if (
+                parsed &&
+                typeof parsed === "object" &&
+                !Array.isArray(parsed)
+              ) {
+                const updates: Partial<ReturnType<typeof get>> = {};
+                // Always apply backend data - including empty arrays (for deletions to propagate)
+                if ("warehouses" in parsed)
+                  updates.warehouses = parsed.warehouses ?? [];
+                if ("racks" in parsed) updates.racks = parsed.racks ?? [];
+                if ("shelves" in parsed) updates.shelves = parsed.shelves ?? [];
+                if ("bins" in parsed) updates.bins = parsed.bins ?? [];
+                if ("technicians" in parsed)
+                  updates.technicians = parsed.technicians ?? [];
+                if ("vendors" in parsed) updates.vendors = parsed.vendors ?? [];
+                if ("companies" in parsed)
+                  updates.stockCompanies = parsed.companies ?? [];
+                if ("categories" in parsed)
+                  updates.stockCategories = parsed.categories ?? [];
+                if ("partNames" in parsed)
+                  updates.stockPartNames = parsed.partNames ?? [];
+                if ("notifications" in parsed)
+                  updates.notifications = parsed.notifications ?? [];
+                if ("reminders" in parsed)
+                  updates.reminders = parsed.reminders ?? [];
+                if ("activityLog" in parsed)
+                  updates.activityLog = parsed.activityLog ?? [];
+                if (parsed.settings)
+                  updates.settings = { ...get().settings, ...parsed.settings };
+                // Restore rejection reasons for users
+                if (
+                  parsed.rejectionReasons &&
+                  typeof parsed.rejectionReasons === "object"
+                ) {
+                  const reasons = parsed.rejectionReasons as Record<
+                    string,
+                    string
+                  >;
+                  set((s) => ({
+                    users: s.users.map((u) =>
+                      reasons[u.id]
+                        ? { ...u, rejectionReason: reasons[u.id] }
+                        : u,
+                    ),
+                  }));
+                }
+                if (Object.keys(updates).length > 0) set(updates as any);
+              }
+            } catch {
+              /* ignore parse errors */
             }
           } catch (e) {
             console.error("syncAppData error:", e);
@@ -3543,7 +3634,15 @@ export const useStore = create<StoreState>()(
               reminders,
               activityLog,
               settings,
+              users,
             } = get();
+            // Build rejection reasons map so other devices can show rejection reason
+            const rejectionReasons: Record<string, string> = {};
+            for (const u of users) {
+              if (u.status === "rejected" && u.rejectionReason) {
+                rejectionReasons[u.id] = u.rejectionReason;
+              }
+            }
             const json = JSON.stringify({
               warehouses,
               racks,
@@ -3558,6 +3657,7 @@ export const useStore = create<StoreState>()(
               reminders,
               activityLog,
               settings,
+              rejectionReasons,
             });
             await backendSetAppDataJson(json);
           } catch (e) {

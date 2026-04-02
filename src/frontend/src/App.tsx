@@ -52,40 +52,53 @@ export default function App() {
   }, []);
 
   // Auto-logout polling: if logged in user is deleted by admin, log them out live.
-  // IMPORTANT: Only log out if backend returns a NON-EMPTY list and the user is missing.
-  // Never log out on empty responses (could be network error / canister unavailable).
+  // Combined with user sync: the main poll syncs users every 5 seconds.
+  // This lightweight check just verifies the current user still exists.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional polling
   useEffect(() => {
     if (!currentUser) return;
     const check = () => {
-      backendGetUsers()
-        .then((users) => {
-          // Guard: if backend returns empty list, it's likely a network/canister error.
-          // Do NOT log out in that case -- only log out when we get a real list back.
-          if (users.length === 0) return;
-          const found = users.find(
-            (u) =>
-              u.id === currentUser.id ||
-              u.email.toLowerCase() === currentUser.email.toLowerCase(),
-          );
-          if (!found) {
-            useStore.getState().logout();
-          }
-        })
-        .catch(() => {
-          // Network error -- do nothing, keep user logged in
-        });
+      const latestUsers = useStore.getState().users;
+      if (latestUsers.length === 0) return; // Guard: never logout on empty list
+      const found = latestUsers.find(
+        (u) =>
+          u.id === currentUser.id ||
+          u.email.toLowerCase() === currentUser.email.toLowerCase(),
+      );
+      if (!found) {
+        useStore.getState().logout();
+      }
     };
-    const interval = setInterval(check, 3000);
+    const interval = setInterval(check, 5000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
 
-  // Live sync polling: sync all data every 8 seconds when logged in
+  // Live sync polling: sync all data every 5 seconds when logged in
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional polling
   useEffect(() => {
     if (!currentUser) return;
     const poll = async () => {
       const store = useStore.getState();
+      // Sync users from backend first so any new registrations/approvals are visible
+      try {
+        const freshUsers = await backendGetUsers();
+        if (freshUsers.length > 0) {
+          const cu = useStore.getState().currentUser;
+          const updatedUsers = freshUsers.map((u) => {
+            if (
+              cu &&
+              (u.id === cu.id ||
+                u.email.toLowerCase() === cu.email.toLowerCase())
+            ) {
+              return { ...u, isOnline: true };
+            }
+            return u;
+          });
+          useStore.setState({ users: updatedUsers });
+        }
+      } catch {
+        /* ignore */
+      }
       await Promise.allSettled([
         store.syncCases(),
         store.syncPartRequests(),
@@ -95,7 +108,7 @@ export default function App() {
       ]);
     };
     poll();
-    const interval = setInterval(poll, 3000);
+    const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
   // Session timeout: after 30 min of inactivity, mark session as expired.
