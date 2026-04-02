@@ -1,78 +1,63 @@
-# Servicedesk-Pro — Version 74 Feature Update
+# Servicedesk-Pro
 
 ## Current State
-Full-stack ICP app with Motoko backend + React/Zustand frontend. Cases, users, part requests, inventory, and notices are backend-persisted. Part requests currently support a single part (partCode + partName + partPhotoUrl) per request. Part ordering only supports a single PO number. The Returned to Store tab in IssuedPartsPage does not retain original issuance details. Notifications are stored in state but not always accurately role-filtered. Dashboard/Reports/AI Engine use hardcoded seed data in many places. Audit logs are partially recorded.
+
+- Full-stack ICP app with Motoko backend + React/Zustand frontend
+- Part requests exist and are saved to backend via JSON blob; polling is 8 seconds in App.tsx
+- PartRequestsPage.tsx shows collapsed cards (Case ID + Part Code + Priority) that expand to show full table details
+- The expand/expand view is not unified for all roles - privileged users see a structured greeting table, backend users see a simpler layout
+- The `issuePartRequest` store action correctly routes the "issued" notification to `req.requestedBy` (the backend user), but the `addPartRequest` action sends notifications to supervisors+admins AND also the requesting user gets a duplicate notification at creation time which is wrong
+- Audit log (`auditLog` array) captures case creation, status changes, but many inventory and part actions only go to `storePilotAuditLogs` (a separate array) or `activityLog` - so the main audit log and storePilotAuditLogs are fragmented
+- Lifecycle (`partLifecycle`) does have entries for purchased/location assigned/issued/returned etc., but LifecyclePage.tsx has hardcoded `EXTRA_LIFECYCLE` fake data that is merged with real data - so it always shows fake entries
+- LifecyclePage.tsx also has a hardcoded `PART_INFO` lookup for fake part IDs and fake part names/status
+- Issue part modal is at the request level only - no per-part individual issue buttons within a multi-part request card
+- The part request card design (collapse/expand) is different for privileged vs backend user views
 
 ## Requested Changes (Diff)
 
 ### Add
-- `PartRequestItem` type: `{id, partCode, partName, partPhotoUrl, status, issuedAt, issuedBy, issuedByName, technicianId}` for per-part tracking within a single request
-- `parts?: PartRequestItem[]` optional field on `PartRequest` — if present, represents multiple parts; single partCode/partName fields remain for backwards compat
-- `poNumbers?: string[]` on `Case` type for multiple PO numbers
-- Multiple part entries UI in CaseDetailPage when status = `part_required` (add/remove rows dynamically)
-- Multiple PO number entries UI in CaseDetailPage when status = `part_ordered`
-- Same multi-part and multi-PO UI in ExistingCasesPage
-- Part availability indicator in CaseDetailPage `part_required` form: backend_user sees "In Stock" / "Not in Stock" badge per part code entered; supervisor/admin sees "In Stock" / "With Technician: [name]" / "Installed" / "Not in Inventory"
-- Per-part status rows in PartRequestsPage expanded view for privileged users
-- "Issue All" button in PartRequestsPage when all parts in a multi-part request are in inventory; otherwise individual "Issue" button per available part
-- Stock availability shown in PartRequestsPage expanded view per part row: supervisor/admin sees full detail (in stock / with technician / installed / not in inventory); backend_user does NOT see this detail (they only see their request status)
-- Block issue if part not in inventory (show warning toast), still allow reject
-- Edit Case ID field in CaseDetailPage (admin only — small edit icon next to the case ID display)
-- Returned to Store tab in IssuedPartsPage: restore and display original issuance details — technician name, company name, issue date, case ID — from the data preserved in `PartInventoryItem`
-- New backend stable var `stable var sdPartRequestsJson : Text = "[]";` with `setSdPartRequestsJson(blob: Text)` and `getSdPartRequestsJson()` query methods for flexible JSON-based part request storage
-- StorePilot audit log entries for every write action (create, update, delete, issue, return, relocate, approve, reject, cancel) with actor name, role, timestamp
+- Per-part individual issue buttons inside expanded request card when request has multiple parts (supervisor/admin see an "Issue" button next to each part row that still has `pending` status)
+- Comprehensive audit log entries for every write action site-wide: purchase entry, part issued from inventory, part relocated, location assigned, part returned to store, part returned to company, new case, case update, part request created, part request issued, part request rejected, part request cancelled, warehouse/rack/shelf/bin add/edit/delete, technician add/edit/delete, vendor add/edit/delete, company/category/partname add/edit/delete, user created/approved/rejected/deleted, notice published/edited/deleted
+- All of the above actions must also add a `storePilotAuditLog` entry (for inventory-related ones) so both arrays are consistent
+- Lifecycle entries for: part request created (new action type "Part Requested"), part request issued (action "Issued via Request"), part relocated (already exists but add actor name+role in details), return to company (already exists)
 
 ### Modify
-- `addPartRequest` store action: support `parts` array; save to new JSON blob backend; create one part request record supporting multi-part
-- `issuePartRequest` store action: accept optional `partItemId` parameter so individual parts within a request can be issued; mark that specific `PartRequestItem` as issued; still create `PartInventoryItem` for each issued part
-- `syncPartRequests`: use new `getSdPartRequestsJson` backend method; fall back to structured `getSdPartRequests` for older data
-- `returnPartToStore` store action: preserve technicianId, caseId, issueDate, issuedBy fields in the part item (do NOT clear them — add new `originalTechnicianId`, `originalCaseId`, `originalIssueDate`, `originalIssuedBy` fields OR just don't zero them out and read them for display in Returned to Store tab)
-- CaseDetailPage `part_required` form: add dynamic multi-part rows, show stock availability per part code
-- CaseDetailPage `part_ordered` form: support multiple PO numbers
-- CaseDetailPage status update: ensure immediate update with no perceived lag (already calls `saveCasesToBackend` async — confirm state update is synchronous)
-- PartRequestsPage expanded view: show per-part rows with status, issue buttons
-- ExistingCasesPage: multi-part support for `part_required` status, multi-PO for `part_ordered`
-- IssuedPartsPage Returned to Store tab: display technician name, company, case ID, issue date from preserved part item fields
-- NotificationsPage + store: ensure `generateAutoNotifications` creates real notifications from real case/part data; role-filter them: supervisor sees inventory/store notifications only (part_request, low_stock, part_issued, part_returned), backend_user sees their own case notifications + part_issued for their own requests, admin sees all
-- Sidebar notification badge counts must reflect role-filtered counts
-- DashboardPage: remove hardcoded numbers; compute from real `cases`, `partItems`, `technicians` arrays
-- ReportsPage: remove hardcoded chart data; build from real store data
-- AIEnginePage: remove hardcoded seed metrics; compute from real inventory
-- AuditLogsPage: display `storePilotAuditLogs` which should be populated on every write action
+- **Live sync speed**: Reduce polling interval from 8s to 3s in App.tsx for snappier updates
+- **Notification routing fix**: In `addPartRequest`, the notification should go to supervisors/admins ONLY - do NOT send a notification back to the requesting user at creation time. The backend user already sees the toast. In `issuePartRequest`, notification goes to `req.requestedBy` (backend user) - this is already correct, keep it. In `rejectPartRequest`, notification goes to `req.requestedBy` (backend user) - already correct, keep it. In `cancelPartRequest`, no notification needed (user cancelled themselves). Remove any notification that goes to the current user when they are the actor.
+- **Part request card redesign** (same layout for ALL roles - admin, supervisor, backend user): 
+  - Collapsed row: Left=CaseID+status badge, Center=part code(s) summary (if multiple parts: "3 parts"), Right=priority badge + chevron icon
+  - Expanded view: single consistent design for all roles. Header greeting ("Hello [Time] [Name] ji") only for privileged users. Then a clean table with rows: Case ID (clickable), Customer, Product Type, Company, Requested By (show for privileged), Date/Time, Priority, Status
+  - Multi-part section: if `req.parts && req.parts.length > 0`, show each part as its own sub-card row with: Part Code, Part Name, Stock Status badge, Part Photo (view button), individual status badge (pending/issued/rejected), and for supervisor/admin on pending parts: individual "Issue" button + "Reject" button per part row
+  - For single-part requests: show Part Code, Part Name, Stock Status, Part Photo in the table
+  - Action buttons at bottom: supervisor sees Issue All (if any parts in stock) + Reject All; admin sees Issue All + Reject + Cancel; backend user sees Cancel (if pending, own request)
+  - Issued/Rejected/Cancelled info banners remain the same
+- **Lifecycle page**: Remove the hardcoded `EXTRA_LIFECYCLE` array and `PART_INFO` lookup entirely. Use only real `partLifecycle` from store. Enhance the part info lookup to pull from real `partItems` and `stockPartNames`/`stockCompanies` instead of the fake `PART_INFO` object.
+- **Audit log completeness**: For every action in store that calls `logActivity()`, also add an `addAuditEntry()` call so the case audit log table is populated. For inventory actions, also add a `storePilotAuditLogs` entry.
 
 ### Remove
-- Hardcoded/seed data from DashboardPage, ReportsPage, AIEnginePage metrics (replace with real computed values)
-- Clearing of technicianId/caseId/issueDate when returning a part to store (preserve originals for display)
+- Hardcoded `EXTRA_LIFECYCLE` constant from `LifecyclePage.tsx`
+- Hardcoded `PART_INFO` constant from `LifecyclePage.tsx`
+- Duplicate notification to requesting backend user at the time they create a part request
 
 ## Implementation Plan
 
-1. **Backend (main.mo)**: Add `stable var sdPartRequestsJson` + two new public functions. No migration needed — additive only.
-
-2. **Types (types/index.ts)**: Add `PartRequestItem` interface, add `parts?: PartRequestItem[]` to `PartRequest`, add `poNumbers?: string[]` to `Case`.
-
-3. **Store (store/index.ts)**:
-   - Update `addPartRequest` to accept `parts` array and store them in the request
-   - Update `issuePartRequest` to accept optional `partId` to issue a specific part within a multi-part request
-   - Add `issueAllPartRequest(requestId, technicianId)` for the "Issue All" case
-   - Update `syncPartRequests` to use new JSON blob backend
-   - Update `returnPartToStore` to NOT clear originalTechnicianId, issueDate, issuedBy, caseId
-   - Ensure all write actions add a `StorePilotAuditLog` entry
-
-4. **CaseDetailPage.tsx**:
-   - When `newStatus === 'part_required'`, render dynamic multi-part list (add row / remove row); each row has partCode + partName + photo upload
-   - Per-part availability badge when partCode is entered (backend_user: "In Stock"/"Not in Stock"; supervisor/admin: full detail)
-   - When `newStatus === 'part_ordered'`, render dynamic PO number list
-   - Admin-only Edit Case ID: small pencil icon next to caseId in the case header; clicking opens an inline edit field
-
-5. **PartRequestsPage.tsx**:
-   - Expanded view: if request has `parts` array, render per-part rows with status badge, stock availability (supervisor/admin only), and individual Issue/Already-Issued buttons
-   - If all parts are available in inventory, show "Issue All" button
-   - If a part is not in inventory, Issue button is disabled with tooltip; reject still enabled
-
-6. **ExistingCasesPage.tsx**: Multi-part UI for `part_required`, multi-PO for `part_ordered`
-
-7. **IssuedPartsPage.tsx**: Returned to Store tab — show technician name (from originalTechnicianId or technicianId), company, case ID, issue date from the preserved part item fields
-
-8. **DashboardPage.tsx / ReportsPage.tsx / AIEnginePage.tsx**: Replace hardcoded numbers with computed values from real store data
-
-9. **Notifications**: Fix `generateAutoNotifications` to produce real notifications; fix role-filtering everywhere (sidebar badge, NotificationsPage)
+1. **App.tsx**: Change polling interval from 8000ms to 3000ms
+2. **store/index.ts**:
+   a. `addPartRequest`: Remove notification that goes to the requesting user (only send to supervisors/admins). Add lifecycle entry for "Part Requested" for each part in the request.
+   b. `issuePartRequest`: Add lifecycle entries for "Issued via Request" for each issued part. Add storePilotAuditLog entry. The notification to req.requestedBy is already correct.
+   c. `rejectPartRequest`: Add storePilotAuditLog entry. Notification to req.requestedBy already correct.
+   d. `cancelPartRequest`: Add storePilotAuditLog entry.
+   e. All inventory actions (addPurchaseEntry, assignPartLocation, relocatePart, issuePartToTechnician, markPartInstalled, returnPartToStore, returnToCompany): ensure both `storePilotAuditLogs` AND `auditLog` entries are added with full details (actor name, role, timestamp, part code, action description)
+   f. All case actions (createCase, updateCase, deleteCase, updateCaseStatus): already have auditEntry calls, just make the details more descriptive
+   g. addTechnician/updateTechnician/deleteTechnician: add auditEntry
+   h. addVendor/updateVendor/deleteVendor: add auditEntry
+   i. addWarehouse/updateWarehouse/deleteWarehouse/addRack/updateRack/deleteRack/addShelf/updateShelf/deleteShelf/addBin/updateBin/deleteBin: add auditEntry
+   j. addStockCompany/updateStockCompany/deleteStockCompany/addStockCategory/updateStockCategory/deleteStockCategory/addStockPartName/updateStockPartName/deleteStockPartName: add auditEntry
+   k. User management (approveUser, rejectUser, deleteUser, editUser): add auditEntry
+   l. Notice actions (addAdminNotice, updateAdminNotice, deleteAdminNotice): add auditEntry
+3. **PartRequestsPage.tsx**: Complete redesign of the card layout:
+   - Unified collapse/expand for all roles
+   - Multi-part sub-rows with individual Issue/Reject buttons for supervisor/admin
+   - "Issue All" only enabled when at least one pending part is in stock
+   - Per-part issue modal (select technician per part or single modal for all)
+4. **LifecyclePage.tsx**: Remove EXTRA_LIFECYCLE and PART_INFO, use only real store data, fix part info lookup to use partItems + stockPartNames/stockCompanies/categories

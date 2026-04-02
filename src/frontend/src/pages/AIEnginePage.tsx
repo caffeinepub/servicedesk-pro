@@ -63,118 +63,165 @@ export default function AIEnginePage() {
   ).length;
 
   const healthScore =
-    totalParts > 0
-      ? Math.round(((inStock + installed) / totalParts) * 100)
-      : 78;
+    totalParts > 0 ? Math.round(((inStock + installed) / totalParts) * 100) : 0;
 
   const handleRefresh = () => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1500);
   };
 
-  // Mock forecast data
-  const forecastData = [
-    { month: "Oct", "Main Motor": 3, Compressor: 2, PCB: 4 },
-    { month: "Nov", "Main Motor": 4, Compressor: 3, PCB: 3 },
-    { month: "Dec", "Main Motor": 6, Compressor: 4, PCB: 5 },
-    { month: "Jan", "Main Motor": 5, Compressor: 2, PCB: 6 },
-    { month: "Feb", "Main Motor": 7, Compressor: 5, PCB: 4 },
-    { month: "Mar", "Main Motor": 8, Compressor: 4, PCB: 7 },
-  ];
+  // Real forecast data - group part issues by month
+  const forecastData = (() => {
+    const issued = partItems.filter((p) => p.issueDate);
+    if (issued.length === 0) return [];
+    // Group by month+partCode
+    const map: Record<string, Record<string, number>> = {};
+    for (const p of issued) {
+      const d = new Date(p.issueDate || "");
+      if (Number.isNaN(d.getTime())) continue;
+      const key = d.toLocaleString("en-US", {
+        month: "short",
+        year: "2-digit",
+      });
+      if (!map[key]) map[key] = {};
+      const code = p.partCode || "Other";
+      map[key][code] = (map[key][code] || 0) + 1;
+    }
+    return Object.entries(map).map(([month, parts]) => ({ month, ...parts }));
+  })();
 
-  const stockVsDemand = [
-    { company: "Midea", stock: inStock > 0 ? inStock : 12, demand: 15 },
-    { company: "Toshiba", stock: 5, demand: 8 },
-    { company: "Samsung", stock: 3, demand: 6 },
-  ];
+  // Real stock vs demand data from inventory grouped by company
+  const stockVsDemand = stockCompanies
+    .map((c) => {
+      const companyParts = partItems.filter((p) => p.companyId === c.id);
+      const stockCount = companyParts.filter(
+        (p) => p.status === "in_stock",
+      ).length;
+      const demandCount = companyParts.filter(
+        (p) => p.status === "issued" || p.status === "installed",
+      ).length;
+      return { company: c.name, stock: stockCount, demand: demandCount };
+    })
+    .filter((d) => d.stock > 0 || d.demand > 0);
 
   const statusDistribution = [
-    { name: "In Warehouse", value: inStock || 12, fill: "#10b981" },
-    { name: "Issued", value: issued || 5, fill: "#f59e0b" },
-    { name: "Installed", value: installed || 8, fill: "#3b82f6" },
-    { name: "Returned", value: returned || 3, fill: "#ef4444" },
+    { name: "In Warehouse", value: inStock, fill: "#10b981" },
+    { name: "Issued", value: issued, fill: "#f59e0b" },
+    { name: "Installed", value: installed, fill: "#3b82f6" },
+    { name: "Returned", value: returned, fill: "#ef4444" },
   ];
 
-  const companyHealth = stockCompanies.slice(0, 4).map((c, i) => ({
-    name: c.name,
-    health: [78, 65, 82, 55][i % 4],
-  }));
-
-  const deadStock = [
-    {
-      code: "TOSBTV-PWR",
-      name: "Toshiba Power Board",
-      qty: 2,
-      lastMove: "45 days ago",
-      risk: "High",
-    },
-    {
-      code: "MID-AC-BELT",
-      name: "AC Belt Drive",
-      qty: 3,
-      lastMove: "32 days ago",
-      risk: "Medium",
-    },
-    {
-      code: "TOS-FAN-01",
-      name: "Fan Motor Small",
-      qty: 1,
-      lastMove: "28 days ago",
-      risk: "Low",
-    },
-  ];
-
-  const techData = technicians.slice(0, 5).map((t, i) => ({
-    name: t.name.split(" ")[0],
-    issued: [8, 12, 6, 9, 5][i % 5],
-    installed: [5, 10, 4, 7, 3][i % 5],
-    avgDays: [3.2, 2.1, 4.5, 2.8, 5.1][i % 5],
-  }));
-  if (techData.length === 0) {
-    techData.push(
-      { name: "Sonu", issued: 12, installed: 10, avgDays: 2.1 },
-      { name: "Raju", issued: 8, installed: 5, avgDays: 3.2 },
-      { name: "Vijay", issued: 6, installed: 4, avgDays: 4.5 },
+  const companyHealth = stockCompanies
+    .slice(0, 6)
+    .map((c) => {
+      const compParts = partItems.filter((p) => p.companyId === c.id);
+      const total = compParts.length;
+      const healthy = compParts.filter(
+        (p) => p.status === "in_stock" || p.status === "installed",
+      ).length;
+      return {
+        name: c.name,
+        health: total > 0 ? Math.round((healthy / total) * 100) : 0,
+      };
+    })
+    .filter(
+      (c) =>
+        c.health > 0 ||
+        partItems.some(
+          (p) =>
+            p.companyId === stockCompanies.find((sc) => sc.name === c.name)?.id,
+        ),
     );
-  }
 
-  const reorderItems = [
-    {
-      name: "Main Motor",
-      current: 2,
-      reorder: 10,
-      lastPurchase: "16 Mar 2026",
-      urgency: "Critical",
-    },
-    {
-      name: "Compressor",
-      current: 3,
-      reorder: 8,
-      lastPurchase: "10 Mar 2026",
-      urgency: "Warning",
-    },
-    {
-      name: "PCB Board",
-      current: 5,
-      reorder: 12,
-      lastPurchase: "05 Mar 2026",
-      urgency: "Warning",
-    },
-    {
-      name: "AC Belt",
-      current: 8,
-      reorder: 5,
-      lastPurchase: "20 Feb 2026",
-      urgency: "OK",
-    },
-    {
-      name: "Fan Motor",
-      current: 1,
-      reorder: 6,
-      lastPurchase: "28 Feb 2026",
-      urgency: "Critical",
-    },
-  ];
+  // Real dead stock: parts in_stock not moved for 30+ days
+  const deadStock = (() => {
+    const now = Date.now();
+    const groups: Record<
+      string,
+      { code: string; name: string; qty: number; lastMoveDays: number }
+    > = {};
+    for (const p of partItems.filter((p2) => p2.status === "in_stock")) {
+      const lastDate = p.issueDate || p.createdAt || "";
+      const days = lastDate
+        ? Math.floor((now - new Date(lastDate).getTime()) / 86400000)
+        : 0;
+      if (days < 14) continue;
+      const key = p.partCode;
+      if (!groups[key])
+        groups[key] = {
+          code: p.partCode,
+          name: p.overridePartName || p.partCode,
+          qty: 0,
+          lastMoveDays: days,
+        };
+      groups[key].qty += 1;
+      if (days > groups[key].lastMoveDays) groups[key].lastMoveDays = days;
+    }
+    return Object.values(groups)
+      .map((d) => ({
+        ...d,
+        lastMove: `${d.lastMoveDays} days ago`,
+        risk:
+          d.lastMoveDays >= 45
+            ? "High"
+            : d.lastMoveDays >= 30
+              ? "Medium"
+              : "Low",
+      }))
+      .sort((a, b) => b.lastMoveDays - a.lastMoveDays);
+  })();
+
+  const techData = technicians
+    .slice(0, 6)
+    .map((t) => {
+      const tParts = partItems.filter((p) => p.technicianId === t.id);
+      const issuedCount = tParts.filter(
+        (p) =>
+          p.status === "issued" ||
+          p.status === "installed" ||
+          p.status === "returned_to_company",
+      ).length;
+      const installedCount = tParts.filter(
+        (p) => p.status === "installed",
+      ).length;
+      return {
+        name: t.name.split(" ")[0],
+        issued: issuedCount,
+        installed: installedCount,
+        avgDays: 0,
+      };
+    })
+    .filter((t) => t.issued > 0);
+
+  // Real reorder data: group in_stock parts by partCode, flag if qty <= 3
+  const reorderItems = (() => {
+    const groups: Record<
+      string,
+      { name: string; current: number; lastPurchase: string }
+    > = {};
+    for (const p of partItems.filter((p2) => p2.status === "in_stock")) {
+      const key = p.partCode;
+      if (!groups[key])
+        groups[key] = {
+          name: p.overridePartName || p.partCode,
+          current: 0,
+          lastPurchase: p.createdAt || "",
+        };
+      groups[key].current += 1;
+    }
+    return Object.entries(groups)
+      .map(([, v]) => ({
+        name: v.name,
+        current: v.current,
+        reorder: 5,
+        lastPurchase: v.lastPurchase
+          ? new Date(v.lastPurchase).toLocaleDateString("en-IN")
+          : "N/A",
+        urgency:
+          v.current <= 2 ? "Critical" : v.current <= 4 ? "Warning" : "OK",
+      }))
+      .sort((a, b) => a.current - b.current);
+  })();
 
   const urgencyColor: Record<string, string> = {
     Critical: "bg-red-100 text-red-700 border border-red-200",
@@ -193,7 +240,8 @@ export default function AIEnginePage() {
     },
     {
       label: "Demand Accuracy",
-      value: "84%",
+      value:
+        totalParts > 0 ? `${Math.round((inStock / totalParts) * 100)}%` : "—",
       icon: Brain,
       color: "from-violet-500 to-purple-600",
       trend: "+5%",
@@ -420,15 +468,15 @@ export default function AIEnginePage() {
                 <CardContent>
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-md flex-shrink-0">
-                      {techData[0]?.name?.[0] ?? "S"}
+                      {techData[0]?.name?.[0] ?? "?"}
                     </div>
                     <div className="flex-1">
                       <p className="font-bold text-slate-800 text-base">
-                        {techData[0]?.name ?? "Sonu"}
+                        {techData[0]?.name ?? "—"}
                       </p>
                       <p className="text-sm text-slate-500">
-                        {techData[0]?.issued ?? 12} parts issued &bull;{" "}
-                        {techData[0]?.installed ?? 10} installed
+                        {techData[0]?.issued ?? 0} parts issued &bull;{" "}
+                        {techData[0]?.installed ?? 0} installed
                       </p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
@@ -436,7 +484,10 @@ export default function AIEnginePage() {
                           High Activity
                         </span>
                         <span className="text-xs text-slate-400">
-                          Avg. resolution: {techData[0]?.avgDays ?? 2.1} days
+                          Avg. resolution:{" "}
+                          {techData[0]?.avgDays > 0
+                            ? `${techData[0].avgDays} days`
+                            : "N/A"}
                         </span>
                       </div>
                     </div>
@@ -549,28 +600,27 @@ export default function AIEnginePage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {(companyHealth.length > 0
-                    ? companyHealth
-                    : [
-                        { name: "Midea", health: 78 },
-                        { name: "Toshiba", health: 65 },
-                        { name: "Samsung", health: 82 },
-                      ]
-                  ).map((c) => (
-                    <div key={c.name}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium text-slate-700">
-                          {c.name}
-                        </span>
-                        <span
-                          className={`font-bold ${c.health >= 70 ? "text-emerald-600" : c.health >= 50 ? "text-amber-600" : "text-red-600"}`}
-                        >
-                          {c.health}%
-                        </span>
+                  {companyHealth.length === 0 ? (
+                    <p className="text-sm text-slate-400 text-center py-6">
+                      No company stock data yet.
+                    </p>
+                  ) : (
+                    companyHealth.map((c) => (
+                      <div key={c.name}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="font-medium text-slate-700">
+                            {c.name}
+                          </span>
+                          <span
+                            className={`font-bold ${c.health >= 70 ? "text-emerald-600" : c.health >= 50 ? "text-amber-600" : "text-red-600"}`}
+                          >
+                            {c.health > 0 ? `${c.health}%` : "—"}
+                          </span>
+                        </div>
+                        <Progress value={c.health} className="h-2" />
                       </div>
-                      <Progress value={c.health} className="h-2" />
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </CardContent>
               </Card>
 
@@ -934,81 +984,51 @@ export default function AIEnginePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      {
-                        code: "TOSBTV-PWR-002",
-                        name: "Toshiba Power Board",
-                        company: "Toshiba",
-                        days: 45,
-                        units: 2,
-                        value: 8600,
-                        risk: "High",
-                      },
-                      {
-                        code: "MID-AC-BELT",
-                        name: "AC Belt Drive",
-                        company: "Midea",
-                        days: 32,
-                        units: 3,
-                        value: 4200,
-                        risk: "Medium",
-                      },
-                      {
-                        code: "TOS-FAN-01",
-                        name: "Fan Motor Small",
-                        company: "Toshiba",
-                        days: 28,
-                        units: 1,
-                        value: 1800,
-                        risk: "Low",
-                      },
-                      {
-                        code: "GDJ-PCB-X1",
-                        name: "PCB Control Board",
-                        company: "Godrej",
-                        days: 60,
-                        units: 2,
-                        value: 5600,
-                        risk: "High",
-                      },
-                    ].map((item) => (
-                      <tr
-                        key={item.code}
-                        className={`border-b border-slate-100 hover:bg-slate-50 ${item.risk === "High" ? "bg-red-50/20" : item.risk === "Medium" ? "bg-amber-50/20" : ""}`}
-                      >
-                        <td className="px-4 py-3 font-mono text-xs text-blue-600 font-semibold">
-                          {item.code}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-800">
-                          {item.name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {item.company}
-                        </td>
-                        <td className="px-4 py-3 font-bold text-red-600">
-                          {item.days}d
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {item.units}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-slate-700">
-                          ₹{item.value.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                              item.risk === "High"
-                                ? "bg-red-100 text-red-700 border border-red-200"
-                                : item.risk === "Medium"
-                                  ? "bg-amber-100 text-amber-700 border border-amber-200"
-                                  : "bg-blue-100 text-blue-700 border border-blue-200"
-                            }`}
-                          >
-                            {item.risk}
-                          </span>
+                    {deadStock.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-4 py-8 text-center text-slate-400 text-sm"
+                        >
+                          No idle parts found. All in-stock parts have moved
+                          recently.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      deadStock.map((item) => (
+                        <tr
+                          key={item.code}
+                          className={`border-b border-slate-100 hover:bg-slate-50 ${item.risk === "High" ? "bg-red-50/20" : item.risk === "Medium" ? "bg-amber-50/20" : ""}`}
+                        >
+                          <td className="px-4 py-3 font-mono text-xs text-blue-600 font-semibold">
+                            {item.code}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-800">
+                            {item.name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">—</td>
+                          <td className="px-4 py-3 font-bold text-red-600">
+                            {item.lastMoveDays}d
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-700">
+                            {item.qty} units
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                                item.risk === "High"
+                                  ? "bg-red-100 text-red-700 border border-red-200"
+                                  : item.risk === "Medium"
+                                    ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                    : "bg-blue-100 text-blue-700 border border-blue-200"
+                              }`}
+                            >
+                              {item.risk}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </CardContent>

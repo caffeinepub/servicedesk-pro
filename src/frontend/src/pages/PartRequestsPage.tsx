@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Eye,
   Inbox,
   Package,
   RefreshCw,
@@ -33,7 +34,7 @@ import {
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { useStore } from "../store";
-import type { PartRequest } from "../types";
+import type { PartRequest, PartRequestItem } from "../types";
 
 type FilterTab = "all" | "pending" | "rejected" | "cancelled";
 
@@ -48,7 +49,21 @@ const PRIORITY_LABEL: Record<string, string> = {
   low: "Low",
   normal: "Normal",
   high: "High",
-  urgent: "Urgent",
+  urgent: "🔥 Urgent",
+};
+
+const STATUS_BORDER: Record<string, string> = {
+  pending: "border-l-amber-400",
+  issued: "border-l-emerald-400",
+  rejected: "border-l-red-400",
+  cancelled: "border-l-slate-300",
+};
+
+const STOCK_STATUS_COLORS = {
+  inStock: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  notInStock: "bg-red-50 text-red-700 border-red-200",
+  withTechnician: "bg-amber-50 text-amber-700 border-amber-200",
+  installed: "bg-blue-50 text-blue-700 border-blue-200",
 };
 
 export default function PartRequestsPage() {
@@ -68,9 +83,10 @@ export default function PartRequestsPage() {
   // Stock availability helper
   const getStockStatus = (
     partCode: string,
-  ): { label: string; color: string; inStock: boolean } => {
+  ): { label: string; colorClass: string; inStock: boolean } => {
     if (!partCode?.trim())
-      return { label: "—", color: "text-gray-400", inStock: false };
+      return { label: "—", colorClass: "text-gray-400", inStock: false };
+
     const inStockItems = partItems.filter(
       (p) =>
         p.partCode.toLowerCase() === partCode.toLowerCase() &&
@@ -83,10 +99,11 @@ export default function PartRequestsPage() {
           : `In Stock (${inStockItems.length} unit${inStockItems.length !== 1 ? "s" : ""})`;
       return {
         label: detail,
-        color: "text-green-600 bg-green-50 border-green-200",
+        colorClass: STOCK_STATUS_COLORS.inStock,
         inStock: true,
       };
     }
+
     // For supervisor/admin: show more detail
     if (currentUser?.role !== "backend_user") {
       const withTech = partItems.find(
@@ -99,8 +116,8 @@ export default function PartRequestsPage() {
           technicians.find((t) => t.id === withTech.technicianId)?.name ??
           "technician";
         return {
-          label: `With Technician: ${techName}`,
-          color: "text-amber-600 bg-amber-50 border-amber-200",
+          label: `With ${techName}`,
+          colorClass: STOCK_STATUS_COLORS.withTechnician,
           inStock: false,
         };
       }
@@ -112,13 +129,13 @@ export default function PartRequestsPage() {
       if (installed)
         return {
           label: "Installed",
-          color: "text-blue-600 bg-blue-50 border-blue-200",
+          colorClass: STOCK_STATUS_COLORS.installed,
           inStock: false,
         };
     }
     return {
       label: "✗ Not in Stock",
-      color: "text-red-600 bg-red-50 border-red-200",
+      colorClass: STOCK_STATUS_COLORS.notInStock,
       inStock: false,
     };
   };
@@ -130,6 +147,11 @@ export default function PartRequestsPage() {
 
   const [activeTab, setActiveTab] = useState<FilterTab>("pending");
   const [issueModal, setIssueModal] = useState<PartRequest | null>(null);
+  // For individual part issue
+  const [issuePartModal, setIssuePartModal] = useState<{
+    req: PartRequest;
+    part: PartRequestItem;
+  } | null>(null);
   const [rejectModal, setRejectModal] = useState<PartRequest | null>(null);
   const [selectedTech, setSelectedTech] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -212,14 +234,63 @@ export default function PartRequestsPage() {
       (isPrivileged || r.requestedBy === currentUser?.id),
   ).length;
 
-  const handleIssue = () => {
+  const handleIssueAll = () => {
     if (!issueModal || !selectedTech) {
       toast.error("Please select a technician.");
       return;
     }
+    // Stock check before issuing
+    if (issueModal.parts && issueModal.parts.length > 0) {
+      const notInStock = issueModal.parts.filter((p) => {
+        if (p.status === "issued" || p.status === "rejected") return false;
+        const stockItems = partItems.filter(
+          (inv) =>
+            inv.partCode.toLowerCase() === p.partCode.toLowerCase() &&
+            inv.status === "in_stock",
+        );
+        return stockItems.length === 0;
+      });
+      if (notInStock.length > 0) {
+        toast.error(
+          `Cannot issue: ${notInStock.map((p) => p.partCode).join(", ")} not in stock`,
+        );
+        return;
+      }
+    } else if (issueModal.partCode) {
+      const inStockItems = partItems.filter(
+        (p) =>
+          p.partCode.toLowerCase() === issueModal.partCode!.toLowerCase() &&
+          p.status === "in_stock",
+      );
+      if (inStockItems.length === 0) {
+        toast.error(`Cannot issue: ${issueModal.partCode} is not in stock`);
+        return;
+      }
+    }
     issuePartRequest(issueModal.id, selectedTech);
     toast.success("Part issued successfully");
     setIssueModal(null);
+    setSelectedTech("");
+  };
+
+  const handleIssueSinglePart = () => {
+    if (!issuePartModal || !selectedTech) {
+      toast.error("Please select a technician.");
+      return;
+    }
+    const { req, part } = issuePartModal;
+    const stockItems = partItems.filter(
+      (inv) =>
+        inv.partCode.toLowerCase() === part.partCode.toLowerCase() &&
+        inv.status === "in_stock",
+    );
+    if (stockItems.length === 0) {
+      toast.error(`Cannot issue: ${part.partCode} is not in stock`);
+      return;
+    }
+    issuePartRequest(req.id, selectedTech, part.id);
+    toast.success(`Part ${part.partCode} issued successfully`);
+    setIssuePartModal(null);
     setSelectedTech("");
   };
 
@@ -238,7 +309,9 @@ export default function PartRequestsPage() {
     const p = priority || "normal";
     return (
       <Badge
-        className={`text-[10px] px-1.5 py-0.5 border ${PRIORITY_COLORS[p] ?? PRIORITY_COLORS.normal}`}
+        className={`text-[10px] px-1.5 py-0.5 border font-semibold ${
+          PRIORITY_COLORS[p] ?? PRIORITY_COLORS.normal
+        }`}
       >
         {PRIORITY_LABEL[p] ?? p}
       </Badge>
@@ -249,27 +322,50 @@ export default function PartRequestsPage() {
     switch (status) {
       case "pending":
         return (
-          <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-            <Clock className="h-3 w-3 mr-1" /> Pending
+          <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px] px-1.5 py-0.5">
+            <Clock className="h-2.5 w-2.5 mr-1" /> Pending
           </Badge>
         );
       case "issued":
         return (
-          <Badge className="bg-green-100 text-green-700 border-green-200">
-            <CheckCircle className="h-3 w-3 mr-1" /> Issued
+          <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] px-1.5 py-0.5">
+            <CheckCircle className="h-2.5 w-2.5 mr-1" /> Issued
           </Badge>
         );
       case "rejected":
         return (
-          <Badge className="bg-red-100 text-red-700 border-red-200">
-            <XCircle className="h-3 w-3 mr-1" /> Rejected
+          <Badge className="bg-red-100 text-red-700 border border-red-200 text-[10px] px-1.5 py-0.5">
+            <XCircle className="h-2.5 w-2.5 mr-1" /> Rejected
           </Badge>
         );
       case "cancelled":
         return (
-          <Badge className="bg-gray-100 text-gray-600 border-gray-200">
-            <Ban className="h-3 w-3 mr-1" /> Cancelled
+          <Badge className="bg-gray-100 text-gray-500 border border-gray-200 text-[10px] px-1.5 py-0.5">
+            <Ban className="h-2.5 w-2.5 mr-1" /> Cancelled
           </Badge>
+        );
+    }
+  };
+
+  const partItemStatusBadge = (status: PartRequestItem["status"]) => {
+    switch (status) {
+      case "pending":
+        return (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
+            Pending
+          </span>
+        );
+      case "issued":
+        return (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">
+            ✓ Issued
+          </span>
+        );
+      case "rejected":
+        return (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-200">
+            Rejected
+          </span>
         );
     }
   };
@@ -325,7 +421,7 @@ export default function PartRequestsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[var(--bg-surface)] p-1 rounded-lg border border-[var(--border)] w-fit">
+      <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-fit">
         {tabs.map((t) => (
           <button
             type="button"
@@ -333,8 +429,8 @@ export default function PartRequestsPage() {
             onClick={() => setActiveTab(t.key)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === t.key
-                ? "bg-blue-600 text-white"
-                : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-100"
             }`}
           >
             <t.icon className="h-3.5 w-3.5" />
@@ -379,7 +475,7 @@ export default function PartRequestsPage() {
       {/* Requests list */}
       {filtered.length === 0 ? (
         <div
-          className="flex flex-col items-center justify-center py-16 text-[var(--text-muted)]"
+          className="flex flex-col items-center justify-center py-16 text-slate-400"
           data-ocid="part_requests.empty_state"
         >
           <Package className="h-12 w-12 mb-3 opacity-30" />
@@ -390,299 +486,332 @@ export default function PartRequestsPage() {
       ) : (
         <div
           className="overflow-y-auto"
-          style={{ maxHeight: "calc(100vh - 320px)" }}
+          style={{ maxHeight: "calc(100vh - 300px)" }}
         >
-          <div className="grid gap-3">
+          <div className="grid gap-2">
             {filtered.map((req, idx) => {
               const tech = technicians.find((t) => t.id === req.technicianId);
-              const expanded = expandedIds.has(req.id);
+              const isExpanded = expandedIds.has(req.id);
               const priority = req.priority || "normal";
+              const borderColor =
+                STATUS_BORDER[req.status] ?? "border-l-slate-300";
+              const hasMultipleParts = req.parts && req.parts.length > 0;
+              const pendingParts = hasMultipleParts
+                ? req.parts!.filter((p) => p.status === "pending")
+                : [];
+              const allPartsInStock = hasMultipleParts
+                ? pendingParts.every((p) => getStockStatus(p.partCode).inStock)
+                : getStockStatus(req.partCode).inStock;
+
               return (
                 <Card
                   key={req.id}
-                  className="border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden"
+                  className={`border border-slate-200 border-l-4 ${borderColor} overflow-hidden shadow-sm hover:shadow-md transition-shadow`}
                   data-ocid={`part_requests.item.${idx + 1}`}
                 >
-                  {/* Collapsed header — always visible */}
+                  {/* ── Collapsed Row (always visible) ── */}
                   <button
                     type="button"
                     className="w-full text-left"
                     onClick={() => toggleExpand(req.id)}
                   >
-                    <div className="flex items-center justify-between px-4 py-3 hover:bg-[var(--bg-hover)] transition-colors">
-                      {/* Left: Case ID + status */}
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-blue-600 text-base font-mono">
+                    <div className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors gap-3">
+                      {/* Left: Case ID + status badge */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-bold text-blue-600 text-sm font-mono whitespace-nowrap">
                           {req.caseId}
                         </span>
                         {statusBadge(req.status)}
                       </div>
-                      {/* Center: Part Code */}
-                      <span className="text-sm font-medium text-[var(--text-secondary)] font-mono">
-                        {req.partCode || "—"}
-                      </span>
-                      {/* Right: Priority + expand icon */}
-                      <div className="flex items-center gap-2">
+
+                      {/* Center: Part code summary */}
+                      <div className="flex-1 flex justify-center">
+                        <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded truncate max-w-[200px]">
+                          {hasMultipleParts
+                            ? `${req.parts!.length} Parts`
+                            : req.partCode || "—"}
+                        </span>
+                      </div>
+
+                      {/* Right: Priority + chevron */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         {priorityBadge(priority)}
-                        {expanded ? (
-                          <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-slate-400" />
                         ) : (
-                          <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
                         )}
                       </div>
                     </div>
                   </button>
 
-                  {/* Expanded content */}
-                  {expanded && (
-                    <CardContent className="px-4 pb-4 pt-0 border-t border-[var(--border)]">
+                  {/* ── Expanded Content ── */}
+                  {isExpanded && (
+                    <CardContent className="px-4 pb-4 pt-0 border-t border-slate-100">
                       <div className="mt-3 space-y-3">
-                        {/* Privileged: greeting + table */}
+                        {/* Greeting banner — privileged only */}
                         {isPrivileged && (
-                          <div className="space-y-2">
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-3 py-2">
-                              <p className="text-xs font-semibold text-blue-800">
-                                Hello {getGreeting()},{" "}
-                                <span className="text-indigo-700">
-                                  {currentUser?.name}
-                                </span>{" "}
-                                ji,
-                              </p>
-                              <p className="text-[11px] text-blue-600 mt-0.5">
-                                A new part request has been submitted for your
-                                attention.
-                              </p>
-                            </div>
-                            <div className="overflow-hidden rounded-lg border border-gray-200">
-                              <table className="w-full text-xs">
-                                <tbody className="divide-y divide-gray-100">
-                                  <tr className="bg-gray-50">
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500 w-1/3">
-                                      Requested By
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-800 font-medium flex items-center gap-1">
-                                      <User className="h-3 w-3 text-indigo-500" />
-                                      {req.requestedByName}
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Case ID
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-800 font-mono">
-                                      <button
-                                        type="button"
-                                        className="text-blue-600 hover:underline font-mono"
-                                        onClick={() =>
-                                          navigate("case-detail", req.caseDbId)
-                                        }
-                                      >
-                                        {req.caseId}
-                                      </button>
-                                    </td>
-                                  </tr>
-                                  <tr className="bg-gray-50">
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Customer
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-800">
-                                      {req.customerName}
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Product Type
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-800">
-                                      {req.productType || "—"}
-                                    </td>
-                                  </tr>
-                                  <tr className="bg-gray-50">
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Company
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-800">
-                                      {req.companyName || "—"}
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Part Name
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-800 font-medium">
-                                      {req.partName || "—"}
-                                    </td>
-                                  </tr>
-                                  <tr className="bg-gray-50">
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Part Code
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-800 font-mono">
-                                      {req.partCode || "—"}
-                                    </td>
-                                  </tr>
-                                  {/* Stock availability row - always show for privileged, also for backend_user */}
-                                  {req.partCode && (
-                                    <tr>
-                                      <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                        Stock Status
-                                      </td>
-                                      <td className="px-3 py-1.5">
-                                        {req.parts && req.parts.length > 0 ? (
-                                          <div className="space-y-1">
-                                            {req.parts.map((part) => {
-                                              const st = getStockStatus(
-                                                part.partCode,
-                                              );
-                                              return (
-                                                <div
-                                                  key={part.id}
-                                                  className="flex items-center gap-2 text-xs"
-                                                >
-                                                  <span className="font-mono text-gray-600">
-                                                    {part.partCode}
-                                                  </span>
-                                                  <span
-                                                    className={`px-1.5 py-0.5 rounded border text-xs ${st.color}`}
-                                                  >
-                                                    {st.label}
-                                                  </span>
-                                                  {part.status === "issued" && (
-                                                    <span className="text-green-600 text-xs">
-                                                      ✓ Issued
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        ) : (
-                                          (() => {
-                                            const st = getStockStatus(
-                                              req.partCode,
-                                            );
-                                            return (
-                                              <span
-                                                className={`text-xs px-2 py-0.5 rounded border ${st.color}`}
-                                              >
-                                                {st.label}
-                                              </span>
-                                            );
-                                          })()
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-4 py-3">
+                            <p className="text-sm font-semibold text-blue-800">
+                              Hello {getGreeting()},{" "}
+                              <span className="text-indigo-700">
+                                {currentUser?.name}
+                              </span>{" "}
+                              ji,
+                            </p>
+                            <p className="text-xs text-blue-600 mt-0.5">
+                              A new part request has been submitted for your
+                              action.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* ── Details table ── ALL roles see this ── */}
+                        <div className="overflow-hidden rounded-lg border border-slate-200">
+                          <table className="w-full text-xs">
+                            <tbody className="divide-y divide-slate-100">
+                              <tr className="bg-slate-50">
+                                <td className="px-3 py-2 font-semibold text-slate-500 w-[38%]">
+                                  Requested By
+                                </td>
+                                <td className="px-3 py-2 text-slate-800 font-medium">
+                                  <span className="flex items-center gap-1">
+                                    <User className="h-3 w-3 text-indigo-400" />
+                                    {req.requestedByName}
+                                  </span>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-2 font-semibold text-slate-500">
+                                  Case ID
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    type="button"
+                                    className="text-blue-600 hover:underline font-mono text-xs font-semibold"
+                                    onClick={() =>
+                                      navigate("case-detail", req.caseDbId)
+                                    }
+                                  >
+                                    {req.caseId}
+                                  </button>
+                                </td>
+                              </tr>
+                              <tr className="bg-slate-50">
+                                <td className="px-3 py-2 font-semibold text-slate-500">
+                                  Customer
+                                </td>
+                                <td className="px-3 py-2 text-slate-800">
+                                  {req.customerName || "—"}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-2 font-semibold text-slate-500">
+                                  Product Type
+                                </td>
+                                <td className="px-3 py-2 text-slate-800">
+                                  {req.productType || "—"}
+                                </td>
+                              </tr>
+                              <tr className="bg-slate-50">
+                                <td className="px-3 py-2 font-semibold text-slate-500">
+                                  Company
+                                </td>
+                                <td className="px-3 py-2 text-slate-800">
+                                  {req.companyName || "—"}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-2 font-semibold text-slate-500">
+                                  Requested At
+                                </td>
+                                <td className="px-3 py-2 text-slate-600">
+                                  {req.requestedAt
+                                    ? new Date(req.requestedAt).toLocaleString(
+                                        "en-IN",
+                                        {
+                                          dateStyle: "medium",
+                                          timeStyle: "short",
+                                        },
+                                      )
+                                    : "—"}
+                                </td>
+                              </tr>
+                              <tr className="bg-slate-50">
+                                <td className="px-3 py-2 font-semibold text-slate-500">
+                                  Priority
+                                </td>
+                                <td className="px-3 py-2">
+                                  {priorityBadge(req.priority)}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* ── Parts Section ── */}
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                            {hasMultipleParts
+                              ? "Parts Requested"
+                              : "Part Details"}
+                          </p>
+                          {hasMultipleParts ? (
+                            // Multi-part rows
+                            <div className="space-y-2">
+                              {req.parts!.map((part) => {
+                                const stockSt = getStockStatus(part.partCode);
+                                return (
+                                  <div
+                                    key={part.id}
+                                    className="bg-slate-50 border border-slate-200 rounded-lg p-3"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="font-mono text-xs font-bold text-slate-700">
+                                            {part.partCode}
+                                          </span>
+                                          <span className="text-xs text-slate-600">
+                                            {part.partName}
+                                          </span>
+                                          <span
+                                            className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                              stockSt.colorClass
+                                            }`}
+                                          >
+                                            {stockSt.label}
+                                          </span>
+                                          {partItemStatusBadge(part.status)}
+                                        </div>
+                                        {part.issuedByName &&
+                                          part.status === "issued" && (
+                                            <p className="text-[10px] text-emerald-600 mt-1">
+                                              Issued by {part.issuedByName}
+                                              {part.technicianId && (
+                                                <>
+                                                  {" "}
+                                                  to{" "}
+                                                  {technicians.find(
+                                                    (t) =>
+                                                      t.id ===
+                                                      part.technicianId,
+                                                  )?.name ?? part.technicianId}
+                                                </>
+                                              )}
+                                            </p>
+                                          )}
+                                      </div>
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        {part.partPhotoUrl && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setImageModal(part.partPhotoUrl!)
+                                            }
+                                            className="p-1 rounded text-blue-500 hover:bg-blue-50 border border-blue-100"
+                                            title="View Photo"
+                                          >
+                                            <Eye className="h-3 w-3" />
+                                          </button>
                                         )}
-                                      </td>
-                                    </tr>
-                                  )}
-                                  <tr className="bg-gray-50">
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Priority
-                                    </td>
-                                    <td className="px-3 py-1.5">
-                                      {priorityBadge(req.priority)}
-                                    </td>
-                                  </tr>
-                                  {req.partPhotoUrl && (
-                                    <tr className="bg-gray-50">
-                                      <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                        Part Photo
-                                      </td>
-                                      <td className="px-3 py-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setImageModal(req.partPhotoUrl!)
-                                          }
-                                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
-                                        >
-                                          <Package className="h-3 w-3" /> View
-                                          Photo
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  )}
-                                  <tr className="bg-gray-50">
-                                    <td className="px-3 py-1.5 font-semibold text-gray-500">
-                                      Requested At
-                                    </td>
-                                    <td className="px-3 py-1.5 text-gray-600">
-                                      {req.requestedAt
-                                        ? new Date(
-                                            req.requestedAt,
-                                          ).toLocaleString("en-IN", {
-                                            dateStyle: "medium",
-                                            timeStyle: "short",
-                                          })
-                                        : "—"}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
+                                        {/* Individual issue button — supervisor/admin for pending part */}
+                                        {isPrivileged &&
+                                          part.status === "pending" && (
+                                            <button
+                                              type="button"
+                                              disabled={!stockSt.inStock}
+                                              onClick={() => {
+                                                setIssuePartModal({
+                                                  req,
+                                                  part,
+                                                });
+                                                setSelectedTech("");
+                                              }}
+                                              className={`text-[10px] px-2 py-1 rounded border font-semibold transition-colors ${
+                                                stockSt.inStock
+                                                  ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+                                                  : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                                              }`}
+                                              title={
+                                                stockSt.inStock
+                                                  ? "Issue this part"
+                                                  : "Not in stock"
+                                              }
+                                            >
+                                              Issue
+                                            </button>
+                                          )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          </div>
-                        )}
-
-                        {/* Backend user: own request details */}
-                        {!isPrivileged && (
-                          <div className="space-y-1 text-sm">
-                            <div className="flex flex-wrap gap-3">
-                              <span className="text-[var(--text-muted)]">
-                                Part:{" "}
-                                <strong className="text-[var(--text-primary)]">
-                                  {req.partName || "—"}
-                                </strong>
-                              </span>
-                              {req.partCode && (
-                                <span className="text-[var(--text-muted)]">
-                                  Code:{" "}
-                                  <strong className="font-mono text-[var(--text-primary)]">
+                          ) : (
+                            // Single part
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {req.partCode && (
+                                  <span className="font-mono text-xs font-bold text-slate-700">
                                     {req.partCode}
-                                  </strong>
-                                </span>
-                              )}
-                              <span className="text-[var(--text-muted)]">
-                                Requested:{" "}
-                                {new Date(req.requestedAt).toLocaleString(
-                                  "en-IN",
-                                  { dateStyle: "medium", timeStyle: "short" },
+                                  </span>
                                 )}
-                              </span>
+                                {req.partName && (
+                                  <span className="text-xs text-slate-600">
+                                    {req.partName}
+                                  </span>
+                                )}
+                                {req.partCode &&
+                                  (() => {
+                                    const st = getStockStatus(req.partCode);
+                                    return (
+                                      <span
+                                        className={`text-[10px] px-1.5 py-0.5 rounded border ${st.colorClass}`}
+                                      >
+                                        {st.label}
+                                      </span>
+                                    );
+                                  })()}
+                                {req.partPhotoUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setImageModal(req.partPhotoUrl!)
+                                    }
+                                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs border border-blue-100 px-2 py-0.5 rounded bg-blue-50"
+                                  >
+                                    <Eye className="h-3 w-3" /> Photo
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            {req.partPhotoUrl && (
-                              <button
-                                type="button"
-                                onClick={() => setImageModal(req.partPhotoUrl!)}
-                              >
-                                <img
-                                  src={req.partPhotoUrl}
-                                  alt="Part"
-                                  className="h-16 w-16 object-cover rounded border hover:opacity-80"
-                                />
-                              </button>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
 
-                        {/* Status info for all */}
+                        {/* ── Status banners ── */}
                         {req.status === "issued" && (
-                          <div className="text-xs bg-green-50 text-green-700 px-3 py-2 rounded-md flex items-center gap-1.5">
-                            <CheckCircle className="h-3.5 w-3.5" />
-                            Issued to{" "}
-                            <strong>{tech?.name ?? req.technicianId}</strong> by{" "}
-                            <strong>{req.issuedByName}</strong>
-                            {req.issuedAt && (
-                              <>
-                                {" "}
-                                &bull;{" "}
-                                {new Date(req.issuedAt).toLocaleDateString(
-                                  "en-IN",
-                                )}
-                              </>
-                            )}
+                          <div className="text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                            <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span>
+                              Issued to{" "}
+                              <strong>{tech?.name ?? req.technicianId}</strong>{" "}
+                              by <strong>{req.issuedByName}</strong>
+                              {req.issuedAt && (
+                                <>
+                                  {" "}
+                                  &bull;{" "}
+                                  {new Date(req.issuedAt).toLocaleDateString(
+                                    "en-IN",
+                                  )}
+                                </>
+                              )}
+                            </span>
                           </div>
                         )}
                         {req.status === "rejected" && (
-                          <div className="text-xs bg-red-50 text-red-700 px-3 py-2 rounded-md">
-                            <span className="font-medium">Rejected</span>
+                          <div className="text-xs bg-red-50 text-red-700 px-3 py-2 rounded-lg border border-red-200">
+                            <span className="font-semibold">Rejected</span>
                             {req.rejectedByName && (
                               <>
                                 {" "}
@@ -693,8 +822,8 @@ export default function PartRequestsPage() {
                           </div>
                         )}
                         {req.status === "cancelled" && (
-                          <div className="text-xs bg-gray-50 text-gray-600 px-3 py-2 rounded-md">
-                            <span className="font-medium">Cancelled</span>
+                          <div className="text-xs bg-gray-50 text-gray-600 px-3 py-2 rounded-lg border border-gray-200">
+                            <span className="font-semibold">Cancelled</span>
                             {(req as any).cancelledByName && (
                               <>
                                 {" "}
@@ -714,8 +843,8 @@ export default function PartRequestsPage() {
                           </div>
                         )}
 
-                        {/* Action buttons */}
-                        <div className="flex gap-2 flex-wrap">
+                        {/* ── Action buttons ── */}
+                        <div className="flex gap-2 flex-wrap pt-1">
                           {/* Backend user: cancel own pending */}
                           {!isPrivileged &&
                             req.status === "pending" &&
@@ -723,7 +852,7 @@ export default function PartRequestsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-red-600 border-red-200 hover:bg-red-50"
+                                className="text-red-600 border-red-200 hover:bg-red-50 h-8 px-3 text-xs"
                                 onClick={() => {
                                   cancelPartRequest(req.id);
                                   toast.success("Part request cancelled");
@@ -734,20 +863,30 @@ export default function PartRequestsPage() {
                               </Button>
                             )}
 
-                          {/* Supervisor actions: issue + reject */}
+                          {/* Supervisor pending: Issue All + Reject */}
                           {currentUser?.role === "supervisor" &&
                             req.status === "pending" && (
                               <>
                                 <Button
                                   size="sm"
-                                  className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-xs"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-3 text-xs"
+                                  disabled={
+                                    hasMultipleParts
+                                      ? pendingParts.length === 0
+                                      : !getStockStatus(req.partCode).inStock
+                                  }
                                   onClick={() => {
                                     setIssueModal(req);
                                     setSelectedTech("");
                                   }}
+                                  title={
+                                    !allPartsInStock
+                                      ? "Some parts not in stock"
+                                      : "Issue all parts"
+                                  }
                                 >
-                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />{" "}
-                                  Issue Part
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                  Issue All
                                 </Button>
                                 <Button
                                   size="sm"
@@ -761,23 +900,35 @@ export default function PartRequestsPage() {
                                   <XCircle className="h-3.5 w-3.5 mr-1" />{" "}
                                   Reject
                                 </Button>
+                                {!allPartsInStock &&
+                                  pendingParts.length > 0 && (
+                                    <p className="text-[10px] text-amber-600 w-full mt-0.5">
+                                      ⚠ Some parts not in stock. Issue available
+                                      parts individually above.
+                                    </p>
+                                  )}
                               </>
                             )}
 
-                          {/* Admin actions: issue + reject + cancel */}
+                          {/* Admin pending: Issue All + Reject + Cancel */}
                           {currentUser?.role === "admin" &&
                             req.status === "pending" && (
                               <>
                                 <Button
                                   size="sm"
-                                  className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-xs"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 px-3 text-xs"
+                                  disabled={
+                                    hasMultipleParts
+                                      ? pendingParts.length === 0
+                                      : !getStockStatus(req.partCode).inStock
+                                  }
                                   onClick={() => {
                                     setIssueModal(req);
                                     setSelectedTech("");
                                   }}
                                 >
-                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />{" "}
-                                  Issue Part
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                  Issue All
                                 </Button>
                                 <Button
                                   size="sm"
@@ -803,6 +954,13 @@ export default function PartRequestsPage() {
                                 >
                                   <Ban className="h-3.5 w-3.5 mr-1" /> Cancel
                                 </Button>
+                                {!allPartsInStock &&
+                                  pendingParts.length > 0 && (
+                                    <p className="text-[10px] text-amber-600 w-full mt-0.5">
+                                      ⚠ Some parts not in stock. Issue available
+                                      parts individually above.
+                                    </p>
+                                  )}
                               </>
                             )}
                         </div>
@@ -816,7 +974,7 @@ export default function PartRequestsPage() {
         </div>
       )}
 
-      {/* Issue Modal */}
+      {/* Issue All Modal */}
       <Dialog open={!!issueModal} onOpenChange={() => setIssueModal(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -833,43 +991,59 @@ export default function PartRequestsPage() {
                   </p>
                 </div>
               </div>
-              <div className="bg-[var(--bg-surface)] rounded-lg p-3 border border-[var(--border)] space-y-1 text-sm">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Case</span>
-                  <span className="font-medium">{issueModal.caseId}</span>
+                  <span className="text-slate-500">Case</span>
+                  <span className="font-medium font-mono">
+                    {issueModal.caseId}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Customer</span>
+                  <span className="text-slate-500">Customer</span>
                   <span className="font-medium">{issueModal.customerName}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Part Name</span>
-                  <span className="font-medium">{issueModal.partName}</span>
-                </div>
-                {issueModal.partCode && (
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-muted)]">Part Code</span>
-                    <span className="font-medium">{issueModal.partCode}</span>
+                {issueModal.parts && issueModal.parts.length > 0 ? (
+                  <div>
+                    <span className="text-slate-500 block mb-1">Parts</span>
+                    <div className="space-y-1">
+                      {issueModal.parts
+                        .filter((p) => p.status === "pending")
+                        .map((p) => (
+                          <div key={p.id} className="flex items-center gap-2">
+                            <span className="font-mono text-slate-700">
+                              {p.partCode}
+                            </span>
+                            <span className="text-slate-600">{p.partName}</span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Part Name</span>
+                      <span className="font-medium">{issueModal.partName}</span>
+                    </div>
+                    {issueModal.partCode && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Part Code</span>
+                        <span className="font-mono font-medium">
+                          {issueModal.partCode}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
                 {issueModal.productType && (
                   <div className="flex justify-between">
-                    <span className="text-[var(--text-muted)]">Product</span>
+                    <span className="text-slate-500">Product</span>
                     <span className="font-medium">
                       {issueModal.productType}
                     </span>
                   </div>
                 )}
-                {issueModal.companyName && (
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-muted)]">Company</span>
-                    <span className="font-medium">
-                      {issueModal.companyName}
-                    </span>
-                  </div>
-                )}
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Priority</span>
+                  <span className="text-slate-500">Priority</span>
                   <span>{priorityBadge(issueModal.priority)}</span>
                 </div>
               </div>
@@ -901,15 +1075,102 @@ export default function PartRequestsPage() {
                 </Select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setIssueModal(null)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIssueModal(null)}
+                  data-ocid="part_requests.cancel_button"
+                >
                   Cancel
                 </Button>
                 <Button
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={handleIssue}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={handleIssueAll}
                   disabled={!selectedTech}
+                  data-ocid="part_requests.confirm_button"
                 >
                   Confirm Issue
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Individual Part Issue Modal */}
+      <Dialog
+        open={!!issuePartModal}
+        onOpenChange={() => setIssuePartModal(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Issue Part</DialogTitle>
+          </DialogHeader>
+          {issuePartModal && (
+            <div className="space-y-4">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Part Code</span>
+                  <span className="font-mono font-bold">
+                    {issuePartModal.part.partCode}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Part Name</span>
+                  <span className="font-medium">
+                    {issuePartModal.part.partName}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Case</span>
+                  <span className="font-mono">{issuePartModal.req.caseId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Requested By</span>
+                  <span className="font-medium">
+                    {issuePartModal.req.requestedByName}
+                  </span>
+                </div>
+              </div>
+              {issuePartModal.part.partPhotoUrl && (
+                <img
+                  src={issuePartModal.part.partPhotoUrl}
+                  alt="Part"
+                  className="h-24 w-full object-contain rounded-lg border"
+                />
+              )}
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">
+                  Assign to Technician *
+                </Label>
+                <Select value={selectedTech} onValueChange={setSelectedTech}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select technician" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {technicians
+                      .filter((t) => t.isActive)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}{" "}
+                          {t.specialization ? `(${t.specialization})` : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIssuePartModal(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={handleIssueSinglePart}
+                  disabled={!selectedTech}
+                >
+                  Issue This Part
                 </Button>
               </div>
             </div>
@@ -925,17 +1186,17 @@ export default function PartRequestsPage() {
           </DialogHeader>
           {rejectModal && (
             <div className="space-y-4">
-              <div className="bg-[var(--bg-surface)] rounded-lg p-3 border border-[var(--border)] space-y-1 text-sm">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Case</span>
+                  <span className="text-slate-500">Case</span>
                   <span className="font-medium">{rejectModal.caseId}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Part</span>
+                  <span className="text-slate-500">Part</span>
                   <span className="font-medium">{rejectModal.partName}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Requested by</span>
+                  <span className="text-slate-500">Requested by</span>
                   <span className="font-medium">
                     {rejectModal.requestedByName}
                   </span>
@@ -950,16 +1211,22 @@ export default function PartRequestsPage() {
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   rows={3}
+                  data-ocid="part_requests.textarea"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setRejectModal(null)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setRejectModal(null)}
+                  data-ocid="part_requests.cancel_button"
+                >
                   Cancel
                 </Button>
                 <Button
                   variant="destructive"
                   onClick={handleReject}
                   disabled={!rejectReason.trim()}
+                  data-ocid="part_requests.confirm_button"
                 >
                   Reject Request
                 </Button>

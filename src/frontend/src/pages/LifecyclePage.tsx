@@ -157,151 +157,6 @@ function formatDate(ts: string) {
   }
 }
 
-const EXTRA_LIFECYCLE = [
-  {
-    id: "el1",
-    partId: "A-01928",
-    action: "Purchased",
-    details:
-      "Part A-01928 (Main Motor) purchased from Midea Pvt.ltd. Invoice: in-01",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T09:57:03.000Z",
-  },
-  {
-    id: "el2",
-    partId: "A-01928",
-    action: "Issued",
-    details: "Issued to Sonu for Case 6532543",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T09:59:11.000Z",
-  },
-  {
-    id: "el3",
-    partId: "A-01928",
-    action: "Returned Unused",
-    details: "Returned to store by Store Admin. Reason: Not required",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T09:59:52.000Z",
-  },
-  {
-    id: "el4",
-    partId: "A-01928",
-    action: "Relocated",
-    details: "Relocated to Main Warehouse > A > Shelf A-1 > Bin Bin-2",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-18T08:14:28.000Z",
-  },
-  {
-    id: "el5",
-    partId: "A-01928",
-    action: "Returned to Company",
-    details: "Returned to company Midea Pvt.ltd. Ref: 1246. Reason: Defective",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-21T09:05:02.000Z",
-  },
-  {
-    id: "el6",
-    partId: "B-37276",
-    action: "Purchased",
-    details:
-      "Part B-37276 (Main Motor) purchased from Midea Pvt.ltd. Invoice: in-01",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T09:57:03.000Z",
-  },
-  {
-    id: "el7",
-    partId: "B-37276",
-    action: "Location Assigned",
-    details: "Location assigned to A › A-1 › Bin-1",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-18T08:14:28.000Z",
-  },
-  {
-    id: "el8",
-    partId: "C-82733",
-    action: "Purchased",
-    details:
-      "Part C-82733 (Main Motor) purchased from Midea Pvt.ltd. Invoice: in-01",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T09:57:03.000Z",
-  },
-  {
-    id: "el9",
-    partId: "C-82733",
-    action: "Location Assigned",
-    details: "Location assigned to A › A-1 › Bin-2",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T10:00:00.000Z",
-  },
-  {
-    id: "el10",
-    partId: "C-82733",
-    action: "Relocated",
-    details: "Relocated from Bin-1 to A › A-1 › Bin-2",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-18T10:10:01.000Z",
-  },
-  {
-    id: "el11",
-    partId: "F-753",
-    action: "Purchased",
-    details:
-      "Part F-753 (Compressor) purchased from Midea Pvt.ltd. Invoice: in-1245",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T09:21:36.000Z",
-  },
-  {
-    id: "el12",
-    partId: "F-753",
-    action: "Issued",
-    details: "Part F-753 issued to Sonu. Case: 154343",
-    userId: "admin1",
-    userName: "Store Admin",
-    timestamp: "2026-03-16T09:22:42.000Z",
-  },
-];
-
-const PART_INFO: Record<
-  string,
-  { company: string; partName: string; status: string; category: string }
-> = {
-  "A-01928": {
-    company: "Midea",
-    partName: "Main Motor",
-    status: "returned_to_company",
-    category: "Refrigerator",
-  },
-  "B-37276": {
-    company: "Midea",
-    partName: "Main Motor",
-    status: "in_stock",
-    category: "Refrigerator",
-  },
-  "C-82733": {
-    company: "Midea",
-    partName: "Main Motor",
-    status: "in_stock",
-    category: "Refrigerator",
-  },
-  "F-753": {
-    company: "Midea",
-    partName: "Compressor",
-    status: "issued",
-    category: "Refrigerator",
-  },
-};
-
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   in_stock: {
     label: "In Warehouse",
@@ -370,8 +225,14 @@ const FILTER_TABS: {
 ];
 
 export default function LifecyclePage() {
-  const { partLifecycle, partItems, stockCompanies, stockPartNames, navigate } =
-    useStore();
+  const {
+    partLifecycle,
+    partItems,
+    stockCompanies,
+    stockPartNames,
+    stockCategories,
+    navigate,
+  } = useStore();
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
@@ -385,8 +246,7 @@ export default function LifecyclePage() {
   );
 
   const allLifecycle = useMemo(() => {
-    const ids = new Set(EXTRA_LIFECYCLE.map((e) => e.id));
-    return [...partLifecycle.filter((e) => !ids.has(e.id)), ...EXTRA_LIFECYCLE];
+    return [...partLifecycle];
   }, [partLifecycle]);
 
   const groups = useMemo(() => {
@@ -407,18 +267,30 @@ export default function LifecyclePage() {
 
   const partCodes = useMemo(() => [...groups.keys()], [groups]);
 
-  const getPartInfo = (code: string) => {
-    if (PART_INFO[code]) return PART_INFO[code];
-    const item = partItems.find((p) => p.partCode === code);
-    if (!item)
-      return { company: "", partName: code, status: "in_stock", category: "" };
-    return {
-      company: stockCompanies.find((c) => c.id === item.companyId)?.name ?? "",
-      partName:
-        stockPartNames.find((p) => p.id === item.partNameId)?.name ?? code,
-      status: item.status,
-      category: "",
-    };
+  const getPartInfo = (partId: string) => {
+    // partId in lifecycle can be a part item id OR a part code
+    let item = partItems.find((p) => p.id === partId);
+    if (!item) {
+      // fallback: search by partCode
+      item = partItems.find((p) => p.partCode === partId);
+    }
+    if (!item) {
+      return {
+        company: "",
+        partName: partId,
+        status: "in_stock",
+        category: "",
+      };
+    }
+    const company =
+      stockCompanies.find((c) => c.id === item!.companyId)?.name ?? "";
+    const partName =
+      stockPartNames.find((p) => p.id === item!.partNameId)?.name ??
+      item!.partCode ??
+      partId;
+    const category =
+      stockCategories.find((c) => c.id === item!.categoryId)?.name ?? "";
+    return { company, partName, status: item.status, category };
   };
 
   const currentDateFilter = dateFilters[activeTab];

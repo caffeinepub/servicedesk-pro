@@ -76,7 +76,7 @@ export default function App() {
           // Network error -- do nothing, keep user logged in
         });
     };
-    const interval = setInterval(check, 8000);
+    const interval = setInterval(check, 3000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
 
@@ -95,7 +95,7 @@ export default function App() {
       ]);
     };
     poll();
-    const interval = setInterval(poll, 8000);
+    const interval = setInterval(poll, 3000);
     return () => clearInterval(interval);
   }, [currentUser?.id]);
   // Session timeout: after 30 min of inactivity, mark session as expired.
