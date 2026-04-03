@@ -442,7 +442,10 @@ export default function IssuedPartsPage() {
                           </td>
                           <td className="px-2 py-2 text-slate-500 text-xs">
                             {p.issueDate
-                              ? new Date(p.issueDate).toLocaleDateString()
+                              ? new Date(p.issueDate).toLocaleString("en-IN", {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })
                               : "-"}
                           </td>
                           <td className="px-2 py-2">

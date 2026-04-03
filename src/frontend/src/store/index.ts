@@ -3244,6 +3244,15 @@ export const useStore = create<StoreState>()(
           }
           get()
             .saveInventoryToBackend()
+            .then(() => {
+              setTimeout(
+                () =>
+                  get()
+                    .syncInventory()
+                    .catch(() => {}),
+                300,
+              );
+            })
             .catch(() => {});
           if (cu) {
             logActivity(
@@ -3694,8 +3703,9 @@ export const useStore = create<StoreState>()(
               (pn) =>
                 pn.name.toLowerCase() === issuedReq.partName.toLowerCase(),
             );
+            const newPartItemId = uid();
             const newPartItem: PartInventoryItem = {
-              id: uid(),
+              id: newPartItemId,
               partCode: issuedReq.partCode || issuedReq.partName,
               purchaseId: `req-${issuedReq.id}`,
               companyId: company?.id ?? "",
@@ -3722,7 +3732,21 @@ export const useStore = create<StoreState>()(
               overrideCompanyName: issuedReq.companyName ?? "",
               partRequestId: issuedReq.id,
             };
-            set((s) => ({ partItems: [...s.partItems, newPartItem] }));
+            set((s) => ({
+              partItems: [...s.partItems, newPartItem],
+              partLifecycle: [
+                ...s.partLifecycle,
+                {
+                  id: uid(),
+                  partId: newPartItemId,
+                  action: "Issued",
+                  details: `Part [${issuedReq.partCode || issuedReq.partName}] issued to technician ${tech?.name ?? technicianId} for Case ${issuedReq.caseId} by ${cu?.name ?? "unknown"} (via part request)`,
+                  userId: cu?.id ?? "",
+                  userName: cu?.name ?? "",
+                  timestamp: issuedAt,
+                },
+              ],
+            }));
             get()
               .saveInventoryToBackend()
               .catch(() => {});
@@ -3773,6 +3797,32 @@ export const useStore = create<StoreState>()(
               ],
             }));
           }
+          // Add lifecycle entries for each issued part
+          const issuedReqLC = get().partRequests.find((r) => r.id === id);
+          if (issuedReqLC) {
+            const partCodesLC =
+              issuedReqLC.parts && issuedReqLC.parts.length > 0
+                ? issuedReqLC.parts
+                : [
+                    {
+                      partCode: issuedReqLC.partCode,
+                      partName: issuedReqLC.partName,
+                      id: issuedReqLC.id,
+                    },
+                  ];
+            const issueLifecycles = partCodesLC.map((p: any) => ({
+              id: uid(),
+              partId: p.id || issuedReqLC.id,
+              action: "Issued",
+              details: `Part [${p.partCode}] issued to technician ${tech?.name ?? technicianId} for Case ${issuedReqLC.caseId} by ${cu?.name ?? "unknown"}`,
+              userId: cu?.id ?? "",
+              userName: cu?.name ?? "",
+              timestamp: issuedAt,
+            }));
+            set((s) => ({
+              partLifecycle: [...s.partLifecycle, ...issueLifecycles],
+            }));
+          }
           if (cu)
             logActivity(
               cu.id,
@@ -3780,10 +3830,18 @@ export const useStore = create<StoreState>()(
               "Part Request Issued",
               `Part request ${id} issued to ${tech?.name}`,
             );
-          // Fix 1: Force re-sync so all clients see the update immediately
+          // Fix: Force re-sync so all clients see the update immediately
           setTimeout(() => {
             get()
               .syncPartRequests()
+              .catch(() => {});
+            get()
+              .saveInventoryToBackend()
+              .then(() => {
+                get()
+                  .syncInventory()
+                  .catch(() => {});
+              })
               .catch(() => {});
           }, 200);
         },

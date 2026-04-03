@@ -295,6 +295,9 @@ export default function CaseDetailPage() {
   const [showHistory, setShowHistory] = useState(false);
 
   const closingPhotoRef = useRef<HTMLInputElement>(null);
+  const caseRelatedRef = useRef<HTMLInputElement>(null);
+  const [caseRelatedFiles, setCaseRelatedFiles] = useState<File[]>([]);
+  const [caseRelatedUrls, setCaseRelatedUrls] = useState<string[]>([]);
 
   const [editingCaseId, setEditingCaseId] = useState(false);
   const [newCaseIdValue, setNewCaseIdValue] = useState("");
@@ -423,6 +426,14 @@ export default function CaseDetailPage() {
     setClosingPhotoUrls((prev) => [...prev, ...newUrls]);
   };
 
+  const handleCaseRelatedPhotoSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const newFiles = Array.from(files);
+    const newUrls = await Promise.all(newFiles.map(fileToDataUrl));
+    setCaseRelatedFiles((prev) => [...prev, ...newFiles]);
+    setCaseRelatedUrls((prev) => [...prev, ...newUrls]);
+  };
+
   const handleStatusChange = async () => {
     if (!newStatus) return;
     // Mandatory part code/name validation for part_required
@@ -495,7 +506,23 @@ export default function CaseDetailPage() {
       }
     }
 
+    // Save case-related images (stored on case, not part request)
+    if (caseRelatedUrls.length > 0) {
+      const newRelatedImages = caseRelatedUrls.map((url, i) => ({
+        id: Math.random().toString(36).slice(2),
+        url,
+        name: caseRelatedFiles[i]?.name ?? `Case photo ${i + 1}`,
+      }));
+      updateCase(caseData.id, {
+        caseRelatedImages: [
+          ...(caseData.caseRelatedImages ?? []),
+          ...newRelatedImages,
+        ] as any,
+      });
+    }
     // Reset form
+    setCaseRelatedFiles([]);
+    setCaseRelatedUrls([]);
     setClosingPhotoFiles([]);
     setClosingPhotoUrls([]);
     setNewStatus("");
@@ -1261,6 +1288,70 @@ export default function CaseDetailPage() {
                     >
                       <span>📦</span> Request Part from Supervisor
                     </button>
+
+                    {/* Case Related Images — NOT sent with part request */}
+                    <div className="border border-dashed border-violet-300 rounded-lg p-3 space-y-2 bg-violet-50">
+                      <p className="text-xs font-semibold text-violet-700 flex items-center gap-1">
+                        <Image className="h-3 w-3" /> Case Related Images
+                        (Product/Serial/Invoice etc.)
+                      </p>
+                      <p className="text-xs text-violet-500">
+                        These photos are saved to the case only — not included
+                        in the part request.
+                      </p>
+                      <input
+                        ref={caseRelatedRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          handleCaseRelatedPhotoSelect(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => caseRelatedRef.current?.click()}
+                        className="flex items-center gap-2 text-xs border border-dashed border-violet-300 rounded-lg px-3 py-2 w-full hover:bg-violet-100"
+                        data-ocid="case_detail.upload_button"
+                      >
+                        <Upload className="h-3 w-3 text-violet-400" />
+                        {caseRelatedFiles.length > 0
+                          ? `${caseRelatedFiles.length} photo(s) selected`
+                          : "Upload case photos (product, serial, invoice, etc.)"}
+                      </button>
+                      {caseRelatedUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {caseRelatedUrls.map((url, idx) => (
+                            <div
+                              key={url.slice(-24)}
+                              className="relative group"
+                            >
+                              <img
+                                src={url}
+                                alt={`Related ${idx + 1}`}
+                                className="h-16 w-16 object-cover rounded border border-violet-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCaseRelatedFiles((prev) =>
+                                    prev.filter((_, i) => i !== idx),
+                                  );
+                                  setCaseRelatedUrls((prev) =>
+                                    prev.filter((_, i) => i !== idx),
+                                  );
+                                }}
+                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1379,6 +1470,105 @@ export default function CaseDetailPage() {
                               alt={`Closing preview ${idx + 1}`}
                               className="h-20 w-20 object-cover rounded border"
                             />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Existing case related images (already saved) */}
+                    {(caseData.caseRelatedImages ?? []).length > 0 && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-violet-700 font-semibold">
+                          Existing Case Related Images
+                        </Label>
+                        <div className="flex flex-wrap gap-2">
+                          {(caseData.caseRelatedImages ?? []).map((img) => (
+                            <div key={img.id} className="relative group">
+                              <img
+                                src={img.url}
+                                alt={img.name}
+                                className="h-16 w-16 object-cover rounded border border-violet-200"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center gap-1">
+                                <a
+                                  href={img.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-white text-xs bg-blue-600 px-1.5 py-0.5 rounded"
+                                >
+                                  View
+                                </a>
+                                <a
+                                  href={img.url}
+                                  download={img.name}
+                                  className="text-white text-xs bg-green-600 px-1.5 py-0.5 rounded"
+                                >
+                                  ↓
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Case Related Images upload for closing */}
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        Case Related Images (optional)
+                      </Label>
+                      <p className="text-xs text-gray-400">
+                        Product photo, serial number, invoice, ratings etc.
+                      </p>
+                      <input
+                        ref={caseRelatedRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          handleCaseRelatedPhotoSelect(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => caseRelatedRef.current?.click()}
+                        className="flex items-center gap-2 text-xs border border-dashed border-violet-300 rounded-lg px-3 py-2 w-full hover:bg-violet-50"
+                        data-ocid="case_detail.upload_button"
+                      >
+                        <Image className="h-3 w-3 text-violet-400" />
+                        {caseRelatedFiles.length > 0
+                          ? `${caseRelatedFiles.length} case photo(s) selected`
+                          : "Upload case related photos (optional)"}
+                      </button>
+                      {caseRelatedUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {caseRelatedUrls.map((url, idx) => (
+                            <div
+                              key={url.slice(-24)}
+                              className="relative group"
+                            >
+                              <img
+                                src={url}
+                                alt={`Related ${idx + 1}`}
+                                className="h-16 w-16 object-cover rounded border border-violet-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCaseRelatedFiles((prev) =>
+                                    prev.filter((_, i) => i !== idx),
+                                  );
+                                  setCaseRelatedUrls((prev) =>
+                                    prev.filter((_, i) => i !== idx),
+                                  );
+                                }}
+                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center"
+                              >
+                                ×
+                              </button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -1535,32 +1725,148 @@ export default function CaseDetailPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Photos</CardTitle>
         </CardHeader>
-        <CardContent>
-          {caseData.photos.length === 0 ? (
-            <div
-              className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center"
-              data-ocid="case_detail.dropzone"
-            >
-              <p className="text-sm text-gray-400">No photos uploaded yet</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-              {caseData.photos.map((p) => (
-                <div key={p.id} className="space-y-1">
-                  <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                    <img
-                      src={p.url}
-                      alt={p.name}
-                      className="w-full h-full object-cover"
-                    />
+        <CardContent className="space-y-5">
+          {/* Part Photos */}
+          <div>
+            <p className="text-xs font-semibold text-orange-700 mb-2 flex items-center gap-1">
+              <Package className="h-3 w-3" /> Part Photos
+            </p>
+            {caseData.photos.filter((p) => p.type === "part").length === 0 ? (
+              <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
+                No part photos
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                {caseData.photos
+                  .filter((p) => p.type === "part")
+                  .map((p) => (
+                    <div key={p.id} className="space-y-1">
+                      <div className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <img
+                          src={p.url}
+                          alt={p.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          <a
+                            href={p.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-white text-xs bg-blue-600 px-1.5 py-0.5 rounded"
+                          >
+                            View
+                          </a>
+                          <a
+                            href={p.url}
+                            download={p.name}
+                            className="text-white text-xs bg-green-600 px-1.5 py-0.5 rounded"
+                          >
+                            ↓
+                          </a>
+                        </div>
+                      </div>
+                      <p className="text-xs text-center text-gray-500 truncate">
+                        {p.name}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          {/* Other Case Photos (after/product/serial etc) */}
+          <div>
+            <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+              <Image className="h-3 w-3" /> Other Case Photos
+            </p>
+            {caseData.photos.filter((p) => p.type !== "part").length === 0 ? (
+              <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
+                No other photos
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                {caseData.photos
+                  .filter((p) => p.type !== "part")
+                  .map((p) => (
+                    <div key={p.id} className="space-y-1">
+                      <div className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                        <img
+                          src={p.url}
+                          alt={p.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          <a
+                            href={p.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-white text-xs bg-blue-600 px-1.5 py-0.5 rounded"
+                          >
+                            View
+                          </a>
+                          <a
+                            href={p.url}
+                            download={p.name}
+                            className="text-white text-xs bg-green-600 px-1.5 py-0.5 rounded"
+                          >
+                            ↓
+                          </a>
+                        </div>
+                      </div>
+                      <p className="text-xs text-center text-gray-500 truncate">
+                        {photoTypeLabel[p.type as PhotoType]}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          {/* Case Related Images */}
+          <div>
+            <p className="text-xs font-semibold text-violet-700 mb-2 flex items-center gap-1">
+              <Image className="h-3 w-3 text-violet-500" /> Case Related Images
+            </p>
+            {(caseData.caseRelatedImages ?? []).length === 0 ? (
+              <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
+                No case related images
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                {(caseData.caseRelatedImages ?? []).map((img) => (
+                  <div key={img.id} className="space-y-1">
+                    <div className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                      <img
+                        src={img.url}
+                        alt={img.name}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                        <a
+                          href={img.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-white text-xs bg-blue-600 px-1.5 py-0.5 rounded"
+                        >
+                          View
+                        </a>
+                        <a
+                          href={img.url}
+                          download={img.name}
+                          className="text-white text-xs bg-green-600 px-1.5 py-0.5 rounded"
+                        >
+                          ↓
+                        </a>
+                      </div>
+                    </div>
+                    <p className="text-xs text-center text-gray-500 truncate">
+                      {img.name}
+                    </p>
                   </div>
-                  <p className="text-xs text-center text-gray-500">
-                    {photoTypeLabel[p.type as PhotoType]}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

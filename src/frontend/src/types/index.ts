@@ -72,6 +72,12 @@ export interface CasePhoto {
   name: string;
 }
 
+export interface CaseRelatedImage {
+  id: string;
+  url: string;
+  name: string;
+}
+
 export interface AuditEntry {
   id: string;
   caseId: string;
@@ -137,6 +143,7 @@ export interface Case {
   remarks: string;
   additionalNotes: string;
   photos: CasePhoto[];
+  caseRelatedImages?: CaseRelatedImage[];
   createdAt: string;
   updatedAt: string;
   createdBy: string;

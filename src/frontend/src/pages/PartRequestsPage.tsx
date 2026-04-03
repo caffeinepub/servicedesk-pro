@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Download,
   Eye,
   Inbox,
   Package,
@@ -71,6 +72,7 @@ export default function PartRequestsPage() {
     partRequests,
     technicians,
     partItems,
+    cases,
     currentUser,
     issuePartRequest,
     rejectPartRequest,
@@ -704,16 +706,28 @@ export default function PartRequestsPage() {
                                       </div>
                                       <div className="flex items-center gap-1 flex-shrink-0">
                                         {part.partPhotoUrl && (
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              setImageModal(part.partPhotoUrl!)
-                                            }
-                                            className="p-1 rounded text-blue-500 hover:bg-blue-50 border border-blue-100"
-                                            title="View Photo"
-                                          >
-                                            <Eye className="h-3 w-3" />
-                                          </button>
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setImageModal(
+                                                  part.partPhotoUrl!,
+                                                )
+                                              }
+                                              className="p-1 rounded text-blue-500 hover:bg-blue-50 border border-blue-100"
+                                              title="View Photo"
+                                            >
+                                              <Eye className="h-3 w-3" />
+                                            </button>
+                                            <a
+                                              href={part.partPhotoUrl}
+                                              download={`part-${part.partCode}.jpg`}
+                                              className="p-1 rounded text-green-600 hover:bg-green-50 border border-green-100"
+                                              title="Download Photo"
+                                            >
+                                              <Download className="h-3 w-3" />
+                                            </a>
+                                          </>
                                         )}
                                         {/* Individual issue button — supervisor/admin for pending part */}
                                         {isPrivileged &&
@@ -774,20 +788,74 @@ export default function PartRequestsPage() {
                                     );
                                   })()}
                                 {req.partPhotoUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setImageModal(req.partPhotoUrl!)
-                                    }
-                                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs border border-blue-100 px-2 py-0.5 rounded bg-blue-50"
-                                  >
-                                    <Eye className="h-3 w-3" /> Photo
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setImageModal(req.partPhotoUrl!)
+                                      }
+                                      className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs border border-blue-100 px-2 py-0.5 rounded bg-blue-50"
+                                    >
+                                      <Eye className="h-3 w-3" /> View
+                                    </button>
+                                    <a
+                                      href={req.partPhotoUrl}
+                                      download={`part-${req.partCode}.jpg`}
+                                      className="flex items-center gap-1 text-green-600 hover:text-green-800 text-xs border border-green-100 px-2 py-0.5 rounded bg-green-50"
+                                    >
+                                      <Download className="h-3 w-3" /> Download
+                                    </a>
+                                  </>
                                 )}
                               </div>
                             </div>
                           )}
                         </div>
+
+                        {/* ── Case Related Images ── */}
+                        {(() => {
+                          const linkedCase = cases.find(
+                            (c) => c.id === req.caseDbId,
+                          );
+                          const caseImgs =
+                            (linkedCase as any)?.caseRelatedImages ?? [];
+                          if (caseImgs.length === 0) return null;
+                          return (
+                            <div className="mt-2 border border-dashed border-violet-200 rounded-lg p-2 bg-violet-50">
+                              <p className="text-xs font-semibold text-violet-700 mb-1.5 flex items-center gap-1">
+                                <span>🖼</span> Case Related Images
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {caseImgs.map((img: any) => (
+                                  <div key={img.id} className="relative group">
+                                    <img
+                                      src={img.url}
+                                      alt={img.name}
+                                      className="h-14 w-14 object-cover rounded border border-violet-200"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center gap-1">
+                                      <a
+                                        href={img.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-white text-[10px] bg-blue-600 px-1 py-0.5 rounded"
+                                      >
+                                        View
+                                      </a>
+                                      <a
+                                        href={img.url}
+                                        download={img.name}
+                                        className="text-white text-[10px] bg-green-600 px-1 py-0.5 rounded"
+                                      >
+                                        ↓
+                                      </a>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* ── Status banners ── */}
                         {req.status === "issued" && (

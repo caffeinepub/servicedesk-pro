@@ -69,6 +69,7 @@ interface CaseEntry {
   createdDate: string;
   closedDate: string;
   partImages: string[];
+  caseRelatedImages: string[];
   partCode: string;
   partCodes: Array<{ id: string; value: string }>;
   poNumber: string;
@@ -91,6 +92,7 @@ function newCaseEntry(): CaseEntry {
     createdDate: new Date().toISOString().split("T")[0],
     closedDate: "",
     partImages: [],
+    caseRelatedImages: [],
     partCode: "",
     partCodes: [{ id: Math.random().toString(36).slice(2), value: "" }],
     poNumber: "",
@@ -183,6 +185,17 @@ export default function ExistingCasesPage() {
             name: `Part Image ${i + 1}`,
           });
         }
+      }
+      // Save case related images
+      if (savedCase && e.caseRelatedImages.length > 0) {
+        const relatedImgs = e.caseRelatedImages.map((url, i) => ({
+          id: Math.random().toString(36).slice(2),
+          url,
+          name: `Case Related Image ${i + 1}`,
+        }));
+        useStore.getState().updateCase(savedCase.id, {
+          caseRelatedImages: relatedImgs as any,
+        });
       }
     }
     setSavedCount(entries.length);
@@ -761,6 +774,100 @@ export default function ExistingCasesPage() {
                         alt={`Part ${idx + 1}`}
                         className="h-16 w-16 object-cover rounded border"
                       />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Case Related Images - optional */}
+              <div className="space-y-1 md:col-span-2">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <Image className="h-3.5 w-3.5 text-violet-600" /> Case Related
+                  Images{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (Optional — product photo, serial no, invoice, ratings)
+                  </span>
+                </Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  id={`case-related-images-${entry.id}`}
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    const urls = await Promise.all(
+                      files.map(
+                        (f) =>
+                          new Promise<string>((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = (ev) =>
+                              resolve(ev.target?.result as string);
+                            reader.readAsDataURL(f);
+                          }),
+                      ),
+                    );
+                    setEntries((prev) =>
+                      prev.map((ent) =>
+                        ent.id === entry.id
+                          ? {
+                              ...ent,
+                              caseRelatedImages: [
+                                ...ent.caseRelatedImages,
+                                ...urls,
+                              ],
+                            }
+                          : ent,
+                      ),
+                    );
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    document
+                      .getElementById(`case-related-images-${entry.id}`)
+                      ?.click()
+                  }
+                  className="flex items-center gap-2 text-xs border border-dashed border-violet-300 rounded-lg px-3 py-2 w-full hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                >
+                  <Image className="h-3 w-3 text-violet-400" />
+                  {entry.caseRelatedImages.length > 0
+                    ? `${entry.caseRelatedImages.length} image${entry.caseRelatedImages.length > 1 ? "s" : ""} selected`
+                    : "Upload Case Related Images (Optional, Multiple)"}
+                </button>
+                {entry.caseRelatedImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {entry.caseRelatedImages.map((url, idx) => (
+                      <div key={url.slice(-20)} className="relative group">
+                        <img
+                          src={url}
+                          alt={`Case ${idx + 1}`}
+                          className="h-16 w-16 object-cover rounded border border-violet-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEntries((prev) =>
+                              prev.map((ent) =>
+                                ent.id === entry.id
+                                  ? {
+                                      ...ent,
+                                      caseRelatedImages:
+                                        ent.caseRelatedImages.filter(
+                                          (_, i) => i !== idx,
+                                        ),
+                                    }
+                                  : ent,
+                              ),
+                            )
+                          }
+                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
