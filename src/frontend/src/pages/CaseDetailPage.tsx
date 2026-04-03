@@ -9,6 +9,7 @@ import {
   Image,
   MapPin,
   MessageSquare,
+  Package,
   Pencil,
   Phone,
   Plus,
@@ -64,6 +65,166 @@ async function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+// Local component for collapsible part status groups
+type PartStatusEntry = {
+  reqId: string;
+  status: string;
+  issuedByName: string;
+  technicianName: string;
+  issuedAt: string;
+  rejectedReason?: string;
+  cancelledByName?: string;
+  partPhotoUrl?: string;
+};
+type PartStatusGroup = {
+  partCode: string;
+  partName: string;
+  entries: PartStatusEntry[];
+};
+
+function PartStatusSection({
+  groups,
+  statusColor,
+}: {
+  groups: PartStatusGroup[];
+  statusColor: (s: string) => string;
+}) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const toggle = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const getStatusLabel = (s: string) => {
+    if (s === "issued") return "Issued";
+    if (s === "pending") return "Pending";
+    if (s === "rejected") return "Rejected";
+    if (s === "cancelled") return "Cancelled";
+    return s;
+  };
+
+  return (
+    <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden">
+      <div className="bg-slate-50 px-3 py-2 font-semibold text-xs text-slate-600 flex items-center gap-1.5">
+        <Package className="h-3.5 w-3.5 text-blue-500" />
+        Parts Status ({groups.length} part code{groups.length !== 1 ? "s" : ""})
+      </div>
+      {groups.map((group) => {
+        const isExpanded = expandedKeys.has(group.partCode);
+        const hasIssued = group.entries.some((e) => e.status === "issued");
+        const hasPending = group.entries.some((e) => e.status === "pending");
+        const dominantStatus = hasIssued
+          ? "issued"
+          : hasPending
+            ? "pending"
+            : (group.entries[0]?.status ?? "pending");
+        return (
+          <div
+            key={group.partCode}
+            className="border-t border-slate-100 first:border-t-0"
+          >
+            <button
+              type="button"
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 transition-colors text-left"
+              onClick={() => toggle(group.partCode)}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-xs font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                  {group.partCode}
+                </span>
+                <span className="text-xs text-slate-500 truncate">
+                  {group.partName}
+                </span>
+                <span
+                  className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${statusColor(dominantStatus)}`}
+                >
+                  {getStatusLabel(dominantStatus)}
+                </span>
+                {group.entries.length > 1 && (
+                  <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium">
+                    ×{group.entries.length}
+                  </span>
+                )}
+              </div>
+              {isExpanded ? (
+                <ChevronUp className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+              )}
+            </button>
+            {isExpanded && (
+              <div className="px-3 pb-3 space-y-2">
+                {group.entries.map((entry, idx) => (
+                  <div
+                    key={`${entry.reqId}-${idx}`}
+                    className="bg-white border border-slate-100 rounded-lg p-2.5 space-y-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(entry.status)}`}
+                      >
+                        {getStatusLabel(entry.status)}
+                      </span>
+                      {entry.issuedAt && (
+                        <span className="text-xs text-slate-400">
+                          {new Date(entry.issuedAt).toLocaleDateString("en-IN")}
+                        </span>
+                      )}
+                    </div>
+                    {entry.status === "issued" && (
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        {entry.issuedByName && (
+                          <div>
+                            <span className="text-slate-400">Issued by: </span>
+                            <span className="font-medium text-slate-700">
+                              {entry.issuedByName}
+                            </span>
+                          </div>
+                        )}
+                        {entry.technicianName && (
+                          <div>
+                            <span className="text-slate-400">To: </span>
+                            <span className="font-medium text-slate-700">
+                              {entry.technicianName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {entry.status === "rejected" && entry.rejectedReason && (
+                      <div className="text-xs text-red-600">
+                        <span className="font-medium">Reason: </span>
+                        {entry.rejectedReason}
+                      </div>
+                    )}
+                    {entry.status === "cancelled" && entry.cancelledByName && (
+                      <div className="text-xs text-slate-500">
+                        <span className="font-medium">Cancelled by: </span>
+                        {entry.cancelledByName}
+                      </div>
+                    )}
+                    {entry.partPhotoUrl && (
+                      <img
+                        src={entry.partPhotoUrl}
+                        alt="Part"
+                        className="h-10 w-10 object-cover rounded border border-slate-200"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function CaseDetailPage() {
@@ -734,36 +895,90 @@ export default function CaseDetailPage() {
                 )}
               </div>
             )}
-            {/* Part issued info banner */}
+            {/* Parts Status - comprehensive multi-part display */}
             {(() => {
-              const relatedReq = partRequests.find(
-                (r) => r.caseDbId === caseData.id && r.status === "issued",
+              const caseReqs = partRequests.filter(
+                (r) => r.caseDbId === caseData.id,
               );
-              if (!relatedReq) return null;
-              const issuedTech = technicians.find(
-                (t) => t.id === relatedReq.technicianId,
-              );
+              if (caseReqs.length === 0) return null;
+
+              // Build a unified list of all part entries grouped by partCode
+              type PartEntry = {
+                partCode: string;
+                partName: string;
+                entries: Array<{
+                  reqId: string;
+                  status: string;
+                  issuedByName: string;
+                  technicianName: string;
+                  issuedAt: string;
+                  rejectedReason?: string;
+                  cancelledByName?: string;
+                  partPhotoUrl?: string;
+                }>;
+              };
+              const groupMap = new Map<string, PartEntry>();
+
+              for (const req of caseReqs) {
+                if (req.parts && req.parts.length > 0) {
+                  for (const p of req.parts) {
+                    const key = p.partCode || p.partName || "Unknown";
+                    const existing = groupMap.get(key) ?? {
+                      partCode: key,
+                      partName: p.partName || key,
+                      entries: [],
+                    };
+                    const tech = technicians.find(
+                      (t) => t.id === (p.technicianId || req.technicianId),
+                    );
+                    existing.entries.push({
+                      reqId: req.id,
+                      status: p.status || req.status,
+                      issuedByName: p.issuedByName || req.issuedByName || "",
+                      technicianName: tech?.name || req.issuedByName || "",
+                      issuedAt: p.issuedAt || req.issuedAt || "",
+                      rejectedReason: req.rejectedReason || "",
+                      cancelledByName: req.cancelledByName || "",
+                      partPhotoUrl: p.partPhotoUrl || "",
+                    });
+                    groupMap.set(key, existing);
+                  }
+                } else {
+                  const key = req.partCode || req.partName || "Unknown";
+                  const existing = groupMap.get(key) ?? {
+                    partCode: key,
+                    partName: req.partName || key,
+                    entries: [],
+                  };
+                  const tech = technicians.find(
+                    (t) => t.id === req.technicianId,
+                  );
+                  existing.entries.push({
+                    reqId: req.id,
+                    status: req.status,
+                    issuedByName: req.issuedByName || "",
+                    technicianName: tech?.name || "",
+                    issuedAt: req.issuedAt || "",
+                    rejectedReason: req.rejectedReason || "",
+                    cancelledByName: req.cancelledByName || "",
+                    partPhotoUrl: req.partPhotoUrl || "",
+                  });
+                  groupMap.set(key, existing);
+                }
+              }
+
+              const groups = [...groupMap.values()];
+
+              const statusColor = (s: string) => {
+                if (s === "issued") return "bg-green-100 text-green-700";
+                if (s === "pending") return "bg-amber-100 text-amber-700";
+                if (s === "rejected") return "bg-red-100 text-red-700";
+                if (s === "cancelled") return "bg-slate-100 text-slate-600";
+                return "bg-blue-100 text-blue-700";
+              };
+
               return (
-                <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-xs font-semibold text-green-700">
-                    Part Issued
-                  </p>
-                  <p className="text-xs text-green-600">
-                    Issued by <strong>{relatedReq.issuedByName}</strong> to{" "}
-                    <strong>
-                      {issuedTech?.name ?? relatedReq.technicianId}
-                    </strong>
-                    {relatedReq.issuedAt && (
-                      <>
-                        {" "}
-                        on{" "}
-                        {new Date(relatedReq.issuedAt).toLocaleDateString(
-                          "en-IN",
-                        )}
-                      </>
-                    )}
-                  </p>
-                </div>
+                <PartStatusSection groups={groups} statusColor={statusColor} />
               );
             })()}
           </CardContent>

@@ -57,6 +57,8 @@ export default function ReportsPage() {
     technicians,
     vendors,
     stockCompanies,
+    stockPartNames,
+    purchaseEntries,
   } = useStore();
   const role = currentUser?.role ?? "backend_user";
   const [refreshing, setRefreshing] = useState(false);
@@ -83,57 +85,51 @@ export default function ReportsPage() {
   const statusDistCases = [
     {
       name: "New",
-      value: cases.filter((c) => c.status === "new").length || 8,
+      value: cases.filter((c) => c.status === "new").length,
       fill: "#3b82f6",
     },
     {
       name: "In Progress",
-      value:
-        cases.filter((c) =>
-          ["confirmed", "pending", "on_route"].includes(c.status),
-        ).length || 15,
+      value: cases.filter((c) =>
+        ["confirmed", "pending", "on_route"].includes(c.status),
+      ).length,
       fill: "#f59e0b",
     },
     {
       name: "Closed",
-      value: cases.filter((c) => c.status === "closed").length || 12,
+      value: cases.filter((c) => c.status === "closed").length,
       fill: "#10b981",
     },
     {
       name: "Cancelled",
-      value: cases.filter((c) => c.status === "cancelled").length || 3,
+      value: cases.filter((c) => c.status === "cancelled").length,
       fill: "#ef4444",
     },
     {
       name: "Part Pending",
-      value:
-        cases.filter((c) =>
-          ["part_required", "part_ordered", "part_received"].includes(c.status),
-        ).length || 6,
+      value: cases.filter((c) =>
+        ["part_required", "part_ordered", "part_received"].includes(c.status),
+      ).length,
       fill: "#8b5cf6",
     },
   ].filter((s) => s.value > 0);
 
-  const techCasesData = technicians.slice(0, 6).map((t) => ({
-    name: t.name.split(" ")[0],
-    cases:
-      cases.filter((c) => c.technicianId === t.id).length ||
-      Math.floor(Math.random() * 10) + 1,
-  }));
-  if (techCasesData.length === 0) {
-    techCasesData.push(
-      { name: "Sonu", cases: 12 },
-      { name: "Raju", cases: 8 },
-      { name: "Vijay", cases: 6 },
-    );
-  }
+  const techCasesData = technicians
+    .slice(0, 6)
+    .map((t) => ({
+      name: t.name.split(" ")[0],
+      cases: cases.filter((c) => c.technicianId === t.id).length,
+    }))
+    .filter((t) => t.cases > 0);
 
-  const casesOverTime = Array.from({ length: 12 }, (_, i) => {
+  const casesOverTime = Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() - (11 - i) * 2);
+    d.setDate(d.getDate() - (13 - i));
+    const dayStr = d.toISOString().split("T")[0];
+    const count = cases.filter((c) => c.createdAt.startsWith(dayStr)).length;
     return {
       date: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
-      cases: Math.floor(Math.random() * 8) + 2,
+      cases: count,
     };
   });
 
@@ -145,87 +141,131 @@ export default function ReportsPage() {
   ).length;
 
   const invStatusDist = [
-    { name: "In Warehouse", value: inStock || 12, fill: "#10b981" },
-    { name: "Issued", value: issuedCount || 5, fill: "#f59e0b" },
+    { name: "In Warehouse", value: inStock, fill: "#10b981" },
+    { name: "Issued", value: issuedCount, fill: "#f59e0b" },
     {
       name: "Installed",
-      value: partItems.filter((p) => p.status === "installed").length || 8,
+      value: partItems.filter((p) => p.status === "installed").length,
       fill: "#3b82f6",
     },
-    { name: "Returned", value: returnedCount || 3, fill: "#ef4444" },
-  ];
+    { name: "Returned", value: returnedCount, fill: "#ef4444" },
+  ].filter((s) => s.value > 0);
 
-  const byCompany = stockCompanies.map((c) => ({
-    name: c.name,
-    parts:
-      partItems.filter((p) => p.companyId === c.id).length ||
-      Math.floor(Math.random() * 10) + 2,
-  }));
-  if (byCompany.length === 0) {
-    byCompany.push(
-      { name: "Midea", parts: 15 },
-      { name: "Toshiba", parts: 8 },
-      { name: "Samsung", parts: 5 },
-    );
-  }
+  const byCompany = stockCompanies
+    .map((c) => ({
+      name: c.name,
+      parts: partItems.filter((p) => p.companyId === c.id).length,
+    }))
+    .filter((c) => c.parts > 0);
 
   const issuesOverTime = Array.from({ length: 8 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (7 - i) * 3);
+    const dayStr = d.toISOString().split("T")[0];
+    const issued = partItems.filter((p) =>
+      p.issueDate?.startsWith(dayStr),
+    ).length;
+    const returned = partItems.filter((p) =>
+      p.returnedToStoreAt?.startsWith(dayStr),
+    ).length;
     return {
       date: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
-      issued: Math.floor(Math.random() * 5) + 1,
-      returned: Math.floor(Math.random() * 3),
+      issued,
+      returned,
     };
   });
 
-  const topIssuedParts = [
-    "Main Motor",
-    "Compressor",
-    "PCB Board",
-    "Fan Motor",
-    "AC Belt",
-  ].map((name, i) => ({
-    name,
-    issued: [12, 8, 6, 9, 4][i],
-  }));
+  const topIssuedParts = (() => {
+    const partNameCounts = new Map<string, number>();
+    for (const p of partItems.filter(
+      (p) => p.status === "issued" || p.status === "installed",
+    )) {
+      const name =
+        stockPartNames.find((pn) => pn.id === p.partNameId)?.name ||
+        (p as any).overridePartName ||
+        p.partCode;
+      partNameCounts.set(name, (partNameCounts.get(name) ?? 0) + 1);
+    }
+    return [...partNameCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, issued]) => ({ name, issued }));
+  })();
 
-  const techPerf = (
-    techCasesData.length > 0 ? techCasesData : [{ name: "Sonu", cases: 8 }]
-  ).map((t) => ({
-    name: t.name,
-    issued: Math.floor(Math.random() * 10) + 3,
-    installed: Math.floor(Math.random() * 8) + 2,
-  }));
+  const techPerf = technicians
+    .slice(0, 6)
+    .map((t) => ({
+      name: t.name.split(" ")[0],
+      issued: partItems.filter(
+        (p) => p.technicianId === t.id && p.status === "issued",
+      ).length,
+      installed: partItems.filter(
+        (p) => p.technicianId === t.id && p.status === "installed",
+      ).length,
+    }))
+    .filter((t) => t.issued > 0 || t.installed > 0);
 
-  const monthlyPurchases = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"].map(
-    (month) => ({
-      month,
-      purchases: Math.floor(Math.random() * 8) + 2,
-      value: Math.floor(Math.random() * 50000) + 10000,
-    }),
-  );
-
-  const vendorSpend = vendors.slice(0, 5).map((v, i) => ({
-    name: v.name,
-    spend:
-      [85000, 62000, 48000, 35000, 22000][i] ??
-      Math.floor(Math.random() * 50000) + 10000,
-  }));
-  if (vendorSpend.length === 0) {
-    vendorSpend.push(
-      { name: "Midea", spend: 85000 },
-      { name: "Toshiba", spend: 62000 },
-      { name: "Haier", spend: 35000 },
+  const monthlyPurchases = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const monthPurchaseEntries = purchaseEntries.filter((p) =>
+      p.createdAt?.startsWith(monthKey),
     );
-  }
+    return {
+      month: d.toLocaleDateString("en-IN", { month: "short" }),
+      purchases: monthPurchaseEntries.length,
+      value: monthPurchaseEntries.reduce(
+        (sum, p) => sum + (p.quantity ?? 1) * ((p as any).costPrice ?? 0),
+        0,
+      ),
+    };
+  });
 
-  const returnTypes = [
-    { name: "Defective", value: 8, fill: "#ef4444" },
-    { name: "Unused", value: 5, fill: "#f59e0b" },
-    { name: "Wrong Part", value: 3, fill: "#8b5cf6" },
-    { name: "Warranty", value: 2, fill: "#06b6d4" },
-  ];
+  const vendorSpend = vendors
+    .map((v) => {
+      const vPurchases = purchaseEntries.filter(
+        (p) => p.vendorId === v.id || p.vendorName === v.name,
+      );
+      const spend = vPurchases.reduce(
+        (sum, p) => sum + (p.quantity ?? 1) * ((p as any).costPrice ?? 0),
+        0,
+      );
+      return { name: v.name, spend };
+    })
+    .filter((v) => v.spend > 0)
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 5);
+
+  const returnTypes = (() => {
+    const returnedItems = partItems.filter(
+      (p) => p.status === "returned_to_company",
+    );
+    const returnTypeMap = new Map<string, number>();
+    for (const p of returnedItems) {
+      const reason = p.returnToCompanyReason || "Other";
+      returnTypeMap.set(reason, (returnTypeMap.get(reason) ?? 0) + 1);
+    }
+    const colors = ["#ef4444", "#f59e0b", "#8b5cf6", "#06b6d4", "#10b981"];
+    return [...returnTypeMap.entries()].map(([name, value], i) => ({
+      name,
+      value,
+      fill: colors[i % colors.length],
+    }));
+  })();
+
+  // Real avg resolution time
+  const closedCasesForAvg = cases.filter((c) => c.closedAt && c.createdAt);
+  const avgResolutionDays =
+    closedCasesForAvg.length > 0
+      ? (
+          closedCasesForAvg.reduce((sum, c) => {
+            const diff =
+              new Date(c.closedAt).getTime() - new Date(c.createdAt).getTime();
+            return sum + diff / 86400000;
+          }, 0) / closedCasesForAvg.length
+        ).toFixed(1)
+      : "—";
 
   const StatBar = ({
     items,
@@ -356,7 +396,8 @@ export default function ReportsPage() {
                   },
                   {
                     label: "Avg Resolution",
-                    value: "3.2 days",
+                    value:
+                      avgResolutionDays === "—" ? "—" : `${avgResolutionDays}d`,
                     color: "text-violet-600",
                   },
                 ]}

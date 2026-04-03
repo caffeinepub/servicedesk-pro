@@ -1692,18 +1692,43 @@ export const useStore = create<StoreState>()(
 
         approveUser: async (userId) => {
           const cu = get().currentUser;
+          const userToApprove = get().users.find((u) => u.id === userId);
           set((s) => ({
             users: s.users.map((u) =>
               u.id === userId ? { ...u, status: "approved" as const } : u,
             ),
           }));
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "User Approved",
               `Approved user ${userId}`,
             );
+            get().addAuditEntry({
+              caseId: "",
+              userId: cu.id,
+              userName: cu.name,
+              action: "User Approved",
+              details: `User "${userToApprove?.name ?? userId}" approved by ${cu.name} (${cu.role})`,
+            });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "UPDATE" as const,
+                  module: "UserManagement",
+                  recordId: userId,
+                  details: `User "${userToApprove?.name ?? userId}" approved by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
           try {
             await backendApproveUser(userId);
           } catch (e) {
@@ -1731,6 +1756,7 @@ export const useStore = create<StoreState>()(
 
         rejectUser: (userId, reason) => {
           const cu = get().currentUser;
+          const userToReject = get().users.find((u) => u.id === userId);
           set((s) => ({
             users: s.users.map((u) =>
               u.id === userId
@@ -1738,13 +1764,37 @@ export const useStore = create<StoreState>()(
                 : u,
             ),
           }));
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "User Rejected",
               `Rejected user ${userId}. Reason: ${reason}`,
             );
+            get().addAuditEntry({
+              caseId: "",
+              userId: cu.id,
+              userName: cu.name,
+              action: "User Rejected",
+              details: `User "${userToReject?.name ?? userId}" rejected by ${cu.name} (${cu.role}). Reason: ${reason}`,
+            });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "UPDATE" as const,
+                  module: "UserManagement",
+                  recordId: userId,
+                  details: `User "${userToReject?.name ?? userId}" rejected by ${cu.name} (${cu.role}). Reason: ${reason}`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
           backendRejectUser(userId).catch(() => {});
           // Persist rejection reason to backend appData so other devices can see it
           get()
@@ -1789,13 +1839,37 @@ export const useStore = create<StoreState>()(
             isOnline: false,
           };
           set((s) => ({ users: [...s.users, newUser] }));
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "User Created",
               `Created user ${userData.name} (${userData.email})`,
             );
+            get().addAuditEntry({
+              caseId: "",
+              userId: cu.id,
+              userName: cu.name,
+              action: "User Created",
+              details: `User "${userData.name}" (${userData.email}) created by ${cu.name} (${cu.role})`,
+            });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "UserManagement",
+                  recordId: newUser.id,
+                  details: `User "${userData.name}" (${userData.role}) created by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
           let backendSuccess = false;
           for (let attempt = 0; attempt < 2; attempt++) {
             try {
@@ -1884,14 +1958,39 @@ export const useStore = create<StoreState>()(
 
         deleteUser: (userId) => {
           const cu = get().currentUser;
+          const userToDelete = get().users.find((u) => u.id === userId);
           set((s) => ({ users: s.users.filter((u) => u.id !== userId) }));
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "User Deleted",
               `Deleted user ${userId}`,
             );
+            get().addAuditEntry({
+              caseId: "",
+              userId: cu.id,
+              userName: cu.name,
+              action: "User Deleted",
+              details: `User "${userToDelete?.name ?? userId}" deleted by ${cu.name} (${cu.role})`,
+            });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "DELETE" as const,
+                  module: "UserManagement",
+                  recordId: userId,
+                  details: `User "${userToDelete?.name ?? userId}" deleted by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
           backendDeleteUser(userId).catch(() => {});
         },
 
@@ -1949,6 +2048,24 @@ export const useStore = create<StoreState>()(
             action: "Case Created",
             details: `New case created for ${c.customerName}`,
           });
+          if (cu) {
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Case",
+                  recordId: newCase.id,
+                  details: `Case ${newCase.caseId} created for ${c.customerName} by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
           if (cu)
             logActivity(
               cu.id,
@@ -2037,6 +2154,22 @@ export const useStore = create<StoreState>()(
               action: "Technician Added",
               details: `Technician "${t.name}" added by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Technician",
+                  recordId: uid(),
+                  details: `Technician "${t.name}" added by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
@@ -2050,13 +2183,30 @@ export const useStore = create<StoreState>()(
           get()
             .saveAppDataToBackend()
             .catch(() => {});
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "Technician Updated",
               `Updated technician ${id}`,
             );
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "UPDATE" as const,
+                  module: "Technician",
+                  recordId: id,
+                  details: `Technician "${id}" updated by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
         },
 
         deleteTechnician: (id) => {
@@ -2082,6 +2232,22 @@ export const useStore = create<StoreState>()(
               action: "Technician Deleted",
               details: `Technician "${tech?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "DELETE" as const,
+                  module: "Technician",
+                  recordId: id,
+                  details: `Technician "${tech?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
@@ -2135,13 +2301,30 @@ export const useStore = create<StoreState>()(
           get()
             .saveAppDataToBackend()
             .catch(() => {});
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "Settings Updated",
               "Admin updated settings",
             );
+            set((state) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "UPDATE" as const,
+                  module: "Settings",
+                  recordId: "settings",
+                  details: `Settings updated by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...state.storePilotAuditLogs,
+              ],
+            }));
+          }
         },
 
         addPhotoToCase: (caseId, photo) => {
@@ -2189,6 +2372,24 @@ export const useStore = create<StoreState>()(
             action: "Status Changed",
             details: `${oldStatus.replace(/_/g, " ")} → ${newStatus.replace(/_/g, " ")}${details ? `. ${details}` : ""}`,
           });
+          if (cu) {
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "UPDATE" as const,
+                  module: "Case",
+                  recordId: caseId,
+                  details: `Case ${c.caseId} status changed: ${oldStatus.replace(/_/g, " ")} → ${newStatus.replace(/_/g, " ")} by ${cu.name} (${cu.role})${details ? `. ${details}` : ""}`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
           if (cu)
             logActivity(
               cu.id,
@@ -2276,9 +2477,27 @@ export const useStore = create<StoreState>()(
               action: "Vendor Added",
               details: `Vendor "${v.name}" added by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Vendor",
+                  recordId: uid(),
+                  details: `Vendor "${v.name}" added by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
         updateVendor: (id, updates) => {
+          const cu = get().currentUser;
+          const vendor = get().vendors.find((v) => v.id === id);
           set((s) => ({
             vendors: s.vendors.map((v) =>
               v.id === id ? { ...v, ...updates } : v,
@@ -2287,6 +2506,24 @@ export const useStore = create<StoreState>()(
           get()
             .saveAppDataToBackend()
             .catch(() => {});
+          if (cu) {
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "UPDATE" as const,
+                  module: "Vendor",
+                  recordId: id,
+                  details: `Vendor "${vendor?.name ?? id}" updated by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
         },
         deleteVendor: (id) => {
           const cu = get().currentUser;
@@ -2303,6 +2540,22 @@ export const useStore = create<StoreState>()(
               action: "Vendor Deleted",
               details: `Vendor "${vendor?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "DELETE" as const,
+                  module: "Vendor",
+                  recordId: id,
+                  details: `Vendor "${vendor?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
@@ -2467,6 +2720,22 @@ export const useStore = create<StoreState>()(
               action: "Warehouse Added",
               details: `Warehouse "${name}" added by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Warehouse",
+                  recordId: uid(),
+                  details: `Warehouse "${name}" added by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
         updateWarehouse: (id, name, address) => {
@@ -2497,6 +2766,7 @@ export const useStore = create<StoreState>()(
           }
         },
         addRackToWarehouse: (name, warehouseId) => {
+          const cu = get().currentUser;
           set((s) => ({
             racks: [
               ...s.racks,
@@ -2506,6 +2776,24 @@ export const useStore = create<StoreState>()(
           get()
             .saveAppDataToBackend()
             .catch(() => {});
+          if (cu) {
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Warehouse",
+                  recordId: uid(),
+                  details: `Rack "${name}" added to warehouse by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
         },
         addRack: (name) => {
           const cu = get().currentUser;
@@ -2531,6 +2819,22 @@ export const useStore = create<StoreState>()(
               action: "Rack Added",
               details: `Rack "${name}" added by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Warehouse",
+                  recordId: uid(),
+                  details: `Rack "${name}" added by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
         updateRack: (id, name) => {
@@ -2577,6 +2881,22 @@ export const useStore = create<StoreState>()(
               action: "Rack Deleted",
               details: `Rack "${rack?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "DELETE" as const,
+                  module: "Warehouse",
+                  recordId: id,
+                  details: `Rack "${rack?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
@@ -2599,6 +2919,22 @@ export const useStore = create<StoreState>()(
               action: "Shelf Added",
               details: `Shelf "${name}" added by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Warehouse",
+                  recordId: uid(),
+                  details: `Shelf "${name}" added by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
         updateShelf: (id, updates) => {
@@ -2641,16 +2977,51 @@ export const useStore = create<StoreState>()(
               action: "Shelf Deleted",
               details: `Shelf "${shelf?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "DELETE" as const,
+                  module: "Warehouse",
+                  recordId: id,
+                  details: `Shelf "${shelf?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
         addBin: (name, shelfId) => {
+          const cu = get().currentUser;
           set((s) => ({
             bins: [...s.bins, { id: uid(), name, shelfId, createdAt: now() }],
           }));
           get()
             .saveAppDataToBackend()
             .catch(() => {});
+          if (cu) {
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Warehouse",
+                  recordId: uid(),
+                  details: `Bin "${name}" added by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
         },
         updateBin: (id, updates) => {
           set((s) => ({
@@ -2661,6 +3032,8 @@ export const useStore = create<StoreState>()(
             .catch(() => {});
         },
         deleteBin: (id) => {
+          const cu = get().currentUser;
+          const bin = get().bins.find((b) => b.id === id);
           set((s) => ({
             bins: s.bins.filter((b) => b.id !== id),
             partItems: s.partItems.map((p) =>
@@ -2670,6 +3043,24 @@ export const useStore = create<StoreState>()(
           get()
             .saveAppDataToBackend()
             .catch(() => {});
+          if (cu) {
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "DELETE" as const,
+                  module: "Warehouse",
+                  recordId: id,
+                  details: `Bin "${bin?.name ?? id}" deleted by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
+          }
         },
 
         addPurchaseEntry: (entry, partCodes) => {
@@ -2738,6 +3129,23 @@ export const useStore = create<StoreState>()(
               action: "Purchase Entry",
               details: `Purchased ${partCodes.length} parts [${partCodesStr}] from ${entry.vendorName}, Invoice: ${entry.invoiceNumber}. Added by ${cu.name} (${cu.role})`,
             });
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "CREATE" as const,
+                  module: "Purchase",
+                  recordId: purchaseId,
+                  details: `Purchase entry: ${partCodes.length} parts [${partCodesStr}] from ${entry.vendorName}, Invoice: ${entry.invoiceNumber}`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                  partCodes: partCodes.map((pc) => pc.code),
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
@@ -2772,6 +3180,24 @@ export const useStore = create<StoreState>()(
               action: "Location Assigned",
               details: `Part [${p?.partCode ?? partId}] assigned to location (Rack/Shelf/Bin) by ${cu.name} (${cu.role})`,
             });
+            const pForLog = get().partItems.find((x) => x.id === partId);
+            set((s) => ({
+              storePilotAuditLogs: [
+                {
+                  id: uid(),
+                  action: "UPDATE" as const,
+                  module: "PartInstance",
+                  recordId: partId,
+                  details: `Part [${pForLog?.partCode ?? partId}] location assigned by ${cu.name} (${cu.role})`,
+                  userId: cu.id,
+                  userName: cu.name,
+                  userRole: cu.role,
+                  timestamp: now(),
+                  partCodes: [pForLog?.partCode ?? partId],
+                },
+                ...s.storePilotAuditLogs,
+              ],
+            }));
           }
         },
 
@@ -2839,8 +3265,8 @@ export const useStore = create<StoreState>()(
                 storePilotAuditLogs: [
                   {
                     id: uid(),
-                    action: "UPDATE" as const,
-                    module: "Inventory",
+                    action: "ISSUE" as const,
+                    module: "PartIssue",
                     recordId: partId,
                     details: `Part [${partForLog.partCode}] issued to ${tech?.name ?? technicianId} for Case ${caseId}`,
                     userId: cu.id,
@@ -2881,13 +3307,41 @@ export const useStore = create<StoreState>()(
           get()
             .saveInventoryToBackend()
             .catch(() => {});
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "Part Installed",
               `Part ${partId} marked installed`,
             );
+            const partForInstall = get().partItems.find((p) => p.id === partId);
+            if (partForInstall) {
+              get().addAuditEntry({
+                caseId: partForInstall.caseId,
+                userId: cu.id,
+                userName: cu.name,
+                action: "Part Installed",
+                details: `Part [${partForInstall.partCode}] marked installed by ${cu.name} (${cu.role})`,
+              });
+              set((s) => ({
+                storePilotAuditLogs: [
+                  {
+                    id: uid(),
+                    action: "UPDATE" as const,
+                    module: "PartInstance",
+                    recordId: partId,
+                    details: `Part [${partForInstall.partCode}] marked as installed by ${cu.name} (${cu.role})`,
+                    userId: cu.id,
+                    userName: cu.name,
+                    userRole: cu.role,
+                    timestamp: now(),
+                    partCodes: [partForInstall.partCode],
+                  },
+                  ...s.storePilotAuditLogs,
+                ],
+              }));
+            }
+          }
         },
 
         returnPartToStore: (partId, remarks) => {
@@ -2948,6 +3402,23 @@ export const useStore = create<StoreState>()(
                 action: "Returned to Store",
                 details: `Part [${partReturned.partCode}] returned to store by ${cu.name} (${cu.role}). Remarks: ${remarks || "None"}`,
               });
+              set((s) => ({
+                storePilotAuditLogs: [
+                  {
+                    id: uid(),
+                    action: "RETURN" as const,
+                    module: "PartIssue",
+                    recordId: partReturned.id,
+                    details: `Part [${partReturned.partCode}] returned to store by ${cu.name} (${cu.role}). Remarks: ${remarks || "None"}`,
+                    userId: cu.id,
+                    userName: cu.name,
+                    userRole: cu.role,
+                    timestamp: now(),
+                    partCodes: [partReturned.partCode],
+                  },
+                  ...s.storePilotAuditLogs,
+                ],
+              }));
             }
           }
         },
@@ -3000,6 +3471,23 @@ export const useStore = create<StoreState>()(
                 action: "Returned to Company",
                 details: `Part [${partRetComp.partCode}] returned to company by ${cu.name} (${cu.role}). Reason: ${reason}. Remarks: ${remarks || "None"}`,
               });
+              set((s) => ({
+                storePilotAuditLogs: [
+                  {
+                    id: uid(),
+                    action: "RETURN" as const,
+                    module: "PartInstance",
+                    recordId: partId,
+                    details: `Part [${partRetComp.partCode}] returned to company by ${cu.name} (${cu.role}). Reason: ${reason}`,
+                    userId: cu.id,
+                    userName: cu.name,
+                    userRole: cu.role,
+                    timestamp: now(),
+                    partCodes: [partRetComp.partCode],
+                  },
+                  ...s.storePilotAuditLogs,
+                ],
+              }));
             }
           }
         },
@@ -3244,7 +3732,7 @@ export const useStore = create<StoreState>()(
             get().addNotification({
               userId: req.requestedBy,
               message: `Your part request for [${req.partCode || req.parts?.[0]?.partCode || "part"}] (Case ${req.caseId}) has been issued to technician ${tech?.name ?? "technician"} by ${cu?.name ?? "supervisor"}`,
-              type: "part_request",
+              type: "part_issued",
               isRead: false,
               caseId: req.caseDbId,
               relatedPartCode: req.partCode || req.parts?.[0]?.partCode,
@@ -3257,7 +3745,7 @@ export const useStore = create<StoreState>()(
               storePilotAuditLogs: [
                 {
                   id: uid(),
-                  action: "UPDATE" as const,
+                  action: "ISSUE" as const,
                   module: "PartRequest",
                   recordId: id,
                   details: `Part request issued: [${issuedReqForLog.partCode || issuedReqForLog.parts?.map((p) => p.partCode).join(",")}] to technician ${tech?.name ?? technicianId} for Case ${issuedReqForLog.caseId}`,
@@ -3292,6 +3780,12 @@ export const useStore = create<StoreState>()(
               "Part Request Issued",
               `Part request ${id} issued to ${tech?.name}`,
             );
+          // Fix 1: Force re-sync so all clients see the update immediately
+          setTimeout(() => {
+            get()
+              .syncPartRequests()
+              .catch(() => {});
+          }, 200);
         },
 
         rejectPartRequest: (id, reason) => {
@@ -3348,6 +3842,25 @@ export const useStore = create<StoreState>()(
                 action: "Part Request Rejected",
                 details: `Part request for [${rejReq.partCode || rejReq.parts?.map((p) => p.partCode).join(", ")}] Case ${rejReq.caseId} rejected by ${cu.name} (${cu.role}). Reason: ${reason}`,
               });
+              set((s) => ({
+                storePilotAuditLogs: [
+                  {
+                    id: uid(),
+                    action: "UPDATE" as const,
+                    module: "PartRequest",
+                    recordId: id,
+                    details: `Part request [${rejReq.partCode || rejReq.parts?.map((p) => p.partCode).join(", ")}] rejected by ${cu.name} (${cu.role}). Reason: ${reason}`,
+                    userId: cu.id,
+                    userName: cu.name,
+                    userRole: cu.role,
+                    timestamp: now(),
+                    partCodes: rejReq.parts
+                      ? rejReq.parts.map((p) => p.partCode)
+                      : [rejReq.partCode],
+                  },
+                  ...s.storePilotAuditLogs,
+                ],
+              }));
             }
           }
         },
@@ -3394,6 +3907,25 @@ export const useStore = create<StoreState>()(
                 action: "Part Request Cancelled",
                 details: `Part request for [${cancelReq.partCode || cancelReq.parts?.map((p) => p.partCode).join(", ")}] Case ${cancelReq.caseId} cancelled by ${cu.name} (${cu.role})`,
               });
+              set((s) => ({
+                storePilotAuditLogs: [
+                  {
+                    id: uid(),
+                    action: "UPDATE" as const,
+                    module: "PartRequest",
+                    recordId: id,
+                    details: `Part request [${cancelReq.partCode || cancelReq.parts?.map((p) => p.partCode).join(", ")}] cancelled by ${cu.name} (${cu.role})`,
+                    userId: cu.id,
+                    userName: cu.name,
+                    userRole: cu.role,
+                    timestamp: now(),
+                    partCodes: cancelReq.parts
+                      ? cancelReq.parts.map((p) => p.partCode)
+                      : [cancelReq.partCode],
+                  },
+                  ...s.storePilotAuditLogs,
+                ],
+              }));
             }
           }
         },

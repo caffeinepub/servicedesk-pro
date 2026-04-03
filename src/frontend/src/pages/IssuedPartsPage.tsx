@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CheckCircle,
   ChevronDown,
+  ChevronUp,
   ClipboardList,
   List,
   Package,
@@ -93,6 +94,16 @@ export default function IssuedPartsPage() {
   const [issueCaseId, setIssueCaseId] = useState("");
   const [issueNotes, setIssueNotes] = useState("");
   const [issueErrors, setIssueErrors] = useState<Record<string, string>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // ── Helpers ──
   const getTechName = (id: string) =>
@@ -299,112 +310,191 @@ export default function IssuedPartsPage() {
     },
   ];
 
-  // ── Table Component ──
-  const PartTable = ({ items }: { items: typeof partItems }) => (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50">
-            <th className="text-left px-4 py-2 text-slate-600 font-medium">
-              Part Code
-            </th>
-            <th className="text-left px-4 py-2 text-slate-600 font-medium">
-              Company
-            </th>
-            <th className="text-left px-4 py-2 text-slate-600 font-medium">
-              Part Name
-            </th>
-            <th className="text-left px-4 py-2 text-slate-600 font-medium">
-              Technician
-            </th>
-            <th className="text-left px-4 py-2 text-slate-600 font-medium">
-              Case ID
-            </th>
-            <th className="text-left px-4 py-2 text-slate-600 font-medium">
-              Date
-            </th>
-            <th className="text-left px-4 py-2 text-slate-600 font-medium">
-              Status
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.length === 0 ? (
-            <tr>
-              <td
-                colSpan={7}
-                className="text-center py-10 text-slate-400"
-                data-ocid="issued.empty_state"
+  // ── Grouped display helper ──
+  // Helper to get dominant status color for a group's left border
+  const getGroupBorderColor = (items: typeof partItems) => {
+    const statuses = items.map((i) => i.status);
+    if (statuses.includes("issued")) return "border-l-amber-400";
+    if (statuses.includes("installed")) return "border-l-blue-400";
+    if (statuses.includes("returned_to_store")) return "border-l-slate-400";
+    return "border-l-slate-300";
+  };
+
+  // ── Table Component (grouped) ──
+  const PartTable = ({ items }: { items: typeof partItems }) => {
+    const groups = useMemo(() => {
+      const map = new Map<string, typeof items>();
+      for (const item of items) {
+        const arr = map.get(item.partCode) ?? [];
+        arr.push(item);
+        map.set(item.partCode, arr);
+      }
+      return [...map.entries()].map(([code, groupItems]) => ({
+        code,
+        groupItems,
+      }));
+    }, [items]);
+
+    if (items.length === 0) {
+      return (
+        <div
+          className="text-center py-10 text-slate-400 text-sm"
+          data-ocid="issued.empty_state"
+        >
+          No records found.
+        </div>
+      );
+    }
+
+    return (
+      <div className="divide-y divide-slate-100">
+        {groups.map(({ code, groupItems }, gIdx) => {
+          const isExpanded = expandedGroups.has(code);
+          const sample = groupItems[0];
+          const borderColor = getGroupBorderColor(groupItems);
+          const dominantStatus = groupItems.some((i) => i.status === "issued")
+            ? "issued"
+            : groupItems.some((i) => i.status === "installed")
+              ? "installed"
+              : (groupItems[0]?.status ?? "issued");
+
+          return (
+            <div
+              key={code}
+              className={`border-l-4 ${borderColor}`}
+              data-ocid={`issued.item.${gIdx + 1}`}
+            >
+              {/* Group header - always visible */}
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                onClick={() => toggleGroup(code)}
+                data-ocid={`issued.toggle.${gIdx + 1}`}
               >
-                No records found.
-              </td>
-            </tr>
-          ) : (
-            items.map((p, i) => (
-              <tr
-                key={p.id}
-                className="border-b border-slate-100 hover:bg-slate-50"
-                data-ocid={`issued.row.${i + 1}`}
-              >
-                <td className="px-4 py-2">
+                <div className="flex items-center gap-3 min-w-0">
                   <button
                     type="button"
-                    className="font-mono text-xs font-semibold text-blue-600 hover:underline"
-                    onClick={() => navigate("part-detail", undefined, p.id)}
-                    data-ocid={`issued.link.${i + 1}`}
+                    className="font-mono text-xs font-semibold text-blue-600 hover:underline flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate("part-detail", undefined, sample.id);
+                    }}
+                    data-ocid={`issued.link.${gIdx + 1}`}
                   >
-                    {p.partCode}
+                    {code}
                   </button>
-                </td>
-                <td className="px-4 py-2 text-slate-700">
-                  {getCompanyDisplay(p)}
-                </td>
-                <td className="px-4 py-2 text-slate-700">
-                  {getPartNameDisplay(p)}
-                </td>
-                <td className="px-4 py-2 text-slate-700">
-                  {p.technicianId ? getTechName(p.technicianId) : "-"}
-                </td>
-                <td className="px-4 py-2 text-slate-600 font-mono text-xs">
-                  {p.caseId || "-"}
-                </td>
-                <td className="px-4 py-2 text-slate-500 text-xs">
-                  {p.issueDate
-                    ? new Date(p.issueDate).toLocaleDateString()
-                    : "-"}
-                </td>
-                <td className="px-4 py-2">
-                  {p.status === "issued" ? (
-                    <button
-                      type="button"
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer hover:opacity-80 transition-opacity ${STATUS_STYLES[p.status]}`}
-                      onClick={() => {
-                        setStatusPopupId(p.id);
-                        setPendingAction(null);
-                        setActionRemarks("");
-                      }}
-                      data-ocid={`issued.status_button.${i + 1}`}
-                    >
-                      {STATUS_LABELS[p.status]}
-                      {p.status === "issued" && (
-                        <ChevronDown className="h-3 w-3 opacity-70" />
-                      )}
-                    </button>
-                  ) : (
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[p.status]}`}
-                    >
-                      {STATUS_LABELS[p.status]}
+                  <span className="text-xs text-slate-500 truncate hidden sm:block">
+                    {getCompanyDisplay(sample)} • {getPartNameDisplay(sample)}
+                  </span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_STYLES[dominantStatus] ?? "bg-slate-100 text-slate-600"}`}
+                  >
+                    {STATUS_LABELS[dominantStatus] ?? dominantStatus}
+                  </span>
+                  {groupItems.length > 1 && (
+                    <span className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
+                      {groupItems.length} units
                     </span>
                   )}
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+                </div>
+                {isExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-slate-400 flex-shrink-0 ml-2" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0 ml-2" />
+                )}
+              </button>
+
+              {/* Expanded detail rows */}
+              {isExpanded && (
+                <div className="px-4 pb-3">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50/80">
+                        <th className="text-left px-2 py-1.5 text-slate-500 font-medium text-xs">
+                          Technician
+                        </th>
+                        <th className="text-left px-2 py-1.5 text-slate-500 font-medium text-xs">
+                          Case ID
+                        </th>
+                        <th className="text-left px-2 py-1.5 text-slate-500 font-medium text-xs">
+                          Issue Date
+                        </th>
+                        <th className="text-left px-2 py-1.5 text-slate-500 font-medium text-xs">
+                          Status
+                        </th>
+                        <th className="text-left px-2 py-1.5 text-slate-500 font-medium text-xs">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupItems.map((p, i) => (
+                        <tr
+                          key={p.id}
+                          className="border-b border-slate-50 hover:bg-slate-50/50"
+                          data-ocid={`issued.row.${gIdx * 10 + i + 1}`}
+                        >
+                          <td className="px-2 py-2 text-slate-700 text-xs">
+                            {p.technicianId ? getTechName(p.technicianId) : "-"}
+                          </td>
+                          <td className="px-2 py-2 text-slate-600 font-mono text-xs">
+                            {p.caseId || "-"}
+                          </td>
+                          <td className="px-2 py-2 text-slate-500 text-xs">
+                            {p.issueDate
+                              ? new Date(p.issueDate).toLocaleDateString()
+                              : "-"}
+                          </td>
+                          <td className="px-2 py-2">
+                            {p.status === "issued" ? (
+                              <button
+                                type="button"
+                                className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer hover:opacity-80 transition-opacity ${STATUS_STYLES[p.status]}`}
+                                onClick={() => {
+                                  setStatusPopupId(p.id);
+                                  setPendingAction(null);
+                                  setActionRemarks("");
+                                }}
+                                data-ocid={`issued.status_button.${gIdx * 10 + i + 1}`}
+                              >
+                                {STATUS_LABELS[p.status]}
+                                <ChevronDown className="h-3 w-3 opacity-70" />
+                              </button>
+                            ) : (
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[p.status]}`}
+                              >
+                                {STATUS_LABELS[p.status]}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-2 py-2">
+                            <div className="flex items-center gap-1">
+                              {p.status === "issued" && (
+                                <button
+                                  type="button"
+                                  className="text-xs text-blue-600 hover:underline"
+                                  onClick={() =>
+                                    navigate("part-detail", undefined, p.id)
+                                  }
+                                >
+                                  View
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-5">
