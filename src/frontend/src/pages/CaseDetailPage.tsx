@@ -301,6 +301,14 @@ export default function CaseDetailPage() {
 
   const [editingCaseId, setEditingCaseId] = useState(false);
   const [newCaseIdValue, setNewCaseIdValue] = useState("");
+  // Multi-part dual panel state (for part_required with multiple parts)
+  const [availablePartIds, setAvailablePartIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [orderedPartIds, setOrderedPartIds] = useState<Set<string>>(new Set());
+  const [orderedPONumbers, setOrderedPONumbers] = useState<
+    Record<string, string>
+  >({});
 
   if (!caseData) {
     return (
@@ -570,6 +578,49 @@ export default function CaseDetailPage() {
     });
     setReminderDate("");
     setReminderNote("");
+  };
+
+  // Multi-part status update handler
+  const handleMultiPartStatusUpdate = async () => {
+    if (availablePartIds.size === 0 && orderedPartIds.size === 0) return;
+    setSaving(true);
+    try {
+      const newPONumbers = Array.from(orderedPartIds)
+        .map((id) => orderedPONumbers[id])
+        .filter(Boolean);
+
+      const updates: Record<string, unknown> = {};
+      if (newPONumbers.length > 0) {
+        updates.poNumbers = [...(caseData.poNumbers ?? []), ...newPONumbers];
+        updates.poNumber = newPONumbers[0];
+      }
+
+      if (availablePartIds.size > 0) {
+        if (Object.keys(updates).length > 0)
+          updateCase(caseData.id, updates as any);
+        changeStatus(
+          caseData.id,
+          "part_available",
+          `${availablePartIds.size} part(s) available, ${orderedPartIds.size} part(s) ordered.${newPONumbers.length > 0 ? ` PO: ${newPONumbers.join(", ")}` : ""}`,
+        );
+      } else if (orderedPartIds.size > 0) {
+        if (Object.keys(updates).length > 0)
+          updateCase(caseData.id, updates as any);
+        changeStatus(
+          caseData.id,
+          "part_ordered",
+          `${orderedPartIds.size} part(s) ordered.${newPONumbers.length > 0 ? ` PO: ${newPONumbers.join(", ")}` : ""}`,
+        );
+      }
+
+      toast.success("Parts status updated");
+      setAvailablePartIds(new Set());
+      setOrderedPartIds(new Set());
+      setOrderedPONumbers({});
+      setNewStatus("");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const waLink = (phone: string) => `https://wa.me/${phone.replace(/\D/g, "")}`;
@@ -1024,6 +1075,159 @@ export default function CaseDetailPage() {
               </p>
             ) : (
               <>
+                {/* Multi-part dual panel: shown when case is part_required AND has pending part requests */}
+                {caseData.status === "part_required" &&
+                  (() => {
+                    const linkedReqs = partRequests.filter(
+                      (r) =>
+                        r.caseDbId === caseData.id && r.status === "pending",
+                    );
+                    const allParts: Array<{
+                      id: string;
+                      partCode: string;
+                      partName: string;
+                      status: string;
+                      partPhotoUrl?: string;
+                    }> = linkedReqs.flatMap((r) => {
+                      if (r.parts && r.parts.length > 0) {
+                        return r.parts
+                          .filter((p) => p.status === "pending")
+                          .map((p) => ({
+                            id: p.id,
+                            partCode: p.partCode,
+                            partName: p.partName,
+                            status: p.status as string,
+                            partPhotoUrl: p.partPhotoUrl,
+                          }));
+                      }
+                      if (r.partCode) {
+                        return [
+                          {
+                            id: r.id,
+                            partCode: r.partCode,
+                            partName: r.partName,
+                            status: "pending" as string,
+                            partPhotoUrl: r.partPhotoUrl,
+                          },
+                        ];
+                      }
+                      return [];
+                    });
+                    if (allParts.length === 0) return null;
+                    return (
+                      <div className="space-y-3">
+                        <div className="text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                          {allParts.length} part(s) required. Select their
+                          status:
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* Panel 1: Parts Available */}
+                          <div className="border border-green-200 rounded-lg p-3 bg-green-50">
+                            <p className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
+                              <Check className="h-3 w-3" /> Mark as Available
+                            </p>
+                            {allParts.map((part) => (
+                              <label
+                                key={`avail-${part.id}`}
+                                className="flex items-center gap-2 py-1 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={availablePartIds.has(part.id)}
+                                  disabled={orderedPartIds.has(part.id)}
+                                  onChange={(e) => {
+                                    setAvailablePartIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (e.target.checked) next.add(part.id);
+                                      else next.delete(part.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className="rounded"
+                                />
+                                <span className="text-xs text-green-800">
+                                  <strong>{part.partCode}</strong>
+                                  {part.partName ? ` — ${part.partName}` : ""}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                          {/* Panel 2: Parts Ordered */}
+                          <div className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                            <p className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1">
+                              <Package className="h-3 w-3" /> Mark as Ordered
+                              (PO)
+                            </p>
+                            {allParts
+                              .filter((p) => !availablePartIds.has(p.id))
+                              .map((part) => (
+                                <div key={`order-${part.id}`} className="py-1">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={orderedPartIds.has(part.id)}
+                                      onChange={(e) => {
+                                        setOrderedPartIds((prev) => {
+                                          const next = new Set(prev);
+                                          if (e.target.checked)
+                                            next.add(part.id);
+                                          else next.delete(part.id);
+                                          return next;
+                                        });
+                                      }}
+                                      className="rounded"
+                                    />
+                                    <span className="text-xs text-blue-800">
+                                      <strong>{part.partCode}</strong>
+                                      {part.partName
+                                        ? ` — ${part.partName}`
+                                        : ""}
+                                    </span>
+                                  </label>
+                                  {orderedPartIds.has(part.id) && (
+                                    <Input
+                                      className="mt-1 text-xs h-7"
+                                      placeholder="PO Number (optional)"
+                                      value={orderedPONumbers[part.id] || ""}
+                                      onChange={(e) =>
+                                        setOrderedPONumbers((prev) => ({
+                                          ...prev,
+                                          [part.id]: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            {allParts.filter((p) => !availablePartIds.has(p.id))
+                              .length === 0 && (
+                              <p className="text-xs text-blue-500 italic">
+                                All parts marked as available
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          onClick={handleMultiPartStatusUpdate}
+                          disabled={
+                            saving ||
+                            (availablePartIds.size === 0 &&
+                              orderedPartIds.size === 0)
+                          }
+                          className="w-full bg-indigo-600 hover:bg-indigo-700"
+                          data-ocid="case_detail.submit_button"
+                        >
+                          {saving ? "Saving..." : "Update Parts Status"}
+                        </Button>
+                        <div className="border-t border-slate-200 pt-3">
+                          <p className="text-xs text-slate-400 text-center">
+                            — or update to other status below —
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                 <div className="space-y-1">
                   <Label className="text-xs">New Status</Label>
                   <Select
@@ -1772,6 +1976,33 @@ export default function CaseDetailPage() {
                   ))}
               </div>
             )}
+            {/* Upload button for part photos */}
+            <label
+              className="mt-2 flex items-center gap-2 text-xs border border-dashed border-orange-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-orange-50 w-full"
+              data-ocid="case_detail.upload_button"
+            >
+              <Upload className="h-3 w-3 text-orange-400" />
+              Upload Part Photo
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  for (const file of files) {
+                    const url = await fileToDataUrl(file);
+                    addPhotoToCase(caseData.id, {
+                      url,
+                      type: "part" as PhotoType,
+                      name: file.name,
+                    });
+                  }
+                  e.target.value = "";
+                  toast.success("Part photo(s) uploaded");
+                }}
+              />
+            </label>
           </div>
 
           {/* Other Case Photos (after/product/serial etc) */}
@@ -1820,6 +2051,33 @@ export default function CaseDetailPage() {
                   ))}
               </div>
             )}
+            {/* Upload button for other case photos */}
+            <label
+              className="mt-2 flex items-center gap-2 text-xs border border-dashed border-gray-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-50 w-full"
+              data-ocid="case_detail.upload_button"
+            >
+              <Upload className="h-3 w-3 text-gray-400" />
+              Upload Case Photo
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  for (const file of files) {
+                    const url = await fileToDataUrl(file);
+                    addPhotoToCase(caseData.id, {
+                      url,
+                      type: "after" as PhotoType,
+                      name: file.name,
+                    });
+                  }
+                  e.target.value = "";
+                  toast.success("Photo(s) uploaded");
+                }}
+              />
+            </label>
           </div>
 
           {/* Case Related Images */}
@@ -1866,6 +2124,44 @@ export default function CaseDetailPage() {
                 ))}
               </div>
             )}
+            {/* Upload button for case related images */}
+            <label
+              className="mt-2 flex items-center gap-2 text-xs border border-dashed border-violet-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-violet-50 w-full"
+              data-ocid="case_detail.upload_button"
+            >
+              <Upload className="h-3 w-3 text-violet-400" />
+              Upload Case Related Photo (product, serial, invoice, etc.)
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  const newImgs: Array<{
+                    id: string;
+                    url: string;
+                    name: string;
+                  }> = [];
+                  for (const file of files) {
+                    const url = await fileToDataUrl(file);
+                    newImgs.push({
+                      id: Math.random().toString(36).slice(2),
+                      url,
+                      name: file.name,
+                    });
+                  }
+                  updateCase(caseData.id, {
+                    caseRelatedImages: [
+                      ...(caseData.caseRelatedImages ?? []),
+                      ...newImgs,
+                    ] as any,
+                  });
+                  e.target.value = "";
+                  toast.success("Case related photo(s) uploaded");
+                }}
+              />
+            </label>
           </div>
         </CardContent>
       </Card>

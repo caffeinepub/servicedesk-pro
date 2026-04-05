@@ -885,6 +885,8 @@ interface StoreState {
   notificationsGeneratedDate: string;
   lastMidnightResetDate: string;
   sessionExpired: boolean;
+  pendingCasesSave: boolean;
+  pendingInventorySave: boolean;
   seenPartRequestsCount: number;
   seenApprovalsCount: number;
 
@@ -1162,6 +1164,8 @@ export const useStore = create<StoreState>()(
         lastMidnightResetDate: "",
         rejectionReason: "",
         sessionExpired: false,
+        pendingCasesSave: false,
+        pendingInventorySave: false,
         seenPartRequestsCount: 0,
         seenApprovalsCount: 0,
         users: SEED_USERS,
@@ -1728,6 +1732,9 @@ export const useStore = create<StoreState>()(
                 ...s.storePilotAuditLogs,
               ],
             }));
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
           }
           try {
             await backendApproveUser(userId);
@@ -1794,6 +1801,9 @@ export const useStore = create<StoreState>()(
                 ...s.storePilotAuditLogs,
               ],
             }));
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
           }
           backendRejectUser(userId).catch(() => {});
           // Persist rejection reason to backend appData so other devices can see it
@@ -1990,6 +2000,9 @@ export const useStore = create<StoreState>()(
                 ...s.storePilotAuditLogs,
               ],
             }));
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
           }
           backendDeleteUser(userId).catch(() => {});
         },
@@ -2066,13 +2079,18 @@ export const useStore = create<StoreState>()(
               ],
             }));
           }
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "Case Created",
               `Created case ${newCase.caseId} for ${c.customerName}`,
             );
+            // Ensure audit log is persisted to backend
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
+          }
           return newCase;
         },
 
@@ -2206,6 +2224,9 @@ export const useStore = create<StoreState>()(
                 ...s.storePilotAuditLogs,
               ],
             }));
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
           }
         },
 
@@ -2248,6 +2269,9 @@ export const useStore = create<StoreState>()(
                 ...s.storePilotAuditLogs,
               ],
             }));
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
           }
         },
 
@@ -2324,6 +2348,9 @@ export const useStore = create<StoreState>()(
                 ...state.storePilotAuditLogs,
               ],
             }));
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
           }
         },
 
@@ -2390,13 +2417,18 @@ export const useStore = create<StoreState>()(
               ],
             }));
           }
-          if (cu)
+          if (cu) {
             logActivity(
               cu.id,
               cu.name,
               "Status Changed",
               `Case ${c.caseId}: ${oldStatus} → ${newStatus}`,
             );
+            // Ensure audit log is persisted to backend
+            get()
+              .saveInventoryToBackend()
+              .catch(() => {});
+          }
         },
 
         importCases: (newCasesData) => {
@@ -3812,7 +3844,7 @@ export const useStore = create<StoreState>()(
                   ];
             const issueLifecycles = partCodesLC.map((p: any) => ({
               id: uid(),
-              partId: p.id || issuedReqLC.id,
+              partId: p.partCode || p.id || issuedReqLC.id, // Use partCode for reliable lookup
               action: "Issued",
               details: `Part [${p.partCode}] issued to technician ${tech?.name ?? technicianId} for Case ${issuedReqLC.caseId} by ${cu?.name ?? "unknown"}`,
               userId: cu?.id ?? "",
@@ -3893,13 +3925,6 @@ export const useStore = create<StoreState>()(
             );
             const rejReq = get().partRequests.find((r) => r.id === id);
             if (rejReq) {
-              get().addAuditEntry({
-                caseId: rejReq.caseDbId,
-                userId: cu.id,
-                userName: cu.name,
-                action: "Part Request Rejected",
-                details: `Part request for [${rejReq.partCode || rejReq.parts?.map((p) => p.partCode).join(", ")}] Case ${rejReq.caseId} rejected by ${cu.name} (${cu.role}). Reason: ${reason}`,
-              });
               set((s) => ({
                 storePilotAuditLogs: [
                   {
@@ -3919,6 +3944,9 @@ export const useStore = create<StoreState>()(
                   ...s.storePilotAuditLogs,
                 ],
               }));
+              get()
+                .saveInventoryToBackend()
+                .catch(() => {});
             }
           }
         },
@@ -3958,13 +3986,6 @@ export const useStore = create<StoreState>()(
             );
             const cancelReq = get().partRequests.find((r) => r.id === id);
             if (cancelReq) {
-              get().addAuditEntry({
-                caseId: cancelReq.caseDbId,
-                userId: cu.id,
-                userName: cu.name,
-                action: "Part Request Cancelled",
-                details: `Part request for [${cancelReq.partCode || cancelReq.parts?.map((p) => p.partCode).join(", ")}] Case ${cancelReq.caseId} cancelled by ${cu.name} (${cu.role})`,
-              });
               set((s) => ({
                 storePilotAuditLogs: [
                   {
@@ -3984,6 +4005,9 @@ export const useStore = create<StoreState>()(
                   ...s.storePilotAuditLogs,
                 ],
               }));
+              get()
+                .saveInventoryToBackend()
+                .catch(() => {});
             }
           }
         },
@@ -4044,6 +4068,7 @@ export const useStore = create<StoreState>()(
           }
         },
         syncCases: async () => {
+          if (get().pendingCasesSave) return; // Skip sync if a save is in-flight
           try {
             const json = await backendGetCasesJson();
             if (json && json !== "{}") {
@@ -4062,10 +4087,21 @@ export const useStore = create<StoreState>()(
         },
         saveCasesToBackend: async () => {
           try {
+            set({ pendingCasesSave: true });
             const { cases } = get();
             await backendSetCasesJson(JSON.stringify(cases));
+            // After successful save, propagate to other devices after brief delay
+            setTimeout(
+              () =>
+                get()
+                  .syncCases()
+                  .catch(() => {}),
+              150,
+            );
           } catch (e) {
             console.error("saveCasesToBackend error:", e);
+          } finally {
+            set({ pendingCasesSave: false });
           }
         },
         syncNotices: async () => {
@@ -4094,6 +4130,7 @@ export const useStore = create<StoreState>()(
           }
         },
         syncInventory: async () => {
+          if (get().pendingInventorySave) return; // Skip sync if a save is in-flight
           try {
             const json = await backendGetInventoryJson();
             // Only skip if backend has never been written to (truly empty)
@@ -4127,6 +4164,7 @@ export const useStore = create<StoreState>()(
         },
         saveInventoryToBackend: async () => {
           try {
+            set({ pendingInventorySave: true });
             const {
               partItems,
               purchaseEntries,
@@ -4142,8 +4180,18 @@ export const useStore = create<StoreState>()(
               storeNotifications,
             });
             await backendSetInventoryJson(json);
+            // After successful save, propagate to other devices
+            setTimeout(
+              () =>
+                get()
+                  .syncInventory()
+                  .catch(() => {}),
+              150,
+            );
           } catch (e) {
             console.error("saveInventoryToBackend error:", e);
+          } finally {
+            set({ pendingInventorySave: false });
           }
         },
         syncAppData: async () => {
